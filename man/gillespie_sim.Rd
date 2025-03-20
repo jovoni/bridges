@@ -2,7 +2,7 @@
 % Please edit documentation in R/gillespie_sim.R
 \name{gillespie_sim}
 \alias{gillespie_sim}
-\title{Gillespie Simulation for Break-Fusion-Bridge (BFB) Processes}
+\title{Gillespie Simulation for Break-Fusion-Bridge (BFB) Processes with Hotspot Selection}
 \usage{
 gillespie_sim(
   initial_cells = 1,
@@ -10,11 +10,13 @@ gillespie_sim(
   birth_rate = 0.1,
   death_rate = 0.001,
   bfb_prob = 0.01,
+  selection_rate = 0,
   max_time = 50,
   max_cells = 100,
   first_n_bfb_cycles = 0,
   first_round_of_bfb = TRUE,
   breakpoint_support = "uniform",
+  hotspot = NULL,
   alpha = NULL,
   beta = NULL
 )
@@ -24,11 +26,13 @@ gillespie_sim(
 
 \item{initial_sequence_length}{Numeric. Length of the initial genomic sequence. Default: 100}
 
-\item{birth_rate}{Numeric. Rate at which cells replicate per unit time. Default: 0.1}
+\item{birth_rate}{Numeric. Base rate at which cells replicate per unit time. Default: 0.1}
 
 \item{death_rate}{Numeric. Rate at which cells die per unit time. Default: 0.001}
 
 \item{bfb_prob}{Numeric. Probability of BFB event occurring during replication. Default: 0.01}
+
+\item{selection_rate}{Numeric. Selection advantage for cells with amplified hotspot. Default: 0}
 
 \item{max_time}{Numeric. Maximum simulation time. Default: 50}
 
@@ -39,6 +43,8 @@ gillespie_sim(
 \item{first_round_of_bfb}{Logical. Whether to apply BFB to initial cells. Default: TRUE}
 
 \item{breakpoint_support}{Character. Distribution used for breakpoint selection ("uniform", "beta", etc.). Default: "uniform"}
+
+\item{hotspot}{Numeric vector. Genomic positions considered as hotspots. Default: NULL}
 
 \item{alpha}{Numeric. First parameter for beta distribution if used for breakpoint selection. Default: NULL}
 
@@ -54,12 +60,14 @@ A list containing:
 \item{death_count}{Total number of death events}
 \item{newick_tree}{Newick format representation of the phylogenetic tree}
 \item{phylogenetic_info}{List containing BFB event history for each cell, tracking gain/loss events}
+\item{hotspot_info}{Data frame tracking hotspot amplification status of cells}
 \item{parameters}{List of input parameters used in the simulation}
 }
 \description{
 Simulates the evolution of cells undergoing Break-Fusion-Bridge cycles using
 a continuous-time Gillespie algorithm. This function models cell birth and death
 processes with the possibility of BFB events occurring during replication.
+Cells with amplified hotspots have an increased birth rate.
 }
 \details{
 The function implements a Gillespie algorithm to simulate stochastic birth and death
@@ -67,10 +75,9 @@ processes with possible BFB events. Events occur at rates proportional to the nu
 and depend on time since the last event. The simulation tracks cell lineages, creating
 a phylogenetic history of BFB events.
 
+Cells with amplified hotspots replicate at an increased rate of birth_rate * (1 + selection_rate).
+
 BFB (Break-Fusion-Bridge) cycles are a mechanism of genomic instability where
 chromosome breakage followed by fusion of broken ends creates genomic rearrangements.
 Each BFB event produces two daughter cells with different rearranged sequences.
-
-The phylogenetic information tracks whether each BFB event resulted in a sequence
-length gain or loss for each affected cell lineage.
 }

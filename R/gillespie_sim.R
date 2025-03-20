@@ -1,21 +1,23 @@
-
-#' Gillespie Simulation for Break-Fusion-Bridge (BFB) Processes
+#' Gillespie Simulation for Break-Fusion-Bridge (BFB) Processes with Hotspot Selection
 #'
 #' @description
 #' Simulates the evolution of cells undergoing Break-Fusion-Bridge cycles using
 #' a continuous-time Gillespie algorithm. This function models cell birth and death
 #' processes with the possibility of BFB events occurring during replication.
+#' Cells with amplified hotspots have an increased birth rate.
 #'
 #' @param initial_cells Numeric. Number of cells at the start of simulation. Default: 1
 #' @param initial_sequence_length Numeric. Length of the initial genomic sequence. Default: 100
-#' @param birth_rate Numeric. Rate at which cells replicate per unit time. Default: 0.1
+#' @param birth_rate Numeric. Base rate at which cells replicate per unit time. Default: 0.1
 #' @param death_rate Numeric. Rate at which cells die per unit time. Default: 0.001
 #' @param bfb_prob Numeric. Probability of BFB event occurring during replication. Default: 0.01
+#' @param selection_rate Numeric. Selection advantage for cells with amplified hotspot. Default: 0
 #' @param max_time Numeric. Maximum simulation time. Default: 50
 #' @param max_cells Numeric. Maximum number of cells allowed before simulation stops. Default: 100
 #' @param first_n_bfb_cycles Numeric. Number of initial birth events that will force BFB events. Default: 0
 #' @param first_round_of_bfb Logical. Whether to apply BFB to initial cells. Default: TRUE
 #' @param breakpoint_support Character. Distribution used for breakpoint selection ("uniform", "beta", etc.). Default: "uniform"
+#' @param hotspot Numeric vector. Genomic positions considered as hotspots. Default: NULL
 #' @param alpha Numeric. First parameter for beta distribution if used for breakpoint selection. Default: NULL
 #' @param beta Numeric. Second parameter for beta distribution if used for breakpoint selection. Default: NULL
 #'
@@ -28,6 +30,7 @@
 #'   \item{death_count}{Total number of death events}
 #'   \item{newick_tree}{Newick format representation of the phylogenetic tree}
 #'   \item{phylogenetic_info}{List containing BFB event history for each cell, tracking gain/loss events}
+#'   \item{hotspot_info}{Data frame tracking hotspot amplification status of cells}
 #'   \item{parameters}{List of input parameters used in the simulation}
 #'
 #' @details
@@ -36,12 +39,11 @@
 #' and depend on time since the last event. The simulation tracks cell lineages, creating
 #' a phylogenetic history of BFB events.
 #'
+#' Cells with amplified hotspots replicate at an increased rate of birth_rate * (1 + selection_rate).
+#'
 #' BFB (Break-Fusion-Bridge) cycles are a mechanism of genomic instability where
 #' chromosome breakage followed by fusion of broken ends creates genomic rearrangements.
 #' Each BFB event produces two daughter cells with different rearranged sequences.
-#'
-#' The phylogenetic information tracks whether each BFB event resulted in a sequence
-#' length gain or loss for each affected cell lineage.
 #'
 #' @export
 gillespie_sim <- function(
@@ -50,11 +52,13 @@ gillespie_sim <- function(
     birth_rate = 0.1,
     death_rate = 0.001,
     bfb_prob = 0.01,
+    selection_rate = 0,
     max_time = 50,
     max_cells = 100,
     first_n_bfb_cycles = 0,
     first_round_of_bfb = TRUE,
     breakpoint_support = "uniform",
+    hotspot = NULL,
     alpha = NULL,
     beta = NULL
 ) {
@@ -71,6 +75,8 @@ gillespie_sim <- function(
   cell_parents <- integer(0)  # Track parent of each cell
   cell_bfb <- logical(0)  # Track whether the cell resulted from a BFB event
   cell_last_event <- numeric(0)  # Track the last time each cell underwent an event
+  cell_hotspot_gained <- logical(0)  # Track whether the cell has hotspot amplified
+  cell_is_alive <- logical(0)  # Track whether each cell is currently alive
   next_cell_id <- 1
 
   # Track BFB event history for phylogenetic information
@@ -81,6 +87,9 @@ gillespie_sim <- function(
   # Create the initial cell with its sequence
   initial_sequence <- vec2seq(1:initial_sequence_length)
   initial_length <- get_seq_length(initial_sequence)
+
+  # Check if initial sequence has hotspot amplified
+  initial_hotspot_gained <- is_hotspot_gained(initial_sequence, hotspot)
 
   # Apply BFB to all initial cells if first_round_of_bfb is TRUE
   if (first_round_of_bfb) {
@@ -93,6 +102,8 @@ gillespie_sim <- function(
     new_bfb <- logical(0)
     new_last_event <- numeric(0)
     new_bfb_history <- list()
+    new_hotspot_gained <- logical(0)
+    new_is_alive <- logical(0)
 
     for (i in 1:initial_cells) {
       # Apply BFB to create daughter sequences
@@ -126,6 +137,10 @@ gillespie_sim <- function(
       left_history <- list(paste(next_bfb_id, l_effect, sep = "-"))
       right_history <- list(paste(next_bfb_id, r_effect, sep = "-"))
 
+      # Check if daughters have hotspot amplified
+      l_hotspot_gained <- is_hotspot_gained(daughter_seqs$l_seq, hotspot)
+      r_hotspot_gained <- is_hotspot_gained(daughter_seqs$r_seq, hotspot)
+
       # Add both daughters to new cells list
       new_cells[[length(new_cells) + 1]] <- daughter_seqs$l_seq
       new_cells[[length(new_cells) + 1]] <- daughter_seqs$r_seq
@@ -134,6 +149,9 @@ gillespie_sim <- function(
       new_bfb_history[[length(new_bfb_history) + 1]] <- left_history
       new_bfb_history[[length(new_bfb_history) + 1]] <- right_history
 
+      # Record hotspot status
+      new_hotspot_gained <- c(new_hotspot_gained, l_hotspot_gained, r_hotspot_gained)
+
       # Record cell creation data for both new cells
       new_cell_ids <- c(new_cell_ids, next_cell_id, next_cell_id + 1)
       new_birth_times <- c(new_birth_times, time, time)
@@ -141,6 +159,7 @@ gillespie_sim <- function(
       new_parents <- c(new_parents, 0, 0)  # Initial cells have no parent
       new_bfb <- c(new_bfb, TRUE, TRUE)  # Both daughters resulted from BFB
       new_last_event <- c(new_last_event, time, time)  # Set last event time to current time
+      new_is_alive <- c(new_is_alive, TRUE, TRUE)  # Both cells are alive
       next_cell_id <- next_cell_id + 2
       next_bfb_id <- next_bfb_id + 1
     }
@@ -154,6 +173,8 @@ gillespie_sim <- function(
     cell_bfb <- new_bfb
     cell_last_event <- new_last_event
     cell_bfb_history <- new_bfb_history
+    cell_hotspot_gained <- new_hotspot_gained
+    cell_is_alive <- new_is_alive
   } else {
     # Original initialization without BFB
     for (i in 1:initial_cells) {
@@ -166,20 +187,34 @@ gillespie_sim <- function(
       cell_parents <- c(cell_parents, 0)  # Initial cells have no parent
       cell_bfb <- c(cell_bfb, FALSE)  # Initial cells did not result from BFB
       cell_last_event <- c(cell_last_event, time)  # Set last event time to current time
+      cell_hotspot_gained <- c(cell_hotspot_gained, initial_hotspot_gained)  # Set hotspot status
+      cell_is_alive <- c(cell_is_alive, TRUE)  # Cell is alive
       cell_bfb_history[[i]] <- list()  # Empty BFB history for initial cells
       next_cell_id <- next_cell_id + 1
     }
   }
 
+  # Track hotspot gain events
+  hotspot_gain_events <- data.frame(
+    time = numeric(0),
+    cell_id = integer(0)
+  )
+
   # Main simulation loop
-  while (time < max_time && length(cells) > 0 && length(cells) < max_cells) {
+  while (time < max_time && sum(cell_is_alive) > 0 && sum(cell_is_alive) < max_cells) {
+    # Get indices of alive cells
+    alive_indices <- which(cell_is_alive)
+
+    # Calculate individual birth rates based on hotspot amplification for alive cells
+    individual_birth_rates <- birth_rate * (1 + selection_rate * cell_hotspot_gained[alive_indices])
+
     # Calculate propensities
-    total_birth_prop <- birth_rate * length(cells)
-    total_death_prop <- death_rate * length(cells)
+    total_birth_prop <- sum(individual_birth_rates)
+    total_death_prop <- death_rate * length(alive_indices)
     total_prop <- total_birth_prop + total_death_prop
 
     # If all cells died or total propensity is 0, exit
-    if (length(cells) == 0 || total_prop == 0) {
+    if (length(alive_indices) == 0 || total_prop == 0) {
       break
     }
 
@@ -192,14 +227,19 @@ gillespie_sim <- function(
       # Birth event
       birth_count <- birth_count + 1
 
-      # Select parent cell based on time since last event
-      time_since_last_event <- time - cell_last_event
-      selection_probs <- time_since_last_event / sum(time_since_last_event)
-      parent_idx <- sample(1:length(cells), 1, prob = selection_probs)
+      # Calculate selection probabilities based on birth rates and time since last event
+      time_since_last_event <- time - cell_last_event[alive_indices]
+      selection_probs <- individual_birth_rates * time_since_last_event
+      selection_probs <- selection_probs / sum(selection_probs)
+
+      # Select parent cell from alive cells
+      parent_alive_idx <- sample(1:length(alive_indices), 1, prob = selection_probs)
+      parent_idx <- alive_indices[parent_alive_idx]
       parent_seq <- cells[[parent_idx]]
       parent_id <- cell_ids[parent_idx]
       parent_bfb_history <- cell_bfb_history[[parent_idx]]
       parent_length <- get_seq_length(parent_seq)
+      parent_hotspot_gained <- cell_hotspot_gained[parent_idx]
 
       # Update last event time for the parent cell
       cell_last_event[parent_idx] <- time
@@ -235,6 +275,18 @@ gillespie_sim <- function(
         l_effect <- ifelse(l_length > parent_length, "gain", "loss")
         r_effect <- ifelse(r_length > parent_length, "gain", "loss")
 
+        # Check if daughters have hotspot amplified
+        l_hotspot_gained <- is_hotspot_gained(daughter_seqs$l_seq, hotspot)
+        r_hotspot_gained <- is_hotspot_gained(daughter_seqs$r_seq, hotspot)
+
+        # Record hotspot gain events
+        if (l_hotspot_gained && !parent_hotspot_gained) {
+          hotspot_gain_events <- rbind(hotspot_gain_events, data.frame(
+            time = time,
+            cell_id = parent_id
+          ))
+        }
+
         # Create BFB histories for both daughters
         left_history <- c(parent_bfb_history, list(paste(next_bfb_id, l_effect, sep = "-")))
         right_history <- c(parent_bfb_history, list(paste(next_bfb_id, r_effect, sep = "-")))
@@ -242,10 +294,19 @@ gillespie_sim <- function(
         # Replace parent with left daughter
         cells[[parent_idx]] <- daughter_seqs$l_seq
         cell_bfb_history[[parent_idx]] <- left_history
+        cell_hotspot_gained[parent_idx] <- l_hotspot_gained
 
         # Add right daughter as new cell
         cells[[length(cells) + 1]] <- daughter_seqs$r_seq
         cell_bfb_history[[length(cell_bfb_history) + 1]] <- right_history
+
+        # Record hotspot gain events for right daughter
+        if (r_hotspot_gained && !parent_hotspot_gained) {
+          hotspot_gain_events <- rbind(hotspot_gain_events, data.frame(
+            time = time,
+            cell_id = next_cell_id
+          ))
+        }
 
         # Record cell creation data for the new cell
         cell_ids <- c(cell_ids, next_cell_id)
@@ -254,6 +315,8 @@ gillespie_sim <- function(
         cell_parents <- c(cell_parents, parent_id)  # Record parent
         cell_bfb <- c(cell_bfb, TRUE)  # New cell resulted from BFB
         cell_last_event <- c(cell_last_event, time)  # Set last event time for new cell
+        cell_hotspot_gained <- c(cell_hotspot_gained, r_hotspot_gained)
+        cell_is_alive <- c(cell_is_alive, TRUE)  # New cell is alive
         next_cell_id <- next_cell_id + 1
         next_bfb_id <- next_bfb_id + 1
       } else {
@@ -270,41 +333,46 @@ gillespie_sim <- function(
         cell_parents <- c(cell_parents, parent_id)  # Record parent
         cell_bfb <- c(cell_bfb, FALSE)  # New cell did not result from BFB
         cell_last_event <- c(cell_last_event, time)  # Set last event time for new cell
+        cell_hotspot_gained <- c(cell_hotspot_gained, parent_hotspot_gained)
+        cell_is_alive <- c(cell_is_alive, TRUE)  # New cell is alive
         next_cell_id <- next_cell_id + 1
       }
 
     } else {
-      # Death event - remove a random cell
+      # Death event - mark a cell as dead
       death_count <- death_count + 1
 
-      if (length(cells) > 0) {
+      if (length(alive_indices) > 0) {
         # Select cell to remove based on time since last event
-        time_since_last_event <- time - cell_last_event
+        time_since_last_event <- time - cell_last_event[alive_indices]
         selection_probs <- time_since_last_event / sum(time_since_last_event)
-        cell_to_remove <- sample(1:length(cells), 1, prob = selection_probs)
+
+        # Select which alive cell to remove
+        alive_cell_to_remove <- sample(1:length(alive_indices), 1, prob = selection_probs)
+        cell_to_remove <- alive_indices[alive_cell_to_remove]
 
         # Record death time
         cell_death_times[cell_to_remove] <- time
 
-        # Remove the cell from the list of alive cells
-        cells <- cells[-cell_to_remove]
-        cell_bfb_history <- cell_bfb_history[-cell_to_remove]
-        cell_last_event <- cell_last_event[-cell_to_remove]
+        # Mark cell as dead
+        cell_is_alive[cell_to_remove] <- FALSE
       }
     }
   }
 
-  # Create cell lifetime data
+  # Set death time for any remaining alive cells to the final simulation time
   cell_death_times[is.na(cell_death_times)] <- time
 
+  # Create cell lifetime data
   cell_lifetimes <- data.frame(
     cell_id = cell_ids,
     birth_time = cell_birth_times,
     death_time = cell_death_times,
     lifetime = cell_death_times - cell_birth_times,
-    is_alive = cell_death_times == max(cell_death_times),
+    is_alive = cell_is_alive,
     parent_id = cell_parents,
-    bfb_event = cell_bfb
+    bfb_event = cell_bfb,
+    hotspot_gained = cell_hotspot_gained
   )
 
   # Function to recursively build Newick string
@@ -324,10 +392,29 @@ gillespie_sim <- function(
     newick_tree <- paste0(newick_tree, ";")
   }
 
+  # Create summary of hotspot status
+  hotspot_summary <- data.frame(
+    time_points = c(0, sort(unique(c(cell_birth_times, cell_death_times)))),
+    cells_with_hotspot = NA,
+    total_cells = NA
+  )
+
+  # Calculate number of cells with hotspot at each time point
+  for (i in 1:nrow(hotspot_summary)) {
+    t <- hotspot_summary$time_points[i]
+    cells_alive <- cell_birth_times <= t & (cell_death_times > t | is.na(cell_death_times))
+    hotspot_summary$total_cells[i] <- sum(cells_alive)
+    hotspot_summary$cells_with_hotspot[i] <- sum(cells_alive & cell_hotspot_gained)
+  }
+
+  # Get only alive cells for final_cells output
+  alive_indices <- which(cell_is_alive)
+  final_cells <- cells[alive_indices]
+
   # Prepare result list
   result <- list(
-    final_cells = cells,
-    sequence_distribution = table(sapply(cells, function(seq) paste(unlist(seq), collapse = ","))),
+    final_cells = final_cells,
+    sequence_distribution = table(sapply(final_cells, function(seq) paste(unlist(seq), collapse = ","))),
     cell_lifetimes = cell_lifetimes,
     final_time = time,
     birth_count = birth_count,
@@ -336,6 +423,11 @@ gillespie_sim <- function(
     phylogenetic_info = list(
       bfb_events = bfb_events,
       cell_bfb_history = cell_bfb_history
+    ),
+    hotspot_info = list(
+      hotspot_summary = hotspot_summary,
+      hotspot_gain_events = hotspot_gain_events,
+      hotspot_positions = hotspot
     )
   )
 
@@ -345,11 +437,13 @@ gillespie_sim <- function(
     birth_rate = birth_rate,
     death_rate = death_rate,
     bfb_prob = bfb_prob,
+    selection_rate = selection_rate,
     max_time = max_time,
     max_cells = max_cells,
     first_n_bfb_cycles = first_n_bfb_cycles,
     first_round_of_bfb = first_round_of_bfb,
     breakpoint_support = breakpoint_support,
+    hotspot = hotspot,
     alpha = alpha,
     beta = beta
   )
