@@ -6,4 +6,5 @@ get_seq_length = function(sequence) {
       return(abs(interval$end - interval$start) + 1)  # Increasing or decreasing interval length
     }
   }))
+  L
 }

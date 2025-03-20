@@ -5,6 +5,7 @@
 #' @param cells1 A list of cell sequences representing the first set of cells.
 #' @param cells2 A list of cell sequences representing the second set of cells.
 #' @param L An integer specifying the length of the vector representation for each cell.
+#' @param order Boolean indicating whether cells should be ordered by proportion of genome in 1 copy
 #'
 #' @return A list containing:
 #'   \item{distance}{The Euclidean distance between the two sets of cells.}
@@ -16,17 +17,18 @@
 #' two matrices is computed and normalized by the product of the matrix dimensions.
 #'
 #' @export
-get_cells_distance <- function(cells1, cells2, L) {
+cells_distance <- function(cells1, cells2, L, order) {
 
   matrices = lapply(list(cells1, cells2), function(cells) {
-    cells2mat(cells, L)
+    cells2mat(cells, L, order)
   })
 
   distance = sqrt(sum((matrices[[1]] - matrices[[2]])^2))
   normalized_distance = distance / prod(dim(matrices[[1]]))
+  normalized_distance
 
-  return(list(
-    distance = distance,
-    normalized_distance = normalized_distance
-  ))
+  # return(list(
+  #   distance = distance,
+  #   normalized_distance = normalized_distance
+  # ))
 }

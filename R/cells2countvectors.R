@@ -2,7 +2,7 @@ cells2countvectors = function(cells, L) {
   breakpoints = get_breakpoints(cells, L)
   breakpoints = c(0, breakpoints, L)
 
-  lapply(cells, function(cell) {
+  list_countvectors = lapply(cells, function(cell) {
     count_vector = lapply(2:length(breakpoints), function(i) {
       b_prev = breakpoints[i-1]
       b_curr = breakpoints[i]
@@ -21,5 +21,7 @@ cells2countvectors = function(cells, L) {
 
       count
     }) %>% unlist()
-  }) %>% do.call("rbind", .)
+  })
+
+  do.call("rbind", list_countvectors)
 }

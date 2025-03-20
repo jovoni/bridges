@@ -1,5 +1,5 @@
 
-cells2mat = function(cells, L) {
+cells2mat = function(cells, L, order) {
   m = matrix(0, nrow = length(cells), ncol = L)
   idx = 1
   for (idx in 1:length(cells)) {
@@ -7,12 +7,14 @@ cells2mat = function(cells, L) {
     m[idx, as.numeric(names(tab_vec))] = as.numeric(tab_vec)
   }
 
-  one_copy_percentage = rowSums(m == 1) / L
+  if (order) {
+    one_copy_percentage = rowSums(m == 1) / L
 
-  # Get the order of the values in the ordering vector
-  row_order <- order(one_copy_percentage, decreasing = TRUE)
+    # Get the order of the values in the ordering vector
+    row_order <- order(one_copy_percentage, decreasing = TRUE)
 
-  # Reorder the matrix rows
-  m <- m[row_order, , drop = FALSE]
+    # Reorder the matrix rows
+    m <- m[row_order, , drop = FALSE]
+  }
   m
 }

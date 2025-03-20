@@ -6,7 +6,7 @@ get_seq_length_stats = function(sim) {
 
   list(
     mean = mean(seq_lenghts),
-    median = median(seq_lenghts),
-    sd = sd(seq_lenghts)
+    median = stats::median(seq_lenghts),
+    sd = stats::sd(seq_lenghts)
   )
 }

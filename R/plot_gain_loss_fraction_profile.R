@@ -22,7 +22,7 @@ plot_gain_loss_fraction_profile = function(cells, L) {
       Loss = -sum(count < 1) / length(count),
       Gain = sum(count > 1) / length(count)
     ) %>%
-    tidyr::pivot_longer(!bin) %>%
+    tidyr::pivot_longer(!(bin)) %>%
     ggplot2::ggplot(mapping = ggplot2::aes(x=bin, y=value, fill=name)) +
     ggplot2::geom_col(width = 1) +
     ggplot2::theme_minimal() +
