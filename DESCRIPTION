@@ -13,4 +13,5 @@ Imports:
     ggplot2,
     magrittr,
     stats,
-    tidyr
+    tidyr,
+    uuid
