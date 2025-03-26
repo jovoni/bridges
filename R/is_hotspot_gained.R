@@ -1,6 +1,6 @@
 
 is_hotspot_gained = function(cell, hotspot) {
-  table_vec = table(bridges:::seq2vec(cell))
+  table_vec = table(seq2vec(cell))
   hotspot = c(hotspot)
   flag = all(lapply(hotspot, function(h) {h %in% names(table_vec)}) %>% unlist())
   if (flag) {

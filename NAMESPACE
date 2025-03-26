@@ -3,4 +3,5 @@
 export("%>%")
 export(cells_distance)
 export(gillespie_sim)
+export(plot_tree)
 importFrom(magrittr,"%>%")
