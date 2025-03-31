@@ -11,6 +11,9 @@
 #'   - `bfb_event`: Logical indicating breakage-fusion-bridge event
 #'   - `hotspot_gained`: Logical indicating hotspot amplification
 #'
+#' @param full_tree Logical. If TRUE, final tree will show all duplications as branches.
+#'  If FALSE, only BFB replications will be shown on the tree.
+#'
 #' @param legend.position Position of the legend. Defaults to "bottom".
 #'   Accepts standard ggplot2 legend positions: "bottom", "top", "left", "right", "none"
 #'
@@ -71,7 +74,7 @@ plot_tree <- function(
     branch_lengths <- dplyr::mutate(
       node_data,
       branch.length = ifelse(
-        is.na(parent_id),  # Root cell (cell_0) has no parent
+        is.na(parent_id),  # Root cell (root) has no parent
         0,                 # Root branch length = 0
         birth_time - cell_data$birth_time[match(parent_id, cell_data$cell_id)]
       )

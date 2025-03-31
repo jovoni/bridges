@@ -1,18 +1,21 @@
 
 cell_lifetimes_to_newick <- function(cell_data) {
-  cell_data$parent_id[is.na(cell_data$parent_id)] = "cell_0"
+  # Check there is a root and rename it
+  root_name = cell_data$cell_id[is.na(cell_data$parent_id)]
+  cell_data$cell_id[cell_data$cell_id == root_name] = "root"
+  cell_data$parent_id[cell_data$parent_id == root_name] = "root"
 
-  # Add root if not present
-  if (!"cell_0" %in% cell_data$cell_id) {
-    root_row <- dplyr::tibble(
-      cell_id = "cell_0",
-      parent_id = NA,
-      bfb_event = FALSE,
-      birth_time = 0,
-      death_time = 0
-    )
-    cell_data <- dplyr::bind_rows(root_row, cell_data)
-  }
+  # # Add root if not present
+  # if (!"root" %in% cell_data$cell_id) {
+  #   root_row <- dplyr::tibble(
+  #     cell_id = "root",
+  #     parent_id = NA,
+  #     bfb_event = FALSE,
+  #     birth_time = 0,
+  #     death_time = 0
+  #   )
+  #   cell_data <- dplyr::bind_rows(root_row, cell_data)
+  # }
 
 
   # Helper function to recursively build the tree

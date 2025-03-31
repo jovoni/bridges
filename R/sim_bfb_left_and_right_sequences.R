@@ -15,20 +15,24 @@ sim_bfb_left_and_right_sequences <- function(sequence, support = "uniform", alph
   L = get_seq_length(sequence)
 
   # Select random breakpoint based on specified distribution
-  if (support == "uniform") {
-    bp_idx = sample(1:(2*L), 1)
-  } else if (support == "beta") {
-    if (is.null(alpha) || is.null(beta)) {
-      stop("For beta distribution, both alpha and beta parameters must be provided")
+  # Ensure that bp_idx is different from L to obtain a proper bfb cycle
+  bp_idx = L
+  while (bp_idx == L) {
+    if (support == "uniform") {
+      bp_idx = sample(1:(2*L), 1)
+    } else if (support == "beta") {
+      if (is.null(alpha) || is.null(beta)) {
+        stop("For beta distribution, both alpha and beta parameters must be provided")
+      }
+      tau = stats::rbeta(1, alpha, beta)
+      bp_idx = max(1, round(tau * 2*L))  # Ensure bp_idx is at least 1
+    } else {
+      stop("Unsupported distribution type. Use 'uniform' or 'beta'.")
     }
-    tau = stats::rbeta(1, alpha, beta)
-    bp_idx = max(1, round(tau * 2*L))  # Ensure bp_idx is at least 1
-  } else {
-    stop("Unsupported distribution type. Use 'uniform' or 'beta'.")
   }
 
-  # Initialize left and right sequences
 
+  # Initialize left and right sequences
   cut_seqs = cut_sequence(fuse_sequence(sequence), bp_idx)
   l_seq = cut_seqs$left_seq
   r_seq = reverse_sequence(cut_seqs$right_seq)

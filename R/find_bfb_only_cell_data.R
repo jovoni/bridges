@@ -1,8 +1,8 @@
 find_bfb_only_cell_data <- function(cell_data) {
   # Add root if not present
-  if (!"cell_0" %in% cell_data$cell_id) {
+  if (!"root" %in% cell_data$cell_id) {
     root_row <- dplyr::tibble(
-      cell_id = "cell_0",
+      cell_id = "root",
       parent_id = NA,
       bfb_event = FALSE,
       birth_time = 0,
@@ -11,7 +11,7 @@ find_bfb_only_cell_data <- function(cell_data) {
     cell_data <- dplyr::bind_rows(root_row, cell_data)
   }
 
-  cell_data$parent_id[is.na(cell_data$parent_id) & cell_data$cell_id != "cell_0"] <- "cell_0"
+  cell_data$parent_id[is.na(cell_data$parent_id) & cell_data$cell_id != "root"] <- "root"
 
   # Function to find the most recent BFB progenitor
   find_bfb_progenitor <- function(cell_id) {
@@ -24,7 +24,7 @@ find_bfb_only_cell_data <- function(cell_data) {
       if (parent_row$bfb_event) return(parent_row$cell_id)
       current <- current_row$parent_id
     }
-    return("cell_0")  # Default to root if no BFB ancestor found
+    return("root")  # Default to root if no BFB ancestor found
   }
 
   # Update parent_id to reflect the most recent BFB progenitor
