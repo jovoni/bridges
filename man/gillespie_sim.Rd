@@ -54,7 +54,7 @@ gillespie_sim(
 A list containing:
 \item{final_cells}{List of cell sequences at the end of simulation}
 \item{sequence_distribution}{Frequency table of unique sequences}
-\item{cell_lifetimes}{Data frame with cell birth/death times and lineage information}
+\item{cell_history}{Data frame with cell birth/death times and lineage information}
 \item{final_time}{Time at which simulation ended}
 \item{birth_count}{Total number of birth events}
 \item{death_count}{Total number of death events}

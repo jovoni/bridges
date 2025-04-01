@@ -88,51 +88,51 @@ OTU_to_OTU_distance <- function(u, v, D) {
 }
 
 # Iterative merging function
-iterative_merge <- function(D, min_size = 2) {
-  otus_history = list()
-  iteration = 1
-  while(nrow(D) > min_size) {
-    new_OTUs <- find_new_OTUs(D)
-
-    # If no merges found, break to prevent infinite loop
-    if(length(new_OTUs) == 0) break
-
-    # Build new distance matrix
-    all_nodes <- colnames(D)
-    single_nodes <- setdiff(all_nodes, unlist(new_OTUs))
-    elements <- c(new_OTUs, as.list(single_nodes))
-
-    # Create new matrix
-    new_D <- matrix(0, nrow = length(elements), ncol = length(elements))
-    rownames(new_D) <- colnames(new_D) <- sapply(elements, function(x) paste(x, collapse = "_"))
-
-    # Compute distances
-    for (i in 1:(nrow(new_D)-1)) {
-      for (j in (i+1):ncol(new_D)) {
-        x <- elements[[i]]
-        y <- elements[[j]]
-
-        if (length(x) == 1 && length(y) == 1) {
-          dist <- node_to_node_distance(x, y, D)
-        } else if (length(x) == 1) {
-          dist <- node_to_OTU_distance(x, y, D)
-        } else if (length(y) == 1) {
-          dist <- node_to_OTU_distance(y, x, D)
-        } else {
-          dist <- OTU_to_OTU_distance(x, y, D)
-        }
-
-        new_D[i, j] <- new_D[j, i] <- dist
-      }
-    }
-
-    otus_history[[iteration]] = new_OTUs
-    D <- new_D
-    cat("Merged to", nrow(D), "clusters\n")
-    iteration = iteration + 1
-  }
-  return(list(D=D, otus_history=otus_history))
-}
+# iterative_merge <- function(D, min_size = 2) {
+#   otus_history = list()
+#   iteration = 1
+#   while(nrow(D) > min_size) {
+#     new_OTUs <- find_new_OTUs(D)
+#
+#     # If no merges found, break to prevent infinite loop
+#     if(length(new_OTUs) == 0) break
+#
+#     # Build new distance matrix
+#     all_nodes <- colnames(D)
+#     single_nodes <- setdiff(all_nodes, unlist(new_OTUs))
+#     elements <- c(new_OTUs, as.list(single_nodes))
+#
+#     # Create new matrix
+#     new_D <- matrix(0, nrow = length(elements), ncol = length(elements))
+#     rownames(new_D) <- colnames(new_D) <- sapply(elements, function(x) paste(x, collapse = "_"))
+#
+#     # Compute distances
+#     for (i in 1:(nrow(new_D)-1)) {
+#       for (j in (i+1):ncol(new_D)) {
+#         x <- elements[[i]]
+#         y <- elements[[j]]
+#
+#         if (length(x) == 1 && length(y) == 1) {
+#           dist <- node_to_node_distance(x, y, D)
+#         } else if (length(x) == 1) {
+#           dist <- node_to_OTU_distance(x, y, D)
+#         } else if (length(y) == 1) {
+#           dist <- node_to_OTU_distance(y, x, D)
+#         } else {
+#           dist <- OTU_to_OTU_distance(x, y, D)
+#         }
+#
+#         new_D[i, j] <- new_D[j, i] <- dist
+#       }
+#     }
+#
+#     otus_history[[iteration]] = new_OTUs
+#     D <- new_D
+#     cat("Merged to", nrow(D), "clusters\n")
+#     iteration = iteration + 1
+#   }
+#   return(list(D=D, otus_history=otus_history))
+# }
 
 build_new_pseudocell = function(new_otu, pseudo_cells) {
   pseudo_cell = matrix(colMeans(pseudo_cells[new_otu,]), nrow = 1)
@@ -182,7 +182,7 @@ tibble_to_newick <- function(cell_data) {
   # Helper function to recursively build the tree
   build_tree <- function(node) {
     # Find children of the current node
-    children <- cell_data %>% dplyr::filter(parent_id == node) %>% dplyr::pull(cell_id)
+    children <- cell_data %>% dplyr::filter(.data$parent_id == node) %>% dplyr::pull(.data$cell_id)
 
     if (length(children) == 0) {
       # If no children, return the node itself
@@ -195,7 +195,7 @@ tibble_to_newick <- function(cell_data) {
   }
 
   # Identify the root node (cells with no parent)
-  root <- cell_data %>% dplyr::filter(is.na(parent_id)) %>% dplyr::pull(cell_id)
+  root <- cell_data %>% dplyr::filter(is.na(.data$parent_id)) %>% dplyr::pull(.data$cell_id)
 
   if (length(root) != 1) {
     stop("Error: There must be exactly one root node.")
@@ -207,81 +207,81 @@ tibble_to_newick <- function(cell_data) {
   return(newick_tree)
 }
 
-process_mfnj_results = function(mfnj_res, eps=.01)  {
-  pseudo_cells_history = mfnj_res$pseudo_cells_history
-  pseudo_cells_df_history = mfnj_res$pseudo_cells_df_history
-  # Retrieve cell_data from psuedo_cells_history
-  all_cells = pseudo_cells_df_history[[1]] %>% dplyr::pull(cell_id)
-  #all_cells = paste0(unlist(pseudo_cells_history), collapse = "|")
-  #all_cells = unique(unlist(strsplit(x = all_cells, split = "-", fixed = T)))
-  cell_df = dplyr::tibble(cell_id = all_cells, parent_id = NA, type = "observed")
-
-  for (i in 1:length(pseudo_cells_history)) {
-    pseudos = pseudo_cells_history[[i]]
-    for (ps in pseudos) {
-      cell_df = cell_df %>%
-        dplyr::rowwise() %>%
-        dplyr::mutate(parent_id = ifelse(is.na(parent_id) & grepl(gsub("\\|", "-", cell_id), gsub("\\|", "-", ps), fixed = TRUE), ps, parent_id)) %>%
-        dplyr::ungroup()
-      cell_df = dplyr::bind_rows(
-        cell_df,
-        dplyr::tibble(cell_id = ps, parent_id = NA, type = "pseudo")
-      )
-    }
-  }
-
-  # Compute distance between every cell and their parent
-  unique_pseudo_cells = pseudo_cells_df_history %>% do.call("bind_rows", .) %>% dplyr::select(!iter) %>% dplyr::distinct()
-  cell_df$distance = lapply(1:nrow(cell_df), function(i) {
-    cell_and_parent_ids = c(cell_df[i,]$cell_id, cell_df[i,]$parent_id)
-    cells_mat = unique_pseudo_cells %>%
-      dplyr::filter(cell_id %in% cell_and_parent_ids) %>%
-      dplyr::select(!cell_id) %>%
-      as.matrix()
-    if (nrow(cells_mat) == 2) return(euclidean_distance(cells_mat[1,], cells_mat[2,]))
-    return(NA)
-  }) %>% unlist()
-
-  cell_df$distance_to_normal = lapply(1:nrow(cell_df), function(i) {
-    target = cell_df[i,]$cell_id
-    cells_mat = unique_pseudo_cells %>%
-      dplyr::filter(cell_id == target) %>%
-      dplyr::select(!cell_id) %>%
-      as.matrix()
-    if (nrow(cells_mat) == 1) return(euclidean_distance(cells_mat[1,], rep(1, ncol(cells_mat))))
-    return(NA)
-  }) %>% unlist()
-
-  cell_df = cell_df %>% dplyr::mutate(bfb_event = distance > eps)
-
-  unique_pseudo_cells = c(cell_df$cell_id, cell_df$parent_id)[grepl("|", c(cell_df$cell_id, cell_df$parent_id), fixed = TRUE)]
-  pseudo_cells_id_mapping = structure(
-    as.numeric(factor(unique_pseudo_cells)),
-    names = unique_pseudo_cells
-  )
-
-  cell_df$cell_id = lapply(1:nrow(cell_df), function(i) {
-    if (cell_df[i,]$type == "pseudo") {
-      paste0("p", pseudo_cells_id_mapping[[cell_df[i,]$cell_id]])
-    } else {
-      cell_df[i,]$cell_id
-    }
-  }) %>% unlist()
-
-  cell_df$parent_id = lapply(1:nrow(cell_df), function(i) {
-    if (grepl("|", cell_df[i,]$parent_id, fixed = TRUE)) {
-      paste0("p", pseudo_cells_id_mapping[[cell_df[i,]$parent_id]])
-    } else {
-      cell_df[i,]$parent_id
-    }
-  }) %>% unlist()
-
-  cell_df$birth_time = NA
-  cell_df$hotspot_gained =  NA
-  cell_df$is_alive = cell_df$type == "observed"
-
-  cell_df
-}
+# process_mfnj_results = function(mfnj_res, eps=.01)  {
+#   pseudo_cells_history = mfnj_res$pseudo_cells_history
+#   pseudo_cells_df_history = mfnj_res$pseudo_cells_df_history
+#   # Retrieve cell_data from psuedo_cells_history
+#   all_cells = pseudo_cells_df_history[[1]] %>% dplyr::pull(cell_id)
+#   #all_cells = paste0(unlist(pseudo_cells_history), collapse = "|")
+#   #all_cells = unique(unlist(strsplit(x = all_cells, split = "-", fixed = T)))
+#   cell_df = dplyr::tibble(cell_id = all_cells, parent_id = NA, type = "observed")
+#
+#   for (i in 1:length(pseudo_cells_history)) {
+#     pseudos = pseudo_cells_history[[i]]
+#     for (ps in pseudos) {
+#       cell_df = cell_df %>%
+#         dplyr::rowwise() %>%
+#         dplyr::mutate(parent_id = ifelse(is.na(parent_id) & grepl(gsub("\\|", "-", cell_id), gsub("\\|", "-", ps), fixed = TRUE), ps, parent_id)) %>%
+#         dplyr::ungroup()
+#       cell_df = dplyr::bind_rows(
+#         cell_df,
+#         dplyr::tibble(cell_id = ps, parent_id = NA, type = "pseudo")
+#       )
+#     }
+#   }
+#
+#   # Compute distance between every cell and their parent
+#   unique_pseudo_cells = pseudo_cells_df_history %>% do.call("bind_rows", .) %>% dplyr::select(!iter) %>% dplyr::distinct()
+#   cell_df$distance = lapply(1:nrow(cell_df), function(i) {
+#     cell_and_parent_ids = c(cell_df[i,]$cell_id, cell_df[i,]$parent_id)
+#     cells_mat = unique_pseudo_cells %>%
+#       dplyr::filter(cell_id %in% cell_and_parent_ids) %>%
+#       dplyr::select(!cell_id) %>%
+#       as.matrix()
+#     if (nrow(cells_mat) == 2) return(euclidean_distance(cells_mat[1,], cells_mat[2,]))
+#     return(NA)
+#   }) %>% unlist()
+#
+#   cell_df$distance_to_normal = lapply(1:nrow(cell_df), function(i) {
+#     target = cell_df[i,]$cell_id
+#     cells_mat = unique_pseudo_cells %>%
+#       dplyr::filter(cell_id == target) %>%
+#       dplyr::select(!cell_id) %>%
+#       as.matrix()
+#     if (nrow(cells_mat) == 1) return(euclidean_distance(cells_mat[1,], rep(1, ncol(cells_mat))))
+#     return(NA)
+#   }) %>% unlist()
+#
+#   cell_df = cell_df %>% dplyr::mutate(bfb_event = distance > eps)
+#
+#   unique_pseudo_cells = c(cell_df$cell_id, cell_df$parent_id)[grepl("|", c(cell_df$cell_id, cell_df$parent_id), fixed = TRUE)]
+#   pseudo_cells_id_mapping = structure(
+#     as.numeric(factor(unique_pseudo_cells)),
+#     names = unique_pseudo_cells
+#   )
+#
+#   cell_df$cell_id = lapply(1:nrow(cell_df), function(i) {
+#     if (cell_df[i,]$type == "pseudo") {
+#       paste0("p", pseudo_cells_id_mapping[[cell_df[i,]$cell_id]])
+#     } else {
+#       cell_df[i,]$cell_id
+#     }
+#   }) %>% unlist()
+#
+#   cell_df$parent_id = lapply(1:nrow(cell_df), function(i) {
+#     if (grepl("|", cell_df[i,]$parent_id, fixed = TRUE)) {
+#       paste0("p", pseudo_cells_id_mapping[[cell_df[i,]$parent_id]])
+#     } else {
+#       cell_df[i,]$parent_id
+#     }
+#   }) %>% unlist()
+#
+#   cell_df$birth_time = NA
+#   cell_df$hotspot_gained =  NA
+#   cell_df$is_alive = cell_df$type == "observed"
+#
+#   cell_df
+# }
 
 # Function to extract unique cell references
 divide_cell_groups <- function(cell_string) {

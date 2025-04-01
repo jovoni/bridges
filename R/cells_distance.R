@@ -1,34 +1,29 @@
 #' Compute Distance Between Two Sets of Cells
 #'
-#' This function calculates the distance between two sets of cells using a specified distance method.
+#' This function calculates the Euclidean distance between two sets of cells, optionally ordering them based on the proportion of the genome in a single-copy state.
 #'
-#' @param cells1 A list of cell sequences representing the first set of cells.
-#' @param cells2 A list of cell sequences representing the second set of cells.
-#' @param L An integer specifying the length of the vector representation for each cell.
-#' @param order Boolean indicating whether cells should be ordered by proportion of genome in 1 copy
+#' @param x1 A list representing the first set of cells. It must contain:
+#'    - cells : A list of integer vectors, where each vector represents a cell sequence.
+#'    - input_parameters : A list containing at least the field initial_sequence_length, specifying the expected length of each cell sequence.
+#' @param x2 A list representing the second set of cells, structured identically to \code{x1}.
+#' @param order Logical value indicating whether to reorder cells based on the proportion of genomic regions with exactly one copy.
 #'
-#' @return A list containing:
-#'   \item{distance}{The Euclidean distance between the two sets of cells.}
-#'   \item{normalized_distance}{The normalized Euclidean distance, scaled by the dimensions of the matrices.}
-#'
-#' @details
-#' The function converts each set of cells into a matrix representation, where each row corresponds to a cell, and columns represent bins.
-#' Rows are reordered based on the proportion of features with exactly one copy in descending order. The Euclidean distance between the
-#' two matrices is computed and normalized by the product of the matrix dimensions.
-#'
-#' @export
-cells_distance <- function(cells1, cells2, L, order) {
+#' @return A numeric value representing the normalized Euclidean distance between the two sets of cells.
+cells_distance <- function(x1, x2, order) {
+  if (x1$input_parameters$initial_sequence_length != x2$input_parameters$initial_sequence_length) {
+    stop("Input should have cells with the same initial sequence length.")
+  }
 
-  matrices = lapply(list(cells1, cells2), function(cells) {
+  L <- x1$input_parameters$initial_sequence_length
+  cells1 <- x1$cells
+  cells2 <- x2$cells
+
+  matrices <- lapply(list(cells1, cells2), function(cells) {
     cells2mat(cells, L, order)
   })
 
-  distance = sqrt(sum((matrices[[1]] - matrices[[2]])^2))
-  normalized_distance = distance / prod(dim(matrices[[1]]))
-  normalized_distance
+  distance <- sqrt(sum((matrices[[1]] - matrices[[2]])^2))
+  normalized_distance <- distance / prod(dim(matrices[[1]]))
 
-  # return(list(
-  #   distance = distance,
-  #   normalized_distance = normalized_distance
-  # ))
+  return(normalized_distance)
 }

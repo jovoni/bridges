@@ -5,19 +5,23 @@
 \title{Plot a Cell Lineage Tree with Detailed Annotations}
 \usage{
 plot_tree(
-  cell_data,
+  x,
   full_tree = TRUE,
   legend.position = "bottom",
   annotate_bfb_events = TRUE,
   annotate_hotspot_amplifications = TRUE,
   bfb_event_colors = c(`FALSE` = "black", `TRUE` = "indianred"),
   hotspot_colors = c(`FALSE` = "white", `TRUE` = "indianred"),
-  tip_label_args = list(align = TRUE, offset = 0.5, hjust = 0.5),
-  use_computed_branch_lengths = TRUE
+  tip_align = TRUE,
+  tip_offset = 0.5,
+  tip_hjust = 0.5,
+  use_computed_branch_lengths = TRUE,
+  hotspot_shape = 21,
+  hotspot_size = 2
 )
 }
 \arguments{
-\item{cell_data}{A data frame containing cell information with required columns:
+\item{x}{A list which has an element named cell_history, which is a data frame with required columns:
 \itemize{
 \item \code{cell_id}: Unique identifier for each cell
 \item \code{parent_id}: Identifier of the parent cell
@@ -25,6 +29,9 @@ plot_tree(
 \item \code{bfb_event}: Logical indicating breakage-fusion-bridge event
 \item \code{hotspot_gained}: Logical indicating hotspot amplification
 }}
+
+\item{full_tree}{Logical. If TRUE, final tree will show all duplications as branches.
+If FALSE, only BFB replications will be shown on the tree.}
 
 \item{legend.position}{Position of the legend. Defaults to "bottom".
 Accepts standard ggplot2 legend positions: "bottom", "top", "left", "right", "none"}
@@ -39,11 +46,18 @@ Default: c("FALSE" = "black", "TRUE" = "indianred")}
 \item{hotspot_colors}{Named vector specifying colors for hotspot amplification status
 Default: c("FALSE" = "white", "TRUE" = "indianred")}
 
-\item{tip_label_args}{List of arguments to pass to geom_tiplab() for customizing tip labels
-Default provides alignment and offset}
+\item{tip_align}{Logical. If TRUE, align tip labels. Default is TRUE.}
+
+\item{tip_offset}{Numeric. Offset distance for tip labels. Default is 0.5.}
+
+\item{tip_hjust}{Numeric. Horizontal justification for tip labels. Default is 0.5.}
 
 \item{use_computed_branch_lengths}{Logical. If TRUE, use custom computed branch lengths.
 If FALSE, use ggtree's default branch length handling.}
+
+\item{hotspot_shape}{Numeric. Shape to use for hotspot amplification markers. Default is 21.}
+
+\item{hotspot_size}{Numeric. Size for hotspot amplification markers. Default is 2.}
 }
 \value{
 A ggtree plot object with cell lineage visualization

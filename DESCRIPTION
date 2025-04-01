@@ -11,10 +11,16 @@ RoxygenNote: 7.3.2
 Imports: 
     ape,
     dplyr,
+    ggnewscale,
     ggplot2,
     ggtree,
     magrittr,
+    patchwork,
     phangorn,
     Quartet,
+    rlang,
     stats,
     tidyr
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

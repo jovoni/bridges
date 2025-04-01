@@ -1,3 +1,4 @@
+
 cells2countvectors = function(cells, L) {
   breakpoints = get_breakpoints(cells, L)
   breakpoints = c(0, breakpoints, L)

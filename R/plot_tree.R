@@ -4,7 +4,7 @@
 #' Creates a comprehensive visualization of cell lineage with flexible annotation options
 #' for tracking biological features like BFB events and hotspot amplifications.
 #'
-#' @param cell_data A data frame containing cell information with required columns:
+#' @param x A list which has an element named cell_history, which is a data frame with required columns:
 #'   - `cell_id`: Unique identifier for each cell
 #'   - `parent_id`: Identifier of the parent cell
 #'   - `birth_time`: Timestamp of cell birth
@@ -27,46 +27,59 @@
 #' @param hotspot_colors Named vector specifying colors for hotspot amplification status
 #'   Default: c("FALSE" = "white", "TRUE" = "indianred")
 #'
-#' @param tip_label_args List of arguments to pass to geom_tiplab() for customizing tip labels
-#'   Default provides alignment and offset
+#' @param tip_align Logical. If TRUE, align tip labels. Default is TRUE.
+#'
+#' @param tip_offset Numeric. Offset distance for tip labels. Default is 0.5.
+#'
+#' @param tip_hjust Numeric. Horizontal justification for tip labels. Default is 0.5.
 #'
 #' @param use_computed_branch_lengths Logical. If TRUE, use custom computed branch lengths.
 #'   If FALSE, use ggtree's default branch length handling.
 #'
+#' @param hotspot_shape Numeric. Shape to use for hotspot amplification markers. Default is 21.
+#'
+#' @param hotspot_size Numeric. Size for hotspot amplification markers. Default is 2.
+#'
 #' @return A ggtree plot object with cell lineage visualization
 #' @export
 plot_tree <- function(
-    cell_data,
+    x,
     full_tree = TRUE,
     legend.position = "bottom",
     annotate_bfb_events = TRUE,
     annotate_hotspot_amplifications = TRUE,
     bfb_event_colors = c("FALSE" = "black", "TRUE" = "indianred"),
     hotspot_colors = c("FALSE" = "white", "TRUE" = "indianred"),
-    tip_label_args = list(align = TRUE, offset = 0.5, hjust = 0.5),
-    use_computed_branch_lengths = TRUE
+    tip_align = TRUE,
+    tip_offset = 0.5,
+    tip_hjust = 0.5,
+    use_computed_branch_lengths = TRUE,
+    hotspot_shape = 21,
+    hotspot_size = 2
 ) {
+  cell_history = x$cell_history
+
   # Validate input data
   required_cols <- c("cell_id", "parent_id", "birth_time", "bfb_event", "hotspot_gained")
-  if (!all(required_cols %in% names(cell_data))) {
-    stop("Missing required columns in cell_data. Needed: ",
+  if (!all(required_cols %in% names(cell_history))) {
+    stop("Missing required columns in cell_history. Needed: ",
          paste(required_cols, collapse = ", "))
   }
 
   # Generate Newick string
   if (!full_tree) {
-    cell_data = find_bfb_only_cell_data(cell_data)
+    cell_history = keep_only_bfb_branches(cell_history)
   }
-  newick_str <- cell_lifetimes_to_newick(cell_data)
+  newick_str <- cell_history_to_newick(cell_history)
 
   # Read the Newick tree
   tree <- ape::read.tree(text = newick_str)
 
   # Prepare annotation data
-  node_data <- dplyr::as_tibble(cell_data) %>%
+  node_data <- dplyr::as_tibble(cell_history) %>%
     dplyr::mutate(
-      node = match(cell_id, c(tree$tip.label, tree$node.label)),
-      is_tip = cell_id %in% tree$tip.label
+      node = match(.data$cell_id, c(tree$tip.label, tree$node.label)),
+      is_tip = .data$cell_id %in% tree$tip.label
     )
 
   # Compute branch lengths if specified
@@ -74,9 +87,9 @@ plot_tree <- function(
     branch_lengths <- dplyr::mutate(
       node_data,
       branch.length = ifelse(
-        is.na(parent_id),  # Root cell (root) has no parent
+        is.na(.data$parent_id),  # Root cell (root) has no parent
         0,                 # Root branch length = 0
-        birth_time - cell_data$birth_time[match(parent_id, cell_data$cell_id)]
+        .data$birth_time - cell_history$birth_time[match(.data$parent_id, cell_history$cell_id)]
       )
     )$branch.length
 
@@ -88,19 +101,19 @@ plot_tree <- function(
   p <- ggtree::ggtree(tree) %<+% node_data
 
   # Add tip labels with flexible arguments
-  p <- p + do.call(ggtree::geom_tiplab, tip_label_args)
+  p = p + ggtree::geom_tiplab(hjust = tip_hjust, align = tip_align, offset = tip_offset)
 
   # Conditionally add BFB event coloring
   if (annotate_bfb_events) {
     p <- p +
-      ggtree::geom_tree(aes(color = bfb_event)) +
+      ggtree::geom_tree(ggplot2::aes(color = .data$bfb_event)) +
       ggplot2::scale_color_manual(values = bfb_event_colors, name = "BFB Replication")
   }
 
   # Conditionally add hotspot amplification markers
   if (annotate_hotspot_amplifications) {
     p <- p +
-      ggtree::geom_tippoint(aes(fill = hotspot_gained), shape = 21, size = 3) +
+      ggtree::geom_tippoint(ggplot2::aes(fill = .data$hotspot_gained), shape = hotspot_shape, size = hotspot_size) +
       ggplot2::scale_fill_manual(values = hotspot_colors, name = "Hotspot Amplification")
   }
 

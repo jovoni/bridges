@@ -24,7 +24,7 @@
 #' @return A list containing:
 #'   \item{final_cells}{List of cell sequences at the end of simulation}
 #'   \item{sequence_distribution}{Frequency table of unique sequences}
-#'   \item{cell_lifetimes}{Data frame with cell birth/death times and lineage information}
+#'   \item{cell_history}{Data frame with cell birth/death times and lineage information}
 #'   \item{final_time}{Time at which simulation ended}
 #'   \item{birth_count}{Total number of birth events}
 #'   \item{death_count}{Total number of death events}
@@ -144,9 +144,7 @@ gillespie_sim <- function(
       # Modify birth rate based on hotspot gain
       l_birth_rate <- birth_rate * (1 + selection_rate * l_hotspot_gained)
       r_birth_rate <- birth_rate * (1 + selection_rate * r_hotspot_gained)
-      cell_next_event_times <- c(cell_next_event_times,
-                                 time + stats::rexp(1, l_birth_rate),
-                                 time + stats::rexp(1, r_birth_rate))
+      cell_next_event_times <- c(cell_next_event_times, time + stats::rexp(1, l_birth_rate), time + stats::rexp(1, r_birth_rate))
 
       # Track BFB history
       cell_bfb_history[[l_cell_id]] <- list(paste(next_bfb_id, l_effect, sep = "-"))
@@ -307,7 +305,7 @@ gillespie_sim <- function(
   cell_death_times[is.na(cell_death_times)] <- time
 
   # Create cell lifetime data
-  cell_lifetimes <- data.frame(
+  cell_history <- data.frame(
     cell_id = cell_ids,
     birth_time = cell_birth_times,
     death_time = cell_death_times,
@@ -339,8 +337,10 @@ gillespie_sim <- function(
     cell_sequences[[paste0("cell_",i)]]
   })
 
-  cell_lifetimes = cell_lifetimes %>% dplyr::mutate(parent_id = ifelse(is.na(parent_id), "root", parent_id))
-  cell_lifetimes = dplyr::bind_rows(
+  cell_history = cell_history %>%
+    dplyr::mutate(parent_id = ifelse(is.na(.data$parent_id), "root", .data$parent_id))
+
+  cell_history = dplyr::bind_rows(
     dplyr::tibble(
       cell_id="root",
       birth_time = -1,
@@ -350,29 +350,29 @@ gillespie_sim <- function(
       parent_id=NA,
       bfb_event=FALSE,
       hotspot_gained=FALSE),
-    cell_lifetimes
+    cell_history
   )
 
   # Prepare result list
   result <- list(
-    final_cells = final_cells,
-    sequence_distribution = table(sapply(final_cells, function(seq) paste(unlist(seq), collapse = ","))),
-    cell_lifetimes = cell_lifetimes,
-    final_time = time,
-    birth_count = birth_count,
-    death_count = death_count,
-    phylogenetic_info = list(
-      bfb_events = bfb_events,
-      cell_bfb_history = cell_bfb_history
-    ),
-    hotspot_info = list(
-      hotspot_summary = hotspot_summary,
-      hotspot_gain_events = hotspot_gain_events,
-      hotspot_positions = hotspot
-    )
+    cells = final_cells,
+    #sequence_distribution = table(sapply(final_cells, function(seq) paste(unlist(seq), collapse = ","))),
+    cell_history = cell_history#,
+    #final_time = time,
+    #birth_count = birth_count,
+    #death_count = death_count,
+    # phylogenetic_info = list(
+    #   bfb_events = bfb_events,
+    #   cell_bfb_history = cell_bfb_history
+    # ),
+    # hotspot_info = list(
+    #   hotspot_summary = hotspot_summary,
+    #   hotspot_gain_events = hotspot_gain_events,
+    #   hotspot_positions = hotspot
+    # )
   )
 
-  result$parameters <- list(
+  result$input_parameters <- list(
     initial_cells = initial_cells,
     initial_sequence_length = initial_sequence_length,
     birth_rate = birth_rate,

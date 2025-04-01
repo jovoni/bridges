@@ -4,27 +4,22 @@
 \alias{cells_distance}
 \title{Compute Distance Between Two Sets of Cells}
 \usage{
-cells_distance(cells1, cells2, L, order)
+cells_distance(x1, x2, order)
 }
 \arguments{
-\item{cells1}{A list of cell sequences representing the first set of cells.}
+\item{x1}{A list representing the first set of cells. It must contain:
+\itemize{
+\item cells : A list of integer vectors, where each vector represents a cell sequence.
+\item input_parameters : A list containing at least the field initial_sequence_length, specifying the expected length of each cell sequence.
+}}
 
-\item{cells2}{A list of cell sequences representing the second set of cells.}
+\item{x2}{A list representing the second set of cells, structured identically to \code{x1}.}
 
-\item{L}{An integer specifying the length of the vector representation for each cell.}
-
-\item{order}{Boolean indicating whether cells should be ordered by proportion of genome in 1 copy}
+\item{order}{Logical value indicating whether to reorder cells based on the proportion of genomic regions with exactly one copy.}
 }
 \value{
-A list containing:
-\item{distance}{The Euclidean distance between the two sets of cells.}
-\item{normalized_distance}{The normalized Euclidean distance, scaled by the dimensions of the matrices.}
+A numeric value representing the normalized Euclidean distance between the two sets of cells.
 }
 \description{
-This function calculates the distance between two sets of cells using a specified distance method.
-}
-\details{
-The function converts each set of cells into a matrix representation, where each row corresponds to a cell, and columns represent bins.
-Rows are reordered based on the proportion of features with exactly one copy in descending order. The Euclidean distance between the
-two matrices is computed and normalized by the product of the matrix dimensions.
+This function calculates the Euclidean distance between two sets of cells, optionally ordering them based on the proportion of the genome in a single-copy state.
 }

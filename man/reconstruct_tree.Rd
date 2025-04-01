@@ -5,8 +5,7 @@
 \title{Reconstruct Phylogenetic Tree from Simulation Data}
 \usage{
 reconstruct_tree(
-  sim,
-  L,
+  x,
   alpha = 0.1,
   cn_weight = 0.001,
   eps = 0.01,
@@ -15,9 +14,7 @@ reconstruct_tree(
 )
 }
 \arguments{
-\item{sim}{A simulation object containing final cells and cell lifetimes.}
-
-\item{L}{Lenght of "normal" sequence}
+\item{x}{An object containing cells, cell history and input paramaters}
 
 \item{alpha}{A numeric value controlling the weight of certain genetic features in the distance calculation (default: 0.1).}
 

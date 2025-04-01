@@ -1,5 +1,6 @@
 
 is_hotspot_gained = function(cell, hotspot) {
+  if (is.null(hotspot)) return(FALSE)
   table_vec = table(seq2vec(cell))
   hotspot = c(hotspot)
   flag = all(lapply(hotspot, function(h) {h %in% names(table_vec)}) %>% unlist())

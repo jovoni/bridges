@@ -1,3 +1,4 @@
+
 get_colors = function(set) {
   if (set == "CN") {
     colors <- structure(
@@ -13,7 +14,7 @@ get_colors = function(set) {
       names = c("Gain", "Loss")
     )
   } else {
-    stop("Error: color set not known")
+    stop("Error: color set not known. Available sets are 'gainloss' and 'CN'")
   }
 
   colors

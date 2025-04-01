@@ -3,8 +3,7 @@
 #' This function reconstructs a phylogenetic tree from a simulation dataset by iteratively clustering cells
 #' based on their genetic similarity. The process continues until a root cell containing all original cells is identified.
 #'
-#' @param sim A simulation object containing final cells and cell lifetimes.
-#' @param L Lenght of "normal" sequence
+#' @param x An object containing cells, cell history and input paramaters
 #' @param alpha A numeric value controlling the weight of certain genetic features in the distance calculation (default: 0.1).
 #' @param cn_weight A numeric weight applied to copy number variations in distance calculations (default: 1e-3).
 #' @param eps A threshold for determining twin cells (default: 0.01).
@@ -16,10 +15,16 @@
 #'   - `pd_list`: A list mapping parents to their daughters in the phylogenetic tree.
 #'
 #' @export
-reconstruct_tree = function(sim, L, alpha = .1, cn_weight = 1e-3, eps = .01, remove_cells = TRUE, verbose = FALSE) {
+reconstruct_tree = function(x, alpha = .1, cn_weight = 1e-3, eps = .01, remove_cells = TRUE, verbose = FALSE) {
   # Extract final cells and cell names from simulation data
-  cells = sim$final_cells
-  cells_names = sim$cell_lifetimes %>% dplyr::filter(is_alive) %>% dplyr::pull(cell_id)
+  cells = x$cells
+  if ("cell_history" %in% names(x)) {
+    cells_names = x$cell_history %>% dplyr::filter(.data$is_alive) %>% dplyr::pull(.data$cell_id)
+  } else {
+    cells_names = as.character(1:length(cells))
+  }
+  L = x$input_parameters$initial_sequence_length
+
   original_cells = cells_names = lapply(cells_names, function(c) {paste0("|",c,"|")}) %>% unlist()
   removed_cells = TRUE
   N0 = length(cells)
@@ -114,23 +119,23 @@ reconstruct_tree = function(sim, L, alpha = .1, cn_weight = 1e-3, eps = .01, rem
   C = rbind(C, removed_cells)
 
   # Build phylogenetic tree
-  phylogeny = build_phylogeny(pd_list, parent = root, parent_id = NA)
+  cell_history = build_cell_history(pd_list, parent = root, parent_id = NA)
 
   # Add metadata to phylogeny
-  phylogeny$type = ifelse(phylogeny$cell_id %in% original_cells, "observed", "pseudo")
-  phylogeny$distance = lapply(1:nrow(phylogeny), function(i) {
-    row = phylogeny[i,]
+  cell_history$type = ifelse(cell_history$cell_id %in% original_cells, "observed", "pseudo")
+  cell_history$distance = lapply(1:nrow(cell_history), function(i) {
+    row = cell_history[i,]
     if (is.na(row$parent_id)) return(NA)
     euclidean_distance(C[row$cell_id,], C[row$parent_id,])
   })
-  phylogeny$bfb_event = phylogeny$distance > eps
-  phylogeny$birth_time = NA
-  phylogeny$hotspot_gained = NA
-  phylogeny$is_alive = phylogeny$type == "observed"
-  phylogeny$bfb_event[is.na(phylogeny$bfb_event)] = FALSE
+  cell_history$bfb_event = cell_history$distance > eps
+  cell_history$birth_time = NA
+  cell_history$hotspot_gained = NA
+  cell_history$is_alive = cell_history$type == "observed"
+  cell_history$bfb_event[is.na(cell_history$bfb_event)] = FALSE
 
   # Generate final cell dataframe
-  cell_df = find_bfb_only_cell_data(phylogeny)
+  cell_history = keep_only_bfb_branches(cell_history = cell_history)
 
-  list(cell_df = cell_df, pd_list = pd_list)
+  list(cell_history = cell_history, tree = pd_list)
 }

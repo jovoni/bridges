@@ -6,7 +6,7 @@ plot_vec_CN_profile = function(vec) {
 
   df = dplyr::tibble(bin=bins, CN=CN)
   df %>%
-    ggplot2::ggplot(mapping = ggplot2::aes(x=bin, y=CN, col=factor(CN), group=CN)) +
+    ggplot2::ggplot(mapping = ggplot2::aes(x=.data$bin, y=.data$CN, col=factor(.data$CN), group=.data$CN)) +
     ggplot2::geom_point() +
     ggplot2::theme_bw() +
     ggplot2::scale_color_manual(values = get_colors("CN")) +

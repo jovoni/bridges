@@ -15,7 +15,7 @@ plot_sequence_length_distribution = function(L0, n, support, Nrep = 1000, bins=1
   }) %>% unlist()
 
   dplyr::tibble(L = xs) %>%
-    ggplot2::ggplot(mapping = ggplot2::aes(x=L)) +
+    ggplot2::ggplot(mapping = ggplot2::aes(x=.data$L)) +
     ggplot2::geom_histogram(bins = bins) +
     ggplot2::theme_bw()
 }
