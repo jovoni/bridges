@@ -6,6 +6,7 @@ cells2mat = function(cells, L, order) {
     tab_vec = table(seq2vec(cells[[idx]]))
     m[idx, as.numeric(names(tab_vec))] = as.numeric(tab_vec)
   }
+  rownames(m) = names(cells)
 
   if (order) {
     one_copy_percentage = rowSums(m == 1) / L

@@ -5,68 +5,61 @@
 \title{Plot a Cell Lineage Tree with Detailed Annotations}
 \usage{
 plot_tree(
-  x,
-  full_tree = TRUE,
-  add_root = FALSE,
-  legend.position = "bottom",
+  tree,
+  ladderize = TRUE,
+  legend.position = "none",
+  annotate_tip = FALSE,
   annotate_bfb_events = TRUE,
   annotate_hotspot_amplifications = TRUE,
-  bfb_event_colors = c(`FALSE` = "black", `TRUE` = "indianred"),
+  bfb_event_colors = c(`FALSE` = "black", `TRUE` = "firebrick3"),
   hotspot_colors = c(`FALSE` = "white", `TRUE` = "indianred"),
   tip_align = TRUE,
   tip_offset = 0.5,
+  size = 0.25,
   tip_hjust = 0.5,
-  use_computed_branch_lengths = TRUE,
+  expand = FALSE,
   hotspot_shape = 21,
-  hotspot_size = 2
+  hotspot_size = 0.25
 )
 }
 \arguments{
-\item{x}{A list which has an element named cell_history, which is a data frame with required columns:
+\item{tree}{A list containing:
 \itemize{
-\item \code{cell_id}: Unique identifier for each cell
-\item \code{parent_id}: Identifier of the parent cell
-\item \code{birth_time}: Timestamp of cell birth
-\item \code{bfb_event}: Logical indicating breakage-fusion-bridge event
-\item \code{hotspot_gained}: Logical indicating hotspot amplification
+\item \code{tree}: A phylogenetic tree object of class \code{phylo}.
+\item \code{node_data}: A data frame with node-specific information including \code{cell_id}, \code{bfb_event}, and \code{hotspot_gained}.
 }}
 
-\item{full_tree}{Logical. If TRUE, final tree will show all duplications as branches.
-If FALSE, only BFB replications will be shown on the tree.}
+\item{ladderize}{Logical. If TRUE, ladderizes the tree for better visualization. Default is TRUE.}
 
-\item{add_root}{Logical. If TRUE, a root is added as parent of all the parent-less cells
-present in the cell_history of x.}
+\item{legend.position}{Character. Position of the legend, one of "none", "bottom", "top", "left", "right". Default is "none".}
 
-\item{legend.position}{Position of the legend. Defaults to "bottom".
-Accepts standard ggplot2 legend positions: "bottom", "top", "left", "right", "none"}
+\item{annotate_tip}{Logical. If TRUE, displays tip labels. Default is FALSE.}
 
-\item{annotate_bfb_events}{Logical. If TRUE, color tree branches based on BFB events}
+\item{annotate_bfb_events}{Logical. If TRUE, colors tree branches based on BFB events. Default is TRUE.}
 
-\item{annotate_hotspot_amplifications}{Logical. If TRUE, add point markers for hotspot amplifications}
+\item{annotate_hotspot_amplifications}{Logical. If TRUE, adds point markers for hotspot amplifications. Default is TRUE.}
 
-\item{bfb_event_colors}{Named vector specifying colors for BFB event status
-Default: c("FALSE" = "black", "TRUE" = "indianred")}
+\item{bfb_event_colors}{Named vector specifying colors for BFB event status. Default: c("FALSE" = "black", "TRUE" = "firebrick3").}
 
-\item{hotspot_colors}{Named vector specifying colors for hotspot amplification status
-Default: c("FALSE" = "white", "TRUE" = "indianred")}
+\item{hotspot_colors}{Named vector specifying colors for hotspot amplification status. Default: c("FALSE" = "white", "TRUE" = "indianred").}
 
-\item{tip_align}{Logical. If TRUE, align tip labels. Default is TRUE.}
+\item{tip_align}{Logical. If TRUE, aligns tip labels. Default is TRUE.}
 
 \item{tip_offset}{Numeric. Offset distance for tip labels. Default is 0.5.}
 
+\item{size}{Numeric. Line width of the tree branches. Default is 0.25.}
+
 \item{tip_hjust}{Numeric. Horizontal justification for tip labels. Default is 0.5.}
 
-\item{use_computed_branch_lengths}{Logical. If TRUE, use custom computed branch lengths.
-If FALSE, use ggtree's default branch length handling.}
+\item{expand}{Logical. If TRUE, expands the plot limits. Default is FALSE.}
 
-\item{hotspot_shape}{Numeric. Shape to use for hotspot amplification markers. Default is 21.}
+\item{hotspot_shape}{Numeric. Shape for hotspot amplification markers. Default is 21.}
 
-\item{hotspot_size}{Numeric. Size for hotspot amplification markers. Default is 2.}
+\item{hotspot_size}{Numeric. Size for hotspot amplification markers. Default is 0.25.}
 }
 \value{
-A ggtree plot object with cell lineage visualization
+A \code{ggtree} plot object representing the cell lineage tree.
 }
 \description{
-Creates a comprehensive visualization of cell lineage with flexible annotation options
-for tracking biological features like BFB events and hotspot amplifications.
+Generates a cell lineage tree visualization with options to annotate BFB events and hotspot amplifications.
 }

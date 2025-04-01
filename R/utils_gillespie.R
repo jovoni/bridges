@@ -480,11 +480,13 @@ prepare_results <- function(state) {
     hotspot_gained = state$cell_hotspot_gained
   )
 
+
   # Get only alive cells for final_cells output
   alive_indices <- which(state$cell_is_alive)
   final_cells <- lapply(state$cell_ids[alive_indices], function(id) {
     state$cell_sequences[[id]]
   })
+  names(final_cells) = cell_history$cell_id[alive_indices]
 
   # Fix parent IDs for display
   cell_history <- cell_history %>%

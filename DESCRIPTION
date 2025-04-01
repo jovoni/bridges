@@ -10,12 +10,11 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Imports: 
     ape,
+    ComplexHeatmap,
     dplyr,
-    ggnewscale,
     ggplot2,
     ggtree,
     magrittr,
-    patchwork,
     phangorn,
     Quartet,
     rlang,

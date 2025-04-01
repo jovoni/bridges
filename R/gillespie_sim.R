@@ -98,6 +98,7 @@ gillespie_sim <- function(
   }
 
   # Finalize and prepare results
+
   sim_state = prepare_results(sim_state)
   sim_state$input_parameters = list(
     initial_cells = initial_cells,
