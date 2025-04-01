@@ -10,7 +10,8 @@ gillespie_sim(
   birth_rate = 0.1,
   death_rate = 0.001,
   bfb_prob = 0.01,
-  selection_rate = 0,
+  positive_selection_rate = 0,
+  negative_selection_rate = 0,
   max_time = 50,
   max_cells = 100,
   first_n_bfb_cycles = 0,
@@ -32,7 +33,9 @@ gillespie_sim(
 
 \item{bfb_prob}{Numeric. Probability of BFB event occurring during replication. Default: 0.01}
 
-\item{selection_rate}{Numeric. Selection advantage for cells with amplified hotspot. Default: 0}
+\item{positive_selection_rate}{Numeric. Selection advantage for cells with amplified hotspot. Default: 0}
+
+\item{negative_selection_rate}{Numeric. Selection disadvantage for cells without amplified hotspot. Default: 0}
 
 \item{max_time}{Numeric. Maximum simulation time. Default: 50}
 
@@ -68,16 +71,4 @@ Simulates the evolution of cells undergoing Break-Fusion-Bridge cycles using
 a continuous-time Gillespie algorithm. This function models cell birth and death
 processes with the possibility of BFB events occurring during replication.
 Cells with amplified hotspots have an increased birth rate.
-}
-\details{
-The function implements a Gillespie algorithm to simulate stochastic birth and death
-processes with possible BFB events. Events occur at rates proportional to the number of cells
-and depend on time since the last event. The simulation tracks cell lineages, creating
-a phylogenetic history of BFB events.
-
-Cells with amplified hotspots replicate at an increased rate of birth_rate * (1 + selection_rate).
-
-BFB (Break-Fusion-Bridge) cycles are a mechanism of genomic instability where
-chromosome breakage followed by fusion of broken ends creates genomic rearrangements.
-Each BFB event produces two daughter cells with different rearranged sequences.
 }

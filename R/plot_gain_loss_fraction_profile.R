@@ -16,8 +16,8 @@ plot_gain_loss_fraction_profile = function(x) {
       # Create the output data frame with repeated values based on count
       dplyr::tibble(
         bin = x_values,
-        count = .data$copy_number,
-        cell_idx = .data$cell_idx
+        count = .$copy_number,
+        cell_idx = .$cell_idx
       )
     }) %>%
     dplyr::group_by(.data$bin) %>%
