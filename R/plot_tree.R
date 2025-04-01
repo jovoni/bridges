@@ -14,6 +14,9 @@
 #' @param full_tree Logical. If TRUE, final tree will show all duplications as branches.
 #'  If FALSE, only BFB replications will be shown on the tree.
 #'
+#' @param add_root Logical. If TRUE, a root is added as parent of all the parent-less cells
+#'  present in the cell_history of x.
+#'
 #' @param legend.position Position of the legend. Defaults to "bottom".
 #'   Accepts standard ggplot2 legend positions: "bottom", "top", "left", "right", "none"
 #'
@@ -45,6 +48,7 @@
 plot_tree <- function(
     x,
     full_tree = TRUE,
+    add_root = FALSE,
     legend.position = "bottom",
     annotate_bfb_events = TRUE,
     annotate_hotspot_amplifications = TRUE,
@@ -70,6 +74,27 @@ plot_tree <- function(
   if (!full_tree) {
     cell_history = keep_only_bfb_branches(cell_history)
   }
+
+  # Add root if requested by considering all cells without parent
+  # as descending from the same root
+  if (add_root) {
+    cell_history$parent_id[is.na(cell_history$parent_id)] = "root"
+    cell_history = dplyr::bind_rows(
+      dplyr::tibble(
+        cell_id = "root",
+        birth_time = -1,
+        death_time = -1,
+        lifetime = 0,
+        is_alive = FALSE,
+        parent_id = NA,
+        bfb_event = FALSE,
+        hotspot_gained = FALSE
+      ),
+      cell_history
+    )
+  }
+
+  if (sum(is.na(cell_history$parent_id)) > 1) stop("Multiple cells don't have a parent. You might run this function with 'add_root=TRUE'")
   newick_str <- cell_history_to_newick(cell_history)
 
   # Read the Newick tree

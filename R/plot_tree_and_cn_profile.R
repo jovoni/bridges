@@ -2,6 +2,7 @@
 plot_tree_and_cn_profile = function(
     x,
     full_tree = TRUE,
+    add_root = FALSE,
     legend.position = "bottom",
     annotate_bfb_events = TRUE,
     annotate_hotspot_amplifications = TRUE,
@@ -20,6 +21,7 @@ plot_tree_and_cn_profile = function(
   # Prepare tree plot
   tree_plot = plot_tree(x,
                         full_tree,
+                        add_root,
                         legend.position,
                         annotate_bfb_events,
                         annotate_hotspot_amplifications,

@@ -7,6 +7,7 @@
 plot_tree(
   x,
   full_tree = TRUE,
+  add_root = FALSE,
   legend.position = "bottom",
   annotate_bfb_events = TRUE,
   annotate_hotspot_amplifications = TRUE,
@@ -32,6 +33,9 @@ plot_tree(
 
 \item{full_tree}{Logical. If TRUE, final tree will show all duplications as branches.
 If FALSE, only BFB replications will be shown on the tree.}
+
+\item{add_root}{Logical. If TRUE, a root is added as parent of all the parent-less cells
+present in the cell_history of x.}
 
 \item{legend.position}{Position of the legend. Defaults to "bottom".
 Accepts standard ggplot2 legend positions: "bottom", "top", "left", "right", "none"}

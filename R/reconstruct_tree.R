@@ -137,5 +137,8 @@ reconstruct_tree = function(x, alpha = .1, cn_weight = 1e-3, eps = .01, remove_c
   # Generate final cell dataframe
   cell_history = keep_only_bfb_branches(cell_history = cell_history)
 
-  list(cell_history = cell_history, tree = pd_list)
+  x$cell_history = cell_history
+  x$tree = pd_list
+
+  x
 }
