@@ -9,3 +9,13 @@ test_that("All dead cells are correctly handled", {
   x = gillespie_sim(1, 100, death_rate = 1)
   expect_equal(length(x$cells), 0)
 })
+
+test_that("No errors", {
+  expect_no_error(
+    gillespie_sim(1, 100, 1, 0, .5, 1, 0, first_round_of_bfb = TRUE)
+  )
+
+  expect_no_error(
+    gillespie_sim(1, 100, 1, 0, .5, 1, 0, first_round_of_bfb = FALSE)
+  )
+})

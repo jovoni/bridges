@@ -31,6 +31,8 @@ plot_heatmap = function(x,
                         tree_width = 1,
                         full_tree = TRUE,
                         add_root = FALSE,
+                        use_raster = TRUE,
+                        raster_quality = 15,
                         branch_lengths = FALSE,
                         ladderize = TRUE,
                         legend.position = "none",
@@ -40,6 +42,7 @@ plot_heatmap = function(x,
                         bfb_event_colors = c("FALSE" = "black", "TRUE" = "firebrick3"),
                         hotspot_colors = c("FALSE" = "white", "TRUE" = "indianred"),
                         tip_align = TRUE,
+                        plot_col = "state",
                         tip_offset = 1,
                         tip_hjust = 1,
                         hotspot_shape = 21,
@@ -92,12 +95,21 @@ plot_heatmap = function(x,
     )
   }
 
-  high_cn_mask = mat > 10
-  mat_row_names = rownames(mat)
-  mat = matrix(as.character(mat), ncol = x$input_parameters$initial_sequence_length, nrow = length(x$cells))
-  mat[high_cn_mask] = "11+"
-  mat = data.frame(mat)
-  rownames(mat) = mat_row_names
+  if (plot_col == "state") {
+    high_cn_mask = mat > 10
+    mat_row_names = rownames(mat)
+    mat = matrix(as.character(mat), ncol = x$input_parameters$initial_sequence_length, nrow = length(x$cells))
+    mat[high_cn_mask] = "11+"
+    mat = data.frame(mat)
+    rownames(mat) = mat_row_names
+    colvals <- get_colors("CN")
+  } else if (plot_col == "copy") {
+    mat = data.frame(mat)
+    colvals <- circlize::colorRamp2(seq(0, 11, 1), get_colors("copy"))
+  } else {
+    stop("plot_col not recognized. Must be either 'copy' or 'state'")
+  }
+
   if (add_tree) {
     mat = mat[ordered_cell_ids, , drop = FALSE]
   }
@@ -106,20 +118,26 @@ plot_heatmap = function(x,
     copynumber_hm = ComplexHeatmap::Heatmap(
       name = "Copy Number",
       as.matrix(mat),
-      col = get_colors("CN"),
+      col = colvals,
       show_column_names = FALSE,
       show_row_names = FALSE,
-      use_raster = TRUE,
-      top_annotation = top_anno
+      use_raster = use_raster,
+      raster_quality = raster_quality,
+      top_annotation = top_anno,
+      cluster_rows = F,
+      cluster_columns = F
     )
   } else {
     copynumber_hm = ComplexHeatmap::Heatmap(
       name = "Copy Number",
       as.matrix(mat),
-      col = get_colors("CN"),
+      col = colvals,
       show_column_names = FALSE,
       show_row_names = FALSE,
-      use_raster = TRUE
+      use_raster = use_raster,
+      raster_quality = raster_quality,
+      cluster_rows = F,
+      cluster_columns = F
     )
   }
 

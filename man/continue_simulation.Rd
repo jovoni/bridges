@@ -4,14 +4,10 @@
 \alias{continue_simulation}
 \title{Check if simulation should continue}
 \usage{
-continue_simulation(state, max_time, max_cells)
+continue_simulation(state)
 }
 \arguments{
 \item{state}{The simulation state}
-
-\item{max_time}{Maximum simulation time}
-
-\item{max_cells}{Maximum number of cells allowed}
 }
 \value{
 Logical indicating whether simulation should continue

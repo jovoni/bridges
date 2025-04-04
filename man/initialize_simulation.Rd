@@ -4,42 +4,10 @@
 \alias{initialize_simulation}
 \title{Initialize simulation state}
 \usage{
-initialize_simulation(
-  initial_cells,
-  initial_sequence_length,
-  birth_rate,
-  death_rate,
-  positive_selection_rate,
-  negative_selection_rate,
-  first_round_of_bfb,
-  breakpoint_support,
-  hotspot,
-  alpha,
-  beta
-)
+initialize_simulation(input_parameters)
 }
 \arguments{
-\item{initial_cells}{Number of cells to start with}
-
-\item{initial_sequence_length}{Length of initial genomic sequence}
-
-\item{birth_rate}{Base birth rate}
-
-\item{death_rate}{Base death rate}
-
-\item{positive_selection_rate}{Selection advantage for hotspot cells}
-
-\item{negative_selection_rate}{Selection disadvantage for non hotspot cells}
-
-\item{first_round_of_bfb}{Whether to apply BFB to initial cells}
-
-\item{breakpoint_support}{Distribution for breakpoint selection}
-
-\item{hotspot}{Positions considered hotspots}
-
-\item{alpha}{Beta distribution parameter}
-
-\item{beta}{Beta distribution parameter}
+\item{input_parameters}{List of parameters given as input to gillespie_sim function.}
 }
 \value{
 A list containing the initialized simulation state

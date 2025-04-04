@@ -10,7 +10,7 @@ cell_history_to_newick <- function(cell_history) {
     # Find children of the current node
     node_data <- cell_history %>%
       dplyr::filter(.data$cell_id == node) %>%
-      dplyr::select(.data$bfb_event)
+      dplyr::select(bfb_event)
 
     # Find children of the current node
     children <- cell_history %>% dplyr::filter(.data$parent_id == node) %>% dplyr::pull(.data$cell_id)

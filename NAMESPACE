@@ -3,6 +3,7 @@
 export("%>%")
 export(get_tree_data)
 export(gillespie_sim)
+export(plot_hotspot_copies)
 export(plot_tree)
 export(reconstruct_tree)
 importFrom(ggtree,"%<+%")

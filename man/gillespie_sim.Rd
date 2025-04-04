@@ -12,6 +12,8 @@ gillespie_sim(
   bfb_prob = 0.01,
   positive_selection_rate = 0,
   negative_selection_rate = 0,
+  positive_selection_function = bridges:::positive_selection_function,
+  negative_selection_function = bridges:::negative_selection_function,
   max_time = 50,
   max_cells = 100,
   first_n_bfb_cycles = 0,
@@ -36,6 +38,12 @@ gillespie_sim(
 \item{positive_selection_rate}{Numeric. Selection advantage for cells with amplified hotspot. Default: 0}
 
 \item{negative_selection_rate}{Numeric. Selection disadvantage for cells without amplified hotspot. Default: 0}
+
+\item{positive_selection_function}{Function. A function that takes as input a positive selection rate and a number
+of copies and returns a value between -1 and Infinity. This determines how selection advantage scales with hotspot amplification.}
+
+\item{negative_selection_function}{Function. A function that takes as input a negative selection rate and a number
+of copies and returns a value between -1 and Infinity. This determines how selection disadvantage scales with hotspot amplification.}
 
 \item{max_time}{Numeric. Maximum simulation time. Default: 50}
 

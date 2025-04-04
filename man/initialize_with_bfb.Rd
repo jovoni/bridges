@@ -4,45 +4,12 @@
 \alias{initialize_with_bfb}
 \title{Initialize simulation with BFB events for initial cells}
 \usage{
-initialize_with_bfb(
-  state,
-  initial_cells,
-  initial_sequence,
-  initial_length,
-  birth_rate,
-  death_rate,
-  positive_selection_rate,
-  negative_selection_rate,
-  breakpoint_support,
-  hotspot,
-  alpha,
-  beta
-)
+initialize_with_bfb(state, initial_sequence)
 }
 \arguments{
 \item{state}{The simulation state}
 
-\item{initial_cells}{Number of cells to start with}
-
 \item{initial_sequence}{Initial genomic sequence}
-
-\item{initial_length}{Length of initial sequence}
-
-\item{birth_rate}{Base birth rate}
-
-\item{death_rate}{Base death rate}
-
-\item{positive_selection_rate}{Selection advantage for hotspot cells}
-
-\item{negative_selection_rate}{Selection disadvantage for non hotspot cells}
-
-\item{breakpoint_support}{Distribution for breakpoint selection}
-
-\item{hotspot}{Positions considered hotspots}
-
-\item{alpha}{Beta distribution parameter}
-
-\item{beta}{Beta distribution parameter}
 }
 \value{
 Updated simulation state

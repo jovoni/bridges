@@ -4,45 +4,12 @@
 \alias{process_birth_event}
 \title{Process a birth event}
 \usage{
-process_birth_event(
-  state,
-  current_cell_id,
-  birth_rate,
-  death_rate,
-  bfb_prob,
-  positive_selection_rate,
-  negative_selection_rate,
-  breakpoint_support,
-  first_n_bfb_cycles,
-  hotspot,
-  alpha,
-  beta
-)
+process_birth_event(state, current_cell_id)
 }
 \arguments{
 \item{state}{The simulation state}
 
 \item{current_cell_id}{ID of the cell undergoing birth}
-
-\item{birth_rate}{Base birth rate}
-
-\item{death_rate}{Base death rate}
-
-\item{bfb_prob}{Probability of BFB event}
-
-\item{positive_selection_rate}{Selection advantage for hotspot cells}
-
-\item{negative_selection_rate}{Selection disadvantage for non hotspot cells}
-
-\item{breakpoint_support}{Distribution for breakpoint selection}
-
-\item{first_n_bfb_cycles}{Number of initial birth events with forced BFB}
-
-\item{hotspot}{Positions considered hotspots}
-
-\item{alpha}{Beta distribution parameter}
-
-\item{beta}{Beta distribution parameter}
 }
 \value{
 Updated simulation state

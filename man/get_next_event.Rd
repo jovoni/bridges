@@ -4,24 +4,10 @@
 \alias{get_next_event}
 \title{Determine the next event to occur}
 \usage{
-get_next_event(
-  state,
-  birth_rate,
-  death_rate,
-  positive_selection_rate,
-  negative_selection_rate
-)
+get_next_event(state)
 }
 \arguments{
 \item{state}{The simulation state}
-
-\item{birth_rate}{Base birth rate}
-
-\item{death_rate}{Base death rate}
-
-\item{positive_selection_rate}{Selection advantage for hotspot cells}
-
-\item{negative_selection_rate}{Selection disadvantage for non hotspot cells}
 }
 \value{
 List with time, cell ID, and event type of next event

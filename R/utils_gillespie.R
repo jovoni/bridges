@@ -1,13 +1,9 @@
 #' Determine the next event to occur
 #'
 #' @param state The simulation state
-#' @param birth_rate Base birth rate
-#' @param death_rate Base death rate
-#' @param positive_selection_rate Selection advantage for hotspot cells
-#' @param negative_selection_rate Selection disadvantage for non hotspot cells
 #'
 #' @return List with time, cell ID, and event type of next event
-get_next_event <- function(state, birth_rate, death_rate, positive_selection_rate, negative_selection_rate) {
+get_next_event <- function(state) {
   # Find the next cell to have an event
   alive_indices <- which(state$cell_is_alive)
 
@@ -24,9 +20,9 @@ get_next_event <- function(state, birth_rate, death_rate, positive_selection_rat
   current_cell_id <- state$cell_ids[next_event_idx]
 
   # Calculate modified birth and death rates for this specific cell
-  cell_hotspot_gained <- state$cell_hotspot_gained[next_event_idx]
-  cell_birth_rate <- birth_rate * (1 + positive_selection_rate * cell_hotspot_gained)
-  cell_death_rate <- death_rate * (1 - negative_selection_rate * (!cell_hotspot_gained))
+  cell_hotspot_copies <- state$cell_hotspot_copies[next_event_idx]
+  cell_birth_rate <- state$input_parameters$birth_rate * (1 + state$input_parameters$positive_selection_function(state$input_parameters$positive_selection_rate, cell_hotspot_copies))
+  cell_death_rate <- state$input_parameters$death_rate * (1 + state$input_parameters$negative_selection_function(state$input_parameters$negative_selection_rate, cell_hotspot_copies))
 
   # Determine event type (birth or death) based on relative rates
   event_probability <- cell_birth_rate / (cell_birth_rate + cell_death_rate)
@@ -44,32 +40,9 @@ get_next_event <- function(state, birth_rate, death_rate, positive_selection_rat
 #'
 #' @param state The simulation state
 #' @param current_cell_id ID of the cell undergoing birth
-#' @param birth_rate Base birth rate
-#' @param death_rate Base death rate
-#' @param bfb_prob Probability of BFB event
-#' @param positive_selection_rate Selection advantage for hotspot cells
-#' @param negative_selection_rate Selection disadvantage for non hotspot cells
-#' @param breakpoint_support Distribution for breakpoint selection
-#' @param first_n_bfb_cycles Number of initial birth events with forced BFB
-#' @param hotspot Positions considered hotspots
-#' @param alpha Beta distribution parameter
-#' @param beta Beta distribution parameter
 #'
 #' @return Updated simulation state
-process_birth_event <- function(
-    state,
-    current_cell_id,
-    birth_rate,
-    death_rate,
-    bfb_prob,
-    positive_selection_rate,
-    negative_selection_rate,
-    breakpoint_support,
-    first_n_bfb_cycles,
-    hotspot,
-    alpha,
-    beta
-) {
+process_birth_event <- function(state, current_cell_id) {
   # Increment birth count
   state$birth_count <- state$birth_count + 1
 
@@ -77,8 +50,8 @@ process_birth_event <- function(
   cell_idx <- which(state$cell_ids == current_cell_id)
 
   # Determine if BFB occurs
-  force_bfb <- state$birth_count <= first_n_bfb_cycles
-  random_bfb <- stats::runif(1) < bfb_prob
+  force_bfb <- state$birth_count <= state$input_parameters$first_n_bfb_cycles
+  random_bfb <- stats::runif(1) < state$input_parameters$bfb_prob
   bfb_occurs <- force_bfb || random_bfb
 
   # Get parent cell information
@@ -90,7 +63,7 @@ process_birth_event <- function(
   # Create daughter sequences
   if (bfb_occurs) {
     # BFB event: simulate left and right sequences
-    daughter_seqs <- sim_bfb_left_and_right_sequences(parent_seq, breakpoint_support, alpha, beta)
+    daughter_seqs <- sim_bfb_left_and_right_sequences(parent_seq, state$input_parameters$breakpoint_support, state$input_parameters$alpha, state$input_parameters$beta)
   } else {
     # Normal duplication: create identical sequences
     daughter_seqs <- list(l_seq = parent_seq, r_seq = parent_seq)
@@ -121,22 +94,25 @@ process_birth_event <- function(
   l_effect <- ifelse(l_length > parent_length, "gain", "loss")
   r_effect <- ifelse(r_length > parent_length, "gain", "loss")
 
-  l_hotspot_gained <- is_hotspot_gained(daughter_seqs$l_seq, hotspot)
-  r_hotspot_gained <- is_hotspot_gained(daughter_seqs$r_seq, hotspot)
+  l_hotspot_gained <- is_hotspot_gained(daughter_seqs$l_seq, state$input_parameters$hotspot)
+  r_hotspot_gained <- is_hotspot_gained(daughter_seqs$r_seq, state$input_parameters$hotspot)
+
+  l_hotspot_copies = get_hotspot_copies(daughter_seqs$l_seq, state$input_parameters$hotspot)
+  r_hotspot_copies = get_hotspot_copies(daughter_seqs$r_seq, state$input_parameters$hotspot)
 
   # Record hotspot gain events
-  if (l_hotspot_gained && !parent_hotspot_gained) {
-    state$hotspot_gain_events <- rbind(
-      state$hotspot_gain_events,
-      data.frame(time = state$time, cell_id = l_cell_id)
-    )
-  }
-  if (r_hotspot_gained && !parent_hotspot_gained) {
-    state$hotspot_gain_events <- rbind(
-      state$hotspot_gain_events,
-      data.frame(time = state$time, cell_id = r_cell_id)
-    )
-  }
+  # if (l_hotspot_gained && !parent_hotspot_gained) {
+  #   state$hotspot_gain_events <- rbind(
+  #     state$hotspot_gain_events,
+  #     data.frame(time = state$time, cell_id = l_cell_id)
+  #   )
+  # }
+  # if (r_hotspot_gained && !parent_hotspot_gained) {
+  #   state$hotspot_gain_events <- rbind(
+  #     state$hotspot_gain_events,
+  #     data.frame(time = state$time, cell_id = r_cell_id)
+  #   )
+  # }
 
   # Store new cell information
   state$cell_ids <- c(state$cell_ids, l_cell_id, r_cell_id)
@@ -148,14 +124,15 @@ process_birth_event <- function(
   state$cell_parents <- c(state$cell_parents, current_cell_id, current_cell_id)
   state$cell_bfb <- c(state$cell_bfb, bfb_occurs, bfb_occurs)
   state$cell_hotspot_gained <- c(state$cell_hotspot_gained, l_hotspot_gained, r_hotspot_gained)
+  state$cell_hotspot_copies <- c(state$cell_hotspot_copies, l_hotspot_copies, r_hotspot_copies)
   state$cell_is_alive <- c(state$cell_is_alive, TRUE, TRUE)
 
-  # Calculate modified birth and death rates for new cells
-  l_birth_rate <- birth_rate * (1 + positive_selection_rate * l_hotspot_gained)
-  r_birth_rate <- birth_rate * (1 + positive_selection_rate * r_hotspot_gained)
+  # Calculate modified birth and death rates
+  l_birth_rate <- state$input_parameters$birth_rate * (1 + positive_selection_function(state$input_parameters$positive_selection_rate, l_hotspot_copies))
+  l_death_rate <- state$input_parameters$death_rate * (1 + negative_selection_function(state$input_parameters$negative_selection_rate, l_hotspot_copies))
 
-  l_death_rate <- death_rate * (1 - negative_selection_rate * (!l_hotspot_gained))
-  r_death_rate <- death_rate * (1 - negative_selection_rate * (!r_hotspot_gained))
+  r_birth_rate <- state$input_parameters$birth_rate * (1 + positive_selection_function(state$input_parameters$positive_selection_rate, r_hotspot_copies))
+  r_death_rate <- state$input_parameters$death_rate * (1 + negative_selection_function(state$input_parameters$negative_selection_rate, r_hotspot_copies))
 
   # Calculate next event times for new cells based on combined rates
   l_combined_rate <- l_birth_rate + l_death_rate
@@ -208,32 +185,10 @@ process_death_event <- function(state, current_cell_id) {
 
 #' Initialize simulation state
 #'
-#' @param initial_cells Number of cells to start with
-#' @param initial_sequence_length Length of initial genomic sequence
-#' @param birth_rate Base birth rate
-#' @param death_rate Base death rate
-#' @param positive_selection_rate Selection advantage for hotspot cells
-#' @param negative_selection_rate Selection disadvantage for non hotspot cells
-#' @param first_round_of_bfb Whether to apply BFB to initial cells
-#' @param breakpoint_support Distribution for breakpoint selection
-#' @param hotspot Positions considered hotspots
-#' @param alpha Beta distribution parameter
-#' @param beta Beta distribution parameter
+#' @param input_parameters List of parameters given as input to gillespie_sim function.
 #'
 #' @return A list containing the initialized simulation state
-initialize_simulation <- function(
-    initial_cells,
-    initial_sequence_length,
-    birth_rate,
-    death_rate,
-    positive_selection_rate,
-    negative_selection_rate,
-    first_round_of_bfb,
-    breakpoint_support,
-    hotspot,
-    alpha,
-    beta
-) {
+initialize_simulation <- function(input_parameters) {
   # Initialize state variables
   state <- list(
     time = 0,
@@ -246,6 +201,7 @@ initialize_simulation <- function(
     cell_parents = character(0),
     cell_bfb = logical(0),
     cell_hotspot_gained = logical(0),
+    cell_hotspot_copies = numeric(0),
     cell_is_alive = logical(0),
     cell_next_event_times = numeric(0),
     cell_bfb_history = list(),
@@ -253,38 +209,18 @@ initialize_simulation <- function(
     next_bfb_id = 1,
     hotspot_gain_events = data.frame(time = numeric(0), cell_id = character(0))
   )
+  state$input_parameters = input_parameters
 
   # Create initial sequence
-  initial_sequence <- vec2seq(1:initial_sequence_length)
+  initial_sequence <- vec2seq(1:input_parameters$initial_sequence_length)
   initial_length <- get_seq_length(initial_sequence)
-  initial_hotspot_gained <- is_hotspot_gained(initial_sequence, hotspot)
+  initial_hotspot_gained <- is_hotspot_gained(initial_sequence, input_parameters$hotspot)
+  initial_hotspot_copies <- get_hotspot_copies(initial_sequence, input_parameters$hotspot)
 
-  if (first_round_of_bfb) {
-    state <- initialize_with_bfb(
-      state,
-      initial_cells,
-      initial_sequence,
-      initial_length,
-      birth_rate,
-      death_rate,
-      positive_selection_rate,
-      negative_selection_rate,
-      breakpoint_support,
-      hotspot,
-      alpha,
-      beta
-    )
+  if (state$input_parameters$first_round_of_bfb) {
+    state <- initialize_with_bfb(state, initial_sequence)
   } else {
-    state <- initialize_without_bfb(
-      state,
-      initial_cells,
-      initial_sequence,
-      initial_hotspot_gained,
-      birth_rate,
-      death_rate,
-      positive_selection_rate,
-      negative_selection_rate
-    )
+    state <- initialize_without_bfb(state)
   }
 
   return(state)
@@ -293,36 +229,19 @@ initialize_simulation <- function(
 #' Initialize simulation with BFB events for initial cells
 #'
 #' @param state The simulation state
-#' @param initial_cells Number of cells to start with
 #' @param initial_sequence Initial genomic sequence
-#' @param initial_length Length of initial sequence
-#' @param birth_rate Base birth rate
-#' @param death_rate Base death rate
-#' @param positive_selection_rate Selection advantage for hotspot cells
-#' @param negative_selection_rate Selection disadvantage for non hotspot cells
-#' @param breakpoint_support Distribution for breakpoint selection
-#' @param hotspot Positions considered hotspots
-#' @param alpha Beta distribution parameter
-#' @param beta Beta distribution parameter
 #'
 #' @return Updated simulation state
-initialize_with_bfb <- function(
-    state,
-    initial_cells,
-    initial_sequence,
-    initial_length,
-    birth_rate,
-    death_rate,
-    positive_selection_rate,
-    negative_selection_rate,
-    breakpoint_support,
-    hotspot,
-    alpha,
-    beta
-) {
-  for (i in 1:initial_cells) {
+initialize_with_bfb <- function(state, initial_sequence) {
+
+  for (i in 1:state$input_parameters$initial_cells) {
     # Apply BFB to create daughter sequences
-    daughter_seqs <- sim_bfb_left_and_right_sequences(initial_sequence, breakpoint_support, alpha, beta)
+    daughter_seqs <- sim_bfb_left_and_right_sequences(
+      initial_sequence,
+      state$input_parameters$breakpoint_support,
+      state$input_parameters$alpha,
+      state$input_parameters$beta
+    )
 
     # Error checking
     if (any(is.na(daughter_seqs$l_seq))) {
@@ -344,11 +263,14 @@ initialize_with_bfb <- function(
     l_length <- get_seq_length(daughter_seqs$l_seq)
     r_length <- get_seq_length(daughter_seqs$r_seq)
 
-    l_effect <- ifelse(l_length > initial_length, "gain", "loss")
-    r_effect <- ifelse(r_length > initial_length, "gain", "loss")
+    l_effect <- ifelse(l_length > state$input_parameters$initial_sequence_length, "gain", "loss")
+    r_effect <- ifelse(r_length > state$input_parameters$initial_sequence_length, "gain", "loss")
 
-    l_hotspot_gained <- is_hotspot_gained(daughter_seqs$l_seq, hotspot)
-    r_hotspot_gained <- is_hotspot_gained(daughter_seqs$r_seq, hotspot)
+    l_hotspot_gained <- is_hotspot_gained(daughter_seqs$l_seq, state$input_parameters$hotspot)
+    r_hotspot_gained <- is_hotspot_gained(daughter_seqs$r_seq, state$input_parameters$hotspot)
+
+    l_hotspot_copies <- get_hotspot_copies(daughter_seqs$l_seq, state$input_parameters$hotspot)
+    r_hotspot_copies <- get_hotspot_copies(daughter_seqs$r_seq, state$input_parameters$hotspot)
 
     # Create cell IDs for daughters
     l_cell_id <- paste0("cell_", length(state$cell_ids) + 1)
@@ -364,14 +286,16 @@ initialize_with_bfb <- function(
     state$cell_parents <- c(state$cell_parents, NA, NA)
     state$cell_bfb <- c(state$cell_bfb, TRUE, TRUE)
     state$cell_hotspot_gained <- c(state$cell_hotspot_gained, l_hotspot_gained, r_hotspot_gained)
+    state$cell_hotspot_copies <- c(state$cell_hotspot_copies, l_hotspot_copies, r_hotspot_copies)
     state$cell_is_alive <- c(state$cell_is_alive, TRUE, TRUE)
 
     # Calculate modified birth and death rates
-    l_birth_rate <- birth_rate * (1 + positive_selection_rate * l_hotspot_gained)
-    r_birth_rate <- birth_rate * (1 + positive_selection_rate * r_hotspot_gained)
 
-    l_death_rate <- death_rate * (1 - negative_selection_rate * (!l_hotspot_gained))
-    r_death_rate <- death_rate * (1 - negative_selection_rate * (!r_hotspot_gained))
+    l_birth_rate <- state$input_parameters$birth_rate * (1 + state$input_parameters$positive_selection_function(state$input_parameters$positive_selection_rate, l_hotspot_copies))
+    l_death_rate <- state$input_parameters$death_rate * (1 + state$input_parameters$negative_selection_function(state$input_parameters$negative_selection_rate, l_hotspot_copies))
+
+    r_birth_rate <- state$input_parameters$birth_rate * (1 + state$input_parameters$positive_selection_function(state$input_parameters$positive_selection_rate, r_hotspot_copies))
+    r_death_rate <- state$input_parameters$death_rate * (1 + state$input_parameters$negative_selection_function(state$input_parameters$negative_selection_rate, r_hotspot_copies))
 
     # Calculate combined rates
     l_combined_rate <- l_birth_rate + l_death_rate
@@ -397,40 +321,26 @@ initialize_with_bfb <- function(
 #' Initialize simulation without BFB for initial cells
 #'
 #' @param state The simulation state
-#' @param initial_cells Number of cells to start with
-#' @param initial_sequence Initial genomic sequence
-#' @param initial_hotspot_gained Whether initial cells have hotspot gain
-#' @param birth_rate Base birth rate
-#' @param death_rate Base death rate
-#' @param positive_selection_rate Selection advantage for hotspot cells
-#' @param negative_selection_rate Selection disadvantage for non hotspot cells
 #'
 #' @return Updated simulation state
-initialize_without_bfb <- function(
-    state,
-    initial_cells,
-    initial_sequence,
-    initial_hotspot_gained,
-    birth_rate,
-    death_rate,
-    positive_selection_rate,
-    negative_selection_rate
-) {
-  for (i in 1:initial_cells) {
+initialize_without_bfb <- function(state) {
+  for (i in 1:state$input_parameters$initial_cells) {
     cell_id <- paste0("cell_", length(state$cell_ids) + 1)
 
     state$cell_ids <- c(state$cell_ids, cell_id)
-    state$cell_sequences[[cell_id]] <- initial_sequence
+    state$cell_sequences[[cell_id]] <- vec2seq(1:state$input_parameters$initial_sequence_length)
     state$cell_birth_times <- c(state$cell_birth_times, state$time)
     state$cell_death_times <- c(state$cell_death_times, NA)
     state$cell_parents <- c(state$cell_parents, NA)
     state$cell_bfb <- c(state$cell_bfb, FALSE)
-    state$cell_hotspot_gained <- c(state$cell_hotspot_gained, initial_hotspot_gained)
+    state$cell_hotspot_gained <- c(state$cell_hotspot_gained, F)
+    state$cell_hotspot_copies <- c(state$cell_hotspot_copies, 1)
     state$cell_is_alive <- c(state$cell_is_alive, TRUE)
 
     # Calculate modified birth and death rates
-    cell_birth_rate <- birth_rate * (1 + positive_selection_rate * initial_hotspot_gained)
-    cell_death_rate <- death_rate * (1 - negative_selection_rate * (!initial_hotspot_gained))
+
+    cell_birth_rate <- state$input_parameters$birth_rate * (1 + state$input_parameters$positive_selection_function(state$input_parameters$positive_selection_rate, 1))
+    cell_death_rate <- state$input_parameters$death_rate * (1 + state$input_parameters$negative_selection_function(state$input_parameters$negative_selection_rate, 1))
 
     # Calculate combined rate
     combined_rate <- cell_birth_rate + cell_death_rate
@@ -450,13 +360,11 @@ initialize_without_bfb <- function(
 #' Check if simulation should continue
 #'
 #' @param state The simulation state
-#' @param max_time Maximum simulation time
-#' @param max_cells Maximum number of cells allowed
 #'
 #' @return Logical indicating whether simulation should continue
-continue_simulation <- function(state, max_time, max_cells) {
+continue_simulation <- function(state) {
   alive_count <- sum(state$cell_is_alive)
-  return(state$time < max_time && alive_count > 0 && alive_count < max_cells)
+  return(state$time < state$input_parameters$max_time && alive_count > 0 && alive_count < state$input_parameters$max_cells)
 }
 
 #' Prepare final results from simulation
@@ -477,9 +385,9 @@ prepare_results <- function(state) {
     is_alive = state$cell_is_alive,
     parent_id = state$cell_parents,
     bfb_event = state$cell_bfb,
-    hotspot_gained = state$cell_hotspot_gained
+    hotspot_gained = state$cell_hotspot_gained,
+    hotspot_copies = state$cell_hotspot_copies
   )
-
 
   # Get only alive cells for final_cells output
   alive_indices <- which(state$cell_is_alive)
@@ -502,7 +410,8 @@ prepare_results <- function(state) {
       is_alive = FALSE,
       parent_id = NA,
       bfb_event = FALSE,
-      hotspot_gained = FALSE
+      hotspot_gained = FALSE,
+      hotspot_copies = 1
     ),
     cell_history
   )
@@ -510,7 +419,8 @@ prepare_results <- function(state) {
   # Prepare and return results
   result <- list(
     cells = final_cells,
-    cell_history = cell_history
+    cell_history = cell_history,
+    input_parameters = state$input_parameters
   )
 
   return(result)

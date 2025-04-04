@@ -4,33 +4,10 @@
 \alias{initialize_without_bfb}
 \title{Initialize simulation without BFB for initial cells}
 \usage{
-initialize_without_bfb(
-  state,
-  initial_cells,
-  initial_sequence,
-  initial_hotspot_gained,
-  birth_rate,
-  death_rate,
-  positive_selection_rate,
-  negative_selection_rate
-)
+initialize_without_bfb(state)
 }
 \arguments{
 \item{state}{The simulation state}
-
-\item{initial_cells}{Number of cells to start with}
-
-\item{initial_sequence}{Initial genomic sequence}
-
-\item{initial_hotspot_gained}{Whether initial cells have hotspot gain}
-
-\item{birth_rate}{Base birth rate}
-
-\item{death_rate}{Base death rate}
-
-\item{positive_selection_rate}{Selection advantage for hotspot cells}
-
-\item{negative_selection_rate}{Selection disadvantage for non hotspot cells}
 }
 \value{
 Updated simulation state

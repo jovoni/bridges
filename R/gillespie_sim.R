@@ -13,6 +13,10 @@
 #' @param bfb_prob Numeric. Probability of BFB event occurring during replication. Default: 0.01
 #' @param positive_selection_rate Numeric. Selection advantage for cells with amplified hotspot. Default: 0
 #' @param negative_selection_rate Numeric. Selection disadvantage for cells without amplified hotspot. Default: 0
+#' @param positive_selection_function Function. A function that takes as input a positive selection rate and a number
+#'  of copies and returns a value between -1 and Infinity. This determines how selection advantage scales with hotspot amplification.
+#' @param negative_selection_function Function. A function that takes as input a negative selection rate and a number
+#'  of copies and returns a value between -1 and Infinity. This determines how selection disadvantage scales with hotspot amplification.
 #' @param max_time Numeric. Maximum simulation time. Default: 50
 #' @param max_cells Numeric. Maximum number of cells allowed before simulation stops. Default: 100
 #' @param first_n_bfb_cycles Numeric. Number of initial birth events that will force BFB events. Default: 0
@@ -43,6 +47,8 @@ gillespie_sim <- function(
     bfb_prob = 0.01,
     positive_selection_rate = 0,
     negative_selection_rate = 0,
+    positive_selection_function = bridges:::positive_selection_function,
+    negative_selection_function = bridges:::negative_selection_function,
     max_time = 50,
     max_cells = 100,
     first_n_bfb_cycles = 0,
@@ -52,61 +58,17 @@ gillespie_sim <- function(
     alpha = NULL,
     beta = NULL
 ) {
-  # Initialize simulation state
-  sim_state <- initialize_simulation(
-    initial_cells,
-    initial_sequence_length,
-    birth_rate,
-    death_rate,
-    positive_selection_rate,
-    negative_selection_rate,
-    first_round_of_bfb,
-    breakpoint_support,
-    hotspot,
-    alpha,
-    beta
-  )
-
-  # Main simulation loop
-  while (continue_simulation(sim_state, max_time, max_cells)) {
-    # Find the next cell to have an event
-    next_event_info <- get_next_event(sim_state, birth_rate, death_rate, positive_selection_rate, negative_selection_rate)
-    sim_state$time <- next_event_info$time
-    current_cell_id <- next_event_info$cell_id
-    current_event_type <- next_event_info$event_type
-
-    if (current_event_type == "birth") {
-      # Handle birth event
-      sim_state <- process_birth_event(
-        sim_state,
-        current_cell_id,
-        birth_rate,
-        death_rate,
-        bfb_prob,
-        positive_selection_rate,
-        negative_selection_rate,
-        breakpoint_support,
-        first_n_bfb_cycles,
-        hotspot,
-        alpha,
-        beta
-      )
-    } else {
-      # Handle death event
-      sim_state <- process_death_event(sim_state, current_cell_id)
-    }
-  }
-
-  # Finalize and prepare results
-
-  sim_state = prepare_results(sim_state)
-  sim_state$input_parameters = list(
+  # Init state with parameters
+  input_parameters = list(
     initial_cells = initial_cells,
     initial_sequence_length = initial_sequence_length,
     birth_rate = birth_rate,
     death_rate = death_rate,
     bfb_prob = bfb_prob,
     positive_selection_rate = positive_selection_rate,
+    negative_selection_rate = negative_selection_rate,
+    positive_selection_function = positive_selection_function,
+    negative_selection_function = negative_selection_function,
     max_time = max_time,
     max_cells = max_cells,
     first_n_bfb_cycles = first_n_bfb_cycles,
@@ -116,6 +78,29 @@ gillespie_sim <- function(
     alpha = alpha,
     beta = beta
   )
+
+  # Initialize simulation state
+  sim_state <- initialize_simulation(input_parameters)
+
+  # Main simulation loop
+  while (continue_simulation(sim_state)) {
+    # Find the next cell to have an event
+    next_event_info <- get_next_event(sim_state)
+    sim_state$time <- next_event_info$time
+    current_cell_id <- next_event_info$cell_id
+    current_event_type <- next_event_info$event_type
+
+    if (current_event_type == "birth") {
+      # Handle birth event
+      sim_state <- process_birth_event(sim_state, current_cell_id)
+    } else {
+      # Handle death event
+      sim_state <- process_death_event(sim_state, current_cell_id)
+    }
+  }
+
+  # Finalize and prepare results
+  sim_state = prepare_results(sim_state)
 
   return(sim_state)
 }
