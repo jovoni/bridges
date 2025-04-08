@@ -10,14 +10,15 @@
 #'
 #' @return List containing left and right sequences
 sim_bfb_left_and_right_sequences <- function(sequence, support = "uniform", alpha = NULL, beta = NULL) {
-
   # Calculate the total number of elements in the sequence, similar to the vectorized version
   L = get_seq_length(sequence)
+  vec = seq2vec(sequence)
+  bps = vec[diff(vec) == 0]
 
   # Select random breakpoint based on specified distribution
   # Ensure that bp_idx is different from L to obtain a proper bfb cycle
   bp_idx = L
-  while (bp_idx == L) {
+  while (bp_idx %in% c(L, bps)) {
     if (support == "uniform") {
       bp_idx = sample(1:(2*L), 1)
     } else if (support == "beta") {
@@ -30,7 +31,6 @@ sim_bfb_left_and_right_sequences <- function(sequence, support = "uniform", alph
       stop("Unsupported distribution type. Use 'uniform' or 'beta'.")
     }
   }
-
 
   # Initialize left and right sequences
   cut_seqs = cut_sequence(fuse_sequence(sequence), bp_idx)

@@ -97,6 +97,7 @@ gillespie_sim <- function(
       # Handle death event
       sim_state <- process_death_event(sim_state, current_cell_id)
     }
+
   }
 
   # Finalize and prepare results
