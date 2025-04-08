@@ -1,8 +1,10 @@
 
-plot_reconstructed_tree = function(best_tree, breakpoints, tree_width, raster_quality = 5, use_raster = TRUE) {
+plot_reconstructed_tree = function(x, best_tree, breakpoints, tree_width = 3, raster_quality = 5, use_raster = TRUE) {
   # Retrieve results for best tree
   leaves = extract_leaf_vecs_with_names(best_tree)
   lambdas = get_proposed_clusters(leaves, breakpoints)
+
+  X = cells2mat(x$cells, x$input_parameters$initial_sequence_length, order = F)
   results <- mixture_of_poissons_cpp(X + 1, lambdas = lambdas + 1)
 
   leaves_assignment = rownames(lambdas)[results$assignments]
