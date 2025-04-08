@@ -4,9 +4,13 @@ plot_reconstructed_tree = function(x, best_tree, breakpoints, tree_width = 3, ra
   leaves = extract_leaf_vecs_with_names(best_tree)
   lambdas = get_proposed_clusters(leaves, breakpoints)
 
-  X = cells2mat(x$cells, x$input_parameters$initial_sequence_length, order = F)
-  results <- mixture_of_poissons_cpp(X + 1, lambdas = lambdas + 1)
+  if (is.list(x)) {
+    X = cells2mat(x$cells, x$input_parameters$initial_sequence_length, order = F)
+  } else {
+    X = x
+  }
 
+  results <- mixture_of_poissons_cpp(X + 1, lambdas = lambdas + 1)
   leaves_assignment = rownames(lambdas)[results$assignments]
 
   tree_df = build_phylogeny_df(best_tree)
@@ -48,7 +52,7 @@ plot_reconstructed_tree = function(x, best_tree, breakpoints, tree_width = 3, ra
   mat = X
   high_cn_mask = mat > 10
   mat_row_names = rownames(mat)
-  mat = matrix(as.character(mat), ncol = x$input_parameters$initial_sequence_length, nrow = length(x$cells))
+  mat = matrix(as.character(mat), ncol = ncol(mat), nrow = nrow(mat))
   mat[high_cn_mask] = "11+"
   mat = data.frame(mat)
   rownames(mat) = mat_row_names
