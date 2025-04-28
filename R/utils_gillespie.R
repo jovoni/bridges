@@ -49,10 +49,8 @@ process_birth_event <- function(state, current_cell_id) {
   # Find index of current cell
   cell_idx <- which(state$cell_ids == current_cell_id)
 
-  # Determine if BFB occurs
-  force_bfb <- state$birth_count <= state$input_parameters$first_n_bfb_cycles
-  random_bfb <- stats::runif(1) < state$input_parameters$bfb_prob
-  bfb_occurs <- force_bfb || random_bfb
+  # Decide type of event
+  event_name = sample(names(state$input_parameters$rates), size = 1, prob = unlist(state$input_parameters$rates))
 
   # Get parent cell information
   parent_seq <- state$cell_sequences[[current_cell_id]]
@@ -61,12 +59,35 @@ process_birth_event <- function(state, current_cell_id) {
   parent_hotspot_gained <- state$cell_hotspot_gained[cell_idx]
 
   # Create daughter sequences
-  if (bfb_occurs) {
-    # BFB event: simulate left and right sequences
-    daughter_seqs <- sim_bfb_left_and_right_sequences(parent_seq, state$input_parameters$breakpoint_support, state$input_parameters$alpha, state$input_parameters$beta)
-  } else {
+  p_lr = stats::runif(1,0,1)
+  if (event_name == "normal") {
     # Normal duplication: create identical sequences
     daughter_seqs <- list(l_seq = parent_seq, r_seq = parent_seq)
+    state$cell_replication_history = c(state$cell_replication_history, event_name, event_name)
+  } else if (event_name == "amp") {
+    new_seq = sim_amp_del(parent_seq, operation = "dup")
+    if (p_lr) {
+      daughter_seqs <- list(l_seq = parent_seq, r_seq = new_seq)
+      state$cell_replication_history = c(state$cell_replication_history, "normal", "dup")
+    } else {
+      daughter_seqs <- list(l_seq = new_seq, r_seq = parent_seq)
+      state$cell_replication_history = c(state$cell_replication_history, "dup", "normal")
+    }
+  } else if (event_name == "del") {
+    new_seq = sim_amp_del(parent_seq, operation = "del")
+    if (p_lr) {
+      daughter_seqs <- list(l_seq = parent_seq, r_seq = new_seq)
+      state$cell_replication_history = c(state$cell_replication_history, "normal", "del")
+    } else {
+      daughter_seqs <- list(l_seq = new_seq, r_seq = parent_seq)
+      state$cell_replication_history = c(state$cell_replication_history, "del", "normal")
+    }
+  } else if (event_name =="bfb") {
+    # BFB event: simulate left and right sequences
+    daughter_seqs <- sim_bfb_left_and_right_sequences(parent_seq, state$input_parameters$breakpoint_support, state$input_parameters$alpha, state$input_parameters$beta)
+    state$cell_replication_history = c(state$cell_replication_history, "bfb", "bfb")
+  } else {
+    stop("event_name not knwon")
   }
 
   # Create new cell IDs
@@ -78,7 +99,7 @@ process_birth_event <- function(state, current_cell_id) {
   state$cell_death_times[cell_idx] <- state$time
 
   # Record BFB event if applicable
-  if (bfb_occurs) {
+  if (event_name =="bfb") {
     state$bfb_events[[state$next_bfb_id]] <- list(
       id = state$next_bfb_id,
       time = state$time,
@@ -122,7 +143,7 @@ process_birth_event <- function(state, current_cell_id) {
   state$cell_birth_times <- c(state$cell_birth_times, state$time, state$time)
   state$cell_death_times <- c(state$cell_death_times, NA, NA)
   state$cell_parents <- c(state$cell_parents, current_cell_id, current_cell_id)
-  state$cell_bfb <- c(state$cell_bfb, bfb_occurs, bfb_occurs)
+  state$cell_bfb <- c(state$cell_bfb, event_name =="bfb", event_name =="bfb")
   state$cell_hotspot_gained <- c(state$cell_hotspot_gained, l_hotspot_gained, r_hotspot_gained)
   state$cell_hotspot_copies <- c(state$cell_hotspot_copies, l_hotspot_copies, r_hotspot_copies)
   state$cell_is_alive <- c(state$cell_is_alive, TRUE, TRUE)
@@ -146,7 +167,7 @@ process_birth_event <- function(state, current_cell_id) {
   )
 
   # Update BFB history
-  if (bfb_occurs) {
+  if (event_name =="bfb") {
     l_bfb_history <- c(parent_bfb_history, list(paste(state$next_bfb_id, l_effect, sep = "-")))
     r_bfb_history <- c(parent_bfb_history, list(paste(state$next_bfb_id, r_effect, sep = "-")))
 
@@ -200,6 +221,7 @@ initialize_simulation <- function(input_parameters) {
     cell_death_times = numeric(0),
     cell_parents = character(0),
     cell_bfb = logical(0),
+    cell_replication_history = character(0),
     cell_hotspot_gained = logical(0),
     cell_hotspot_copies = numeric(0),
     cell_is_alive = logical(0),
@@ -288,6 +310,7 @@ initialize_with_bfb <- function(state, initial_sequence) {
     state$cell_hotspot_gained <- c(state$cell_hotspot_gained, l_hotspot_gained, r_hotspot_gained)
     state$cell_hotspot_copies <- c(state$cell_hotspot_copies, l_hotspot_copies, r_hotspot_copies)
     state$cell_is_alive <- c(state$cell_is_alive, TRUE, TRUE)
+    state$cell_replication_history = c(state$cell_replication_history, "bfb", "bfb")
 
     # Calculate modified birth and death rates
 
@@ -324,6 +347,7 @@ initialize_with_bfb <- function(state, initial_sequence) {
 #'
 #' @return Updated simulation state
 initialize_without_bfb <- function(state) {
+
   for (i in 1:state$input_parameters$initial_cells) {
     cell_id <- paste0("cell_", length(state$cell_ids) + 1)
 
@@ -336,6 +360,7 @@ initialize_without_bfb <- function(state) {
     state$cell_hotspot_gained <- c(state$cell_hotspot_gained, F)
     state$cell_hotspot_copies <- c(state$cell_hotspot_copies, 1)
     state$cell_is_alive <- c(state$cell_is_alive, TRUE)
+    state$cell_replication_history = c(state$cell_replication_history, "normal")
 
     # Calculate modified birth and death rates
 
@@ -385,6 +410,7 @@ prepare_results <- function(state) {
     is_alive = state$cell_is_alive,
     parent_id = state$cell_parents,
     bfb_event = state$cell_bfb,
+    replication_type = state$cell_replication_history,
     hotspot_gained = state$cell_hotspot_gained,
     hotspot_copies = state$cell_hotspot_copies
   )

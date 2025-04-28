@@ -1,14 +1,16 @@
 
 plot_reconstructed_tree = function(x, best_tree, breakpoints, tree_width = 3, raster_quality = 5, use_raster = TRUE) {
   # Retrieve results for best tree
-  leaves = extract_leaf_vecs_with_names(best_tree)
-  lambdas = get_proposed_clusters(leaves, breakpoints)
 
   if (is.list(x)) {
     X = cells2mat(x$cells, x$input_parameters$initial_sequence_length, order = F)
   } else {
     X = x
   }
+
+  L = ncol(X)
+  leaves = extract_leaf_vecs_with_names(best_tree)
+  lambdas = get_proposed_clusters(leaves, breakpoints, L)
 
   results <- mixture_of_poissons_cpp(X + 1, lambdas = lambdas + 1)
   leaves_assignment = rownames(lambdas)[results$assignments]
@@ -159,7 +161,7 @@ cut_seq <- function(seq, cut_idx) {
   )
 }
 
-propose_tree <- function(root, bps) {
+propose_tree <- function(root, bps, N_segments) {
   # If no breakpoints, return the tree unchanged and empty breakpoints
   if (length(bps) == 0) {
     return(list(tree = root, remaining_bps = bps))
@@ -188,7 +190,7 @@ propose_tree <- function(root, bps) {
   }
 
   # Apply the breakpoint to create a new tree
-  new_root <- apply_breakpoint(root, selected$node, selected$cut_idx, N)
+  new_root <- apply_breakpoint(root, selected$node, selected$cut_idx, N_segments)
 
   # Remove the used breakpoint from the list
   remaining_bps <- bps[-bp_idx]
@@ -250,14 +252,19 @@ apply_breakpoint <- function(current_node, target_node, cut_idx, N) {
 library(data.tree)
 
 # Convert your tree to a data.tree structure
-convert_to_dataTree <- function(node, parent = NULL) {
+convert_to_dataTree <- function(node, parent = NULL, convert_name = FALSE) {
   if (is.null(node)) return(NULL)
 
-  curr <- Node$new(node$seq)
+  if (convert_name) {
+    name = paste0("[",paste0(node$vec, collapse = ","), "]")
+  } else {
+    name = node$seq
+  }
+  curr <- Node$new(name)
   if (!is.null(parent)) parent$AddChildNode(curr)
 
-  convert_to_dataTree(node$left, curr)
-  convert_to_dataTree(node$right, curr)
+  convert_to_dataTree(node$left, curr, convert_name)
+  convert_to_dataTree(node$right, curr, convert_name)
 
   return(curr)
 }
@@ -289,7 +296,7 @@ init_cell = function(seq, N) {
 }
 
 
-get_proposed_clusters = function(leaves, breakpoints) {
+get_proposed_clusters = function(leaves, breakpoints, L) {
   proposed_clusters = lapply(leaves, function(l) {
     v = rep(0, L)
     expanded_bp = c(0, breakpoints, L)

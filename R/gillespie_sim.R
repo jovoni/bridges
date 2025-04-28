@@ -19,7 +19,6 @@
 #'  of copies and returns a value between -1 and Infinity. This determines how selection disadvantage scales with hotspot amplification.
 #' @param max_time Numeric. Maximum simulation time. Default: 50
 #' @param max_cells Numeric. Maximum number of cells allowed before simulation stops. Default: 100
-#' @param first_n_bfb_cycles Numeric. Number of initial birth events that will force BFB events. Default: 0
 #' @param first_round_of_bfb Logical. Whether to apply BFB to initial cells. Default: TRUE
 #' @param breakpoint_support Character. Distribution used for breakpoint selection ("uniform", "beta", etc.). Default: "uniform"
 #' @param hotspot Numeric vector. Genomic positions considered as hotspots. Default: NULL
@@ -44,34 +43,56 @@ gillespie_sim <- function(
     initial_sequence_length = 100,
     birth_rate = 0.1,
     death_rate = 0.001,
+    normal_dup_rate = .5,
     bfb_prob = 0.01,
+    amp_rate = .1,
+    del_rate = .1,
+    allow_wgd = TRUE,
     positive_selection_rate = 0,
     negative_selection_rate = 0,
     positive_selection_function = positive_selection_function,
     negative_selection_function = negative_selection_function,
     max_time = 50,
     max_cells = 100,
-    first_n_bfb_cycles = 0,
+    #first_n_bfb_cycles = 0,
     first_round_of_bfb = TRUE,
     breakpoint_support = "uniform",
     hotspot = NULL,
     alpha = NULL,
     beta = NULL
 ) {
+  # Normalize rates
+  sum_rates = sum(normal_dup_rate, bfb_prob, amp_rate, del_rate)
+  normal_dup_rate = normal_dup_rate / sum_rates
+  bfb_prob = bfb_prob / sum_rates
+  amp_rate = amp_rate / sum_rates
+  del_rate = del_rate / sum_rates
+  rates = list(
+    normal=normal_dup_rate,
+    bfb=bfb_prob,
+    amp=amp_rate,
+    del=del_rate
+  )
+
   # Init state with parameters
   input_parameters = list(
     initial_cells = initial_cells,
     initial_sequence_length = initial_sequence_length,
     birth_rate = birth_rate,
     death_rate = death_rate,
-    bfb_prob = bfb_prob,
+    # normal_dup_rate = normal_dup_rate,
+    # bfb_prob = bfb_prob,
+    # amp_rate = amp_rate,
+    # del_rate = del_rate,
+    rates = rates,
+    allow_wgd = allow_wgd,
     positive_selection_rate = positive_selection_rate,
     negative_selection_rate = negative_selection_rate,
     positive_selection_function = positive_selection_function,
     negative_selection_function = negative_selection_function,
     max_time = max_time,
     max_cells = max_cells,
-    first_n_bfb_cycles = first_n_bfb_cycles,
+    #first_n_bfb_cycles = first_n_bfb_cycles,
     first_round_of_bfb = first_round_of_bfb,
     breakpoint_support = breakpoint_support,
     hotspot = hotspot,
@@ -100,8 +121,10 @@ gillespie_sim <- function(
 
   }
 
+  sim_state$cell_replication_history %>% table()
+
+
   # Finalize and prepare results
   sim_state = prepare_results(sim_state)
-
   return(sim_state)
 }

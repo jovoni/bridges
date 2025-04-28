@@ -9,14 +9,17 @@ gillespie_sim(
   initial_sequence_length = 100,
   birth_rate = 0.1,
   death_rate = 0.001,
+  normal_dup_rate = 0.5,
   bfb_prob = 0.01,
+  amp_rate = 0.1,
+  del_rate = 0.1,
+  allow_wgd = TRUE,
   positive_selection_rate = 0,
   negative_selection_rate = 0,
   positive_selection_function = positive_selection_function,
   negative_selection_function = negative_selection_function,
   max_time = 50,
   max_cells = 100,
-  first_n_bfb_cycles = 0,
   first_round_of_bfb = TRUE,
   breakpoint_support = "uniform",
   hotspot = NULL,
@@ -48,8 +51,6 @@ of copies and returns a value between -1 and Infinity. This determines how selec
 \item{max_time}{Numeric. Maximum simulation time. Default: 50}
 
 \item{max_cells}{Numeric. Maximum number of cells allowed before simulation stops. Default: 100}
-
-\item{first_n_bfb_cycles}{Numeric. Number of initial birth events that will force BFB events. Default: 0}
 
 \item{first_round_of_bfb}{Logical. Whether to apply BFB to initial cells. Default: TRUE}
 

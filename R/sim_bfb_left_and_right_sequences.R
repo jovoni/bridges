@@ -61,6 +61,7 @@ fuse_sequence <- function(sequence) {
 
 cut_sequence <- function(sequence, cut_index) {
   # Initialize output sequences
+
   left_seq <- list()
   right_seq <- list()
 
@@ -69,11 +70,7 @@ cut_sequence <- function(sequence, cut_index) {
 
   for (interval in sequence) {
     # Calculate the length of the current interval
-    interval_length <- if (interval$direction == 0) {
-      1
-    } else {
-      abs(interval$end - interval$start) + 1
-    }
+    interval_length <- abs(interval$end - interval$start) + 1
 
     # If the cut point is before this interval, everything goes to the right
     if (current_length >= cut_index) {
