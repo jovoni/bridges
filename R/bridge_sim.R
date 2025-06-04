@@ -18,7 +18,6 @@
 #' @param bfb_prob Numeric. Probability of BFB event occurring during replication. Default: 0.01
 #' @param amp_rate Numeric. Rate of amplification events. Default: 0.1
 #' @param del_rate Numeric. Rate of deletion events. Default: 0.1
-#' @param f_subsample Numeric between 0 and 1. Fraction of final alive cells to subsample. Default: 1
 #' @param allow_wgd Logical. Whether to allow whole genome duplication. Default: TRUE
 #' @param positive_selection_rate Numeric. Selection advantage for cells with amplified hotspot. Default: 0
 #' @param negative_selection_rate Numeric. Selection disadvantage for cells without amplified hotspot. Default: 0
@@ -51,7 +50,6 @@ bridge_sim <- function(
     bfb_prob = 0.5,
     amp_rate = 1,
     del_rate = 1,
-    f_subsample = 1,
     allow_wgd = TRUE,
     positive_selection_rate = 0,
     negative_selection_rate = 0,
@@ -63,10 +61,9 @@ bridge_sim <- function(
     alpha = NULL,
     beta = NULL
 ) {
-
   validate_bridge_sim_params(initial_cells, chromosomes, bin_length, birth_rate, death_rate,
                              bfb_allele, normal_dup_rate, bfb_prob, amp_rate, del_rate,
-                             f_subsample, allow_wgd, positive_selection_rate, negative_selection_rate,
+                             allow_wgd, positive_selection_rate, negative_selection_rate,
                              max_time, max_cells, first_round_of_bfb, breakpoint_support,
                              hotspot, alpha, beta)
 
@@ -94,6 +91,7 @@ bridge_sim <- function(
   bfb_prob <- bfb_prob / sum_rates
   amp_rate <- amp_rate / sum_rates
   del_rate <- del_rate / sum_rates
+
   rates <- list(
     normal = normal_dup_rate,
     bfb = bfb_prob,
@@ -145,9 +143,8 @@ bridge_sim <- function(
     }
   }
 
-  # Finalize and prepare results
-
-  sim_state <- prepare_results(sim_state, f_subsample)
+  # Finalize and prepare results (without subsampling)
+  sim_state <- prepare_results(sim_state)
   sim_state$cna_data <- sequences_to_cndata(sim_state$cells, chr_seq_lengths, bin_length)
 
   return(sim_state)

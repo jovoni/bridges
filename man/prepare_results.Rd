@@ -4,13 +4,10 @@
 \alias{prepare_results}
 \title{Prepare final results from simulation}
 \usage{
-prepare_results(state, f_subsample)
+prepare_results(state)
 }
 \arguments{
 \item{state}{The simulation state}
-
-\item{f_subsample}{Fraction of alive cells
-to subsample}
 }
 \value{
 A list containing simulation results

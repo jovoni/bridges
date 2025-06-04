@@ -16,7 +16,6 @@ bridge_sim(
   bfb_prob = 0.5,
   amp_rate = 1,
   del_rate = 1,
-  f_subsample = 1,
   allow_wgd = TRUE,
   positive_selection_rate = 0,
   negative_selection_rate = 0,
@@ -49,8 +48,6 @@ bridge_sim(
 \item{amp_rate}{Numeric. Rate of amplification events. Default: 0.1}
 
 \item{del_rate}{Numeric. Rate of deletion events. Default: 0.1}
-
-\item{f_subsample}{Numeric between 0 and 1. Fraction of final alive cells to subsample. Default: 1}
 
 \item{allow_wgd}{Logical. Whether to allow whole genome duplication. Default: TRUE}
 

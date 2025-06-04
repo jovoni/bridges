@@ -59,16 +59,6 @@ fit = function(data,
                 b_dist_func = "avg",
                 ...) {
 
-  # Validate distance function choices
-  if (!g_dist_func %in% names(G_DISTS)) {
-    stop(paste("Invalid G distance function:", g_dist_func,
-               "\nAvailable G functions:", paste(names(G_DISTS), collapse = ", ")))
-  }
-  if (!b_dist_func %in% names(B_DISTS)) {
-    stop(paste("Invalid B distance function:", b_dist_func,
-               "\nAvailable B functions:", paste(names(B_DISTS), collapse = ", ")))
-  }
-
   # Process data
   message("Pre-processing input...")
   all_input_Xs = process_input_data(data, chromosomes, alleles, k_jitter_fix, fillna)

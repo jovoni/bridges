@@ -313,18 +313,11 @@ process_birth_event <- function(state, current_cell_id) {
 #' Prepare final results from simulation
 #'
 #' @param state The simulation state
-#' @param f_subsample Fraction of alive cells
-#'  to subsample
 #'
 #' @return A list containing simulation results
-prepare_results <- function(state, f_subsample) {
-  # Get only alive cells for final_cells output
+prepare_results <- function(state) {
+  # Get only alive cells for final_cells output (no subsampling)
   alive_indices <- which(state$cell_is_alive)
-
-  if (f_subsample != 1) {
-    N_subsample = as.integer(f_subsample * length(alive_indices))
-    alive_indices = sample(alive_indices, N_subsample)
-  }
 
   final_cells <- lapply(state$cell_ids[alive_indices], function(id) {
     state$cell_sequences[[id]]
@@ -333,14 +326,6 @@ prepare_results <- function(state, f_subsample) {
 
   # Extract history table
   cell_history <- state$history
-
-  # Remove non sampled cells from the tree
-  alive_cells_not_sampled = cell_history %>%
-    dplyr::filter(.data$is_alive, !.data$cell_id %in% names(final_cells)) %>%
-    dplyr::pull(.data$cell_id)
-
-  cell_history = cell_history %>%
-    dplyr::filter(!.data$cell_id %in% alive_cells_not_sampled)
 
   # Add root node
   root_row <- tibble::tibble(
@@ -849,7 +834,6 @@ validate_bridge_sim_params <- function(
     bfb_prob,
     amp_rate,
     del_rate,
-    f_subsample,
     allow_wgd,
     positive_selection_rate,
     negative_selection_rate,
@@ -908,11 +892,6 @@ validate_bridge_sim_params <- function(
   # Check that at least one rate is positive
   if (sum(unlist(rate_params)) == 0) {
     stop("At least one of normal_dup_rate, bfb_prob, amp_rate, or del_rate must be positive")
-  }
-
-  # f_subsample: between 0 and 1
-  if (!is.numeric(f_subsample) || f_subsample <= 0 || f_subsample > 1) {
-    stop("f_subsample must be a number between 0 and 1 (exclusive of 0, inclusive of 1)")
   }
 
   # Selection rates: numeric
@@ -1063,4 +1042,56 @@ validate_bridge_sim_params <- function(
 
   # All validations passed
   return(invisible(NULL))
+}
+
+
+subsample_sim <- function(sim_result, f_subsample = 1) {
+  if (f_subsample < 0 || f_subsample > 1) {
+    stop("f_subsample must be between 0 and 1")
+  }
+
+  if (f_subsample == 1) {
+    return(sim_result)
+  }
+
+  # Get original alive cell IDs
+  original_cell_ids <- names(sim_result$cells)
+
+  # Subsample cells
+  n_subsample <- as.integer(f_subsample * length(original_cell_ids))
+  if (n_subsample == 0) {
+    stop("Subsampling fraction too small - results in 0 cells")
+  }
+
+  sampled_cell_ids <- sample(original_cell_ids, n_subsample)
+
+  # Create subsampled cells
+  subsampled_cells <- sim_result$cells[sampled_cell_ids]
+
+  # Filter cell history to remove non-sampled alive cells
+  alive_cells_not_sampled <- sim_result$cell_history %>%
+    dplyr::filter(.data$is_alive, !.data$cell_id %in% sampled_cell_ids) %>%
+    dplyr::pull(.data$cell_id)
+
+  subsampled_cell_history <- sim_result$cell_history %>%
+    dplyr::filter(!.data$cell_id %in% alive_cells_not_sampled)
+
+  # Rebuild tree from filtered history
+  subsampled_tree <- ape::read.tree(text = cell_history_to_newick(subsampled_cell_history))
+
+  # Create new CNA data for subsampled cells
+  chr_seq_lengths <- sim_result$input_parameters$chr_seq_lengths
+  bin_length <- sim_result$input_parameters$bin_length
+  subsampled_cna_data <- sequences_to_cndata(subsampled_cells, chr_seq_lengths, bin_length)
+
+  # Return subsampled result
+  subsampled_result <- list(
+    cells = subsampled_cells,
+    cell_history = subsampled_cell_history,
+    tree = subsampled_tree,
+    cna_data = subsampled_cna_data,
+    input_parameters = sim_result$input_parameters
+  )
+
+  return(subsampled_result)
 }

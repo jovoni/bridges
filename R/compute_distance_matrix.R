@@ -38,11 +38,12 @@ compute_greedy_distances = function(all_input_Xs,
                                     target_vals = c(2, 1, 1),
                                     g_dist_func = "G") {
   # Get the distance function from G_DISTS
-  if (!g_dist_func %in% names(G_DISTS)) {
-    stop(paste("Invalid G distance function:", g_dist_func,
-               "\nAvailable options:", paste(names(G_DISTS), collapse = ", ")))
-  }
-  dist_func = G_DISTS[[g_dist_func]]
+  dist_func = get_g_dist(g_dist_func)
+  # if (!g_dist_func %in% names(G_DISTS)) {
+  #   stop(paste("Invalid G distance function:", g_dist_func,
+  #              "\nAvailable options:", paste(names(G_DISTS), collapse = ", ")))
+  # }
+  # dist_func = G_DISTS[[g_dist_func]]
 
   alleles = alleles[alleles %in% names(all_input_Xs[[1]])]
   chromosomes = chromosomes[chromosomes %in% names(all_input_Xs)]
@@ -66,11 +67,12 @@ compute_avg_distances = function(all_input_Xs,
                                  bfb_penalty = 0,
                                  b_dist_func = "avg") {
   # Get the distance function from B_DISTS
-  if (!b_dist_func %in% names(B_DISTS)) {
-    stop(paste("Invalid B distance function:", b_dist_func,
-               "\nAvailable options:", paste(names(B_DISTS), collapse = ", ")))
-  }
-  dist_func = B_DISTS[[b_dist_func]]
+  dist_func = get_b_dist(b_dist_func)
+  # if (!b_dist_func %in% names(B_DISTS)) {
+  #   stop(paste("Invalid B distance function:", b_dist_func,
+  #              "\nAvailable options:", paste(names(B_DISTS), collapse = ", ")))
+  # }
+  # dist_func = B_DISTS[[b_dist_func]]
 
   alleles = alleles[alleles %in% names(all_input_Xs[[1]])]
   chromosomes = chromosomes[chromosomes %in% names(all_input_Xs)]
@@ -90,28 +92,28 @@ compute_avg_distances = function(all_input_Xs,
 
 
 # Helper functions for users
-list_available_distances = function() {
-  list(
-    G_functions = names(G_DISTS),
-    B_functions = names(B_DISTS)
-  )
-}
+# list_available_distances = function() {
+#   list(
+#     G_functions = names(G_DISTS),
+#     B_functions = names(B_DISTS)
+#   )
+# }
 
 # Convenience function to show all possible combinations
-show_distance_combinations = function() {
-  g_funcs = names(G_DISTS)
-  b_funcs = names(B_DISTS)
-
-  cat("Available G:B distance function combinations:\n")
-  cat("===========================================\n")
-  for (g in g_funcs) {
-    for (b in b_funcs) {
-      cat(sprintf("G: %-15s | B: %s\n", g, b))
-    }
-  }
-  cat("\nUsage example:\n")
-  cat('result = main(data, g_dist_func = "G_with_steps", b_dist_func = "A_each")\n')
-}
+# show_distance_combinations = function() {
+#   g_funcs = names(G_DISTS)
+#   b_funcs = names(B_DISTS)
+#
+#   cat("Available G:B distance function combinations:\n")
+#   cat("===========================================\n")
+#   for (g in g_funcs) {
+#     for (b in b_funcs) {
+#       cat(sprintf("G: %-15s | B: %s\n", g, b))
+#     }
+#   }
+#   cat("\nUsage example:\n")
+#   cat('result = main(data, g_dist_func = "G_with_steps", b_dist_func = "A_each")\n')
+# }
 
 compute_distance_matrix = function(input_X, dist_func, ...) {
   sequences = lapply(rownames(input_X), function(r) {input_X[r,]})

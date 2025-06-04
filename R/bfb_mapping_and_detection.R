@@ -61,6 +61,7 @@ reconstruct_tree <- function(fit, chr, allele, B_dist, G_dist) {
   # Initialize results storage
   internal_nodes <- list()
   deltas <- list()
+  merged_profiles = list()
 
   # Create a working copy of input data that will be modified
   working_input <- input
@@ -81,8 +82,9 @@ reconstruct_tree <- function(fit, chr, allele, B_dist, G_dist) {
   #plot(tree, show.node.label = T)
   #node_id = 13
 
-  node_id = post_order_nodes[3]
+  node_id = post_order_nodes[1]
   for (node_id in post_order_nodes) {
+    #print(which(post_order_nodes == node_id))
     # print(working_input)
     # print(all_names[node_id])
     # Get children of this node
@@ -126,15 +128,16 @@ reconstruct_tree <- function(fit, chr, allele, B_dist, G_dist) {
       # Choose internal node based on which distance is lower
       if (delta > 0) {
         internal_node_cell <- b_d$ancestor
+        merged_profiles[[as.character(node_id)]] = list(left = b_d$left, right = b_d$right)
       } else {
         internal_node_cell <- g_d$ancestor
+        merged_profiles[[as.character(node_id)]]
+        merged_profiles[[as.character(node_id)]] = NULL
       }
 
       if (length(internal_node_cell) == 1) {
         internal_node_cell = matrix(internal_node_cell, nrow = 1, ncol = 1)
       }
-
-
 
       # Store results
       internal_nodes[[as.character(node_id)]] <- internal_node_cell
@@ -147,6 +150,7 @@ reconstruct_tree <- function(fit, chr, allele, B_dist, G_dist) {
 
       # Remove the cells that were combined (but keep other cells)
       working_input <- working_input[!rownames(working_input) %in% c(left_cell_name, right_cell_name),,drop=F]
+      #print(rownames(working_input))
     }
   }
 
@@ -154,6 +158,7 @@ reconstruct_tree <- function(fit, chr, allele, B_dist, G_dist) {
   return(list(
     internal_nodes = internal_nodes,
     deltas = deltas,
+    merged_profiles = merged_profiles,
     final_input = working_input,
     processed_nodes = length(internal_nodes),
     chr = chr, allele = allele
@@ -388,7 +393,7 @@ compare_assignment_wrt_true = function(true_tree, cell_history,
   cell_history$node_type = lapply(cell_history$cell_id, function(c_id) {
     d <- cell_history %>% dplyr::filter(.data$parent_id == c_id)
     if (nrow(d) != 0) {
-      if ("bfb" %in% unique(d$replication_type) ) {
+      if ("bfb" %in% unique(d$cn_event) ) {
         return("Likely BFB")
       }
     }
