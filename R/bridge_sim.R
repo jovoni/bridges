@@ -51,6 +51,8 @@ bridge_sim <- function(
     amp_rate = 1,
     del_rate = 1,
     allow_wgd = TRUE,
+    lambda = 5,
+    rate = 1e7,
     positive_selection_rate = 0,
     negative_selection_rate = 0,
     max_time = 300,
@@ -136,7 +138,7 @@ bridge_sim <- function(
 
     if (current_event_type == "birth") {
       # Handle birth event
-      sim_state <- process_birth_event(sim_state, current_cell_id)
+      sim_state <- process_birth_event(sim_state, current_cell_id, lambda = lambda, rate = rate)
     } else {
       # Handle death event
       sim_state <- process_death_event(sim_state, current_cell_id)

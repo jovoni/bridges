@@ -4,7 +4,7 @@
 \alias{process_birth_event}
 \title{Process a birth event (diploid version)}
 \usage{
-process_birth_event(state, current_cell_id)
+process_birth_event(state, current_cell_id, lambda, rate)
 }
 \arguments{
 \item{state}{The simulation state}

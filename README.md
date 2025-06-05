@@ -18,5 +18,3 @@ You can install the development version of bridges from
 # install.packages("devtools")
 devtools::install_github("jovoni/bridges")
 ```
-
-\`\`\`

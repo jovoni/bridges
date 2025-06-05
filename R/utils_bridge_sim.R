@@ -188,7 +188,6 @@ initialize_without_bfb <- function(state, initial_sequences) {
   return(state)
 }
 
-
 #' Process a birth event (diploid version)
 #'
 #' @param state The simulation state
@@ -201,50 +200,156 @@ initialize_without_bfb <- function(state, initial_sequences) {
 #' @param current_cell_id ID of the cell undergoing birth
 #'
 #' @return Updated simulation state
-process_birth_event <- function(state, current_cell_id) {
+process_birth_event <- function(state, current_cell_id, lambda, rate) {
   # Find index of current cell
   cell_idx <- which(state$cell_ids == current_cell_id)
 
-  # Decide type of event
-  event_name <- sample(names(state$input_parameters$rates), size = 1, prob = unlist(state$input_parameters$rates))
+  # Sample number of events for each daughter cell
+  n_left <- stats::rpois(1, lambda)
+  n_right <- stats::rpois(1, lambda)
 
   # Get parent cell information
   parent_sequences <- state$cell_sequences[[current_cell_id]]
-  # parent_hotspot <- state$hotspot_status[cell_idx]
 
-  # Create daughter cell sequences
-  if (event_name == "normal") {
-    l_sequences <- parent_sequences
-    r_sequences <- parent_sequences
-  } else {
-    selected_chr_allele <- sample(names(parent_sequences), 1)
+  # Initialize daughter sequences with parent sequences
+  l_sequences <- parent_sequences
+  r_sequences <- parent_sequences
 
-    if (event_name == "amp") {
-      modified_seq <- sim_amp_del(parent_sequences[[selected_chr_allele]], operation = "dup")
+  # Track if BFB has occurred and which events happened
+  bfb_occurred <- FALSE
+  l_events <- character(0)
+  r_events <- character(0)
+  l_chr_alleles <- character(0)
+  r_chr_alleles <- character(0)
+
+  # Helper function to apply a single event to sequences
+  apply_single_event <- function(sequences, event_name, selected_chr_allele = NULL) {
+    if (event_name == "normal") {
+      return(sequences)  # No change for normal events
+    } else if (event_name == "amp") {
+      if (is.null(selected_chr_allele)) {
+        selected_chr_allele <- sample(names(sequences), 1)
+      }
+      sequences[[selected_chr_allele]] <- sim_amp_del(sequences[[selected_chr_allele]], operation = "dup", rate = rate)
     } else if (event_name == "del") {
-      modified_seq <- sim_amp_del(parent_sequences[[selected_chr_allele]], operation = "del")
+      if (is.null(selected_chr_allele)) {
+        selected_chr_allele <- sample(names(sequences), 1)
+      }
+      sequences[[selected_chr_allele]] <- sim_amp_del(sequences[[selected_chr_allele]], operation = "del", rate = rate)
     } else if (event_name == "bfb") {
-      selected_chr_allele = state$input_parameters$bfb_allele
+      selected_chr_allele <- state$input_parameters$bfb_allele
       bfb_result <- sim_bfb_left_and_right_sequences(
-        parent_sequences[[selected_chr_allele]],
+        sequences[[selected_chr_allele]],
         state$input_parameters$breakpoint_support,
         state$input_parameters$alpha,
         state$input_parameters$beta
       )
+      # For BFB, we return both left and right sequences
+      return(list(l_seq = bfb_result$l_seq, r_seq = bfb_result$r_seq, chr_allele = selected_chr_allele))
     }
 
-    # Base daughter sequences on parent
-    l_sequences <- parent_sequences
-    r_sequences <- parent_sequences
+    return(list(sequences = sequences, chr_allele = selected_chr_allele))
+  }
 
-    if (event_name == "bfb") {
-      l_sequences[[selected_chr_allele]] <- bfb_result$l_seq
-      r_sequences[[selected_chr_allele]] <- bfb_result$r_seq
+  # Check if we need to do a BFB event first
+  total_events <- n_left + n_right
+  if (total_events > 0) {
+    # Sample all events that will occur
+    all_event_names <- sample(names(state$input_parameters$rates),
+                              size = total_events,
+                              prob = unlist(state$input_parameters$rates),
+                              replace = TRUE)
+
+    # Check if BFB is among the events
+    bfb_indices <- which(all_event_names == "bfb")
+
+    if (length(bfb_indices) > 0) {
+      # If there are BFB events, only keep the first one and make it the first event
+      bfb_occurred <- TRUE
+
+      # Apply BFB first (affects both daughter cells)
+      bfb_result <- apply_single_event(parent_sequences, "bfb")
+      l_sequences[[bfb_result$chr_allele]] <- bfb_result$l_seq
+      r_sequences[[bfb_result$chr_allele]] <- bfb_result$r_seq
+
+      # Record BFB event for both cells
+      l_events <- c(l_events, "bfb")
+      r_events <- c(r_events, "bfb")
+      l_chr_alleles <- c(l_chr_alleles, bfb_result$chr_allele)
+      r_chr_alleles <- c(r_chr_alleles, bfb_result$chr_allele)
+
+      # Remove BFB events from the list and redistribute remaining events
+      remaining_events <- all_event_names[-bfb_indices]
+      total_remaining <- length(remaining_events)
+
+      # Adjust n_left and n_right to account for BFB
+      n_left <- max(0, n_left - 1)
+      n_right <- max(0, n_right - 1)
+
+      # Redistribute remaining events
+      if (total_remaining > 0) {
+        if (n_left + n_right > 0) {
+          # Randomly assign remaining events to left and right
+          left_additional <- min(n_left, total_remaining)
+          right_additional <- min(n_right, total_remaining - left_additional)
+
+          if (left_additional > 0) {
+            left_events_idx <- sample(total_remaining, left_additional)
+            left_additional_events <- remaining_events[left_events_idx]
+            remaining_events <- remaining_events[-left_events_idx]
+            total_remaining <- total_remaining - left_additional
+          } else {
+            left_additional_events <- character(0)
+          }
+
+          if (right_additional > 0 && total_remaining > 0) {
+            right_additional_events <- remaining_events[1:min(right_additional, total_remaining)]
+          } else {
+            right_additional_events <- character(0)
+          }
+
+          # Apply additional events to left cell
+          for (event in left_additional_events) {
+            result <- apply_single_event(l_sequences, event)
+            l_sequences <- result$sequences
+            l_events <- c(l_events, event)
+            l_chr_alleles <- c(l_chr_alleles, result$chr_allele)
+          }
+
+          # Apply additional events to right cell
+          for (event in right_additional_events) {
+            result <- apply_single_event(r_sequences, event)
+            r_sequences <- result$sequences
+            r_events <- c(r_events, event)
+            r_chr_alleles <- c(r_chr_alleles, result$chr_allele)
+          }
+        }
+      }
     } else {
-      if (stats::runif(1) < 0.5) {
-        l_sequences[[selected_chr_allele]] <- modified_seq
-      } else {
-        r_sequences[[selected_chr_allele]] <- modified_seq
+      # No BFB events - distribute events normally
+      left_events_count <- min(n_left, total_events)
+      right_events_count <- min(n_right, total_events - left_events_count)
+
+      # Apply events to left cell
+      if (left_events_count > 0) {
+        left_event_names <- all_event_names[1:left_events_count]
+        for (event in left_event_names) {
+          result <- apply_single_event(l_sequences, event)
+          l_sequences <- result$sequences
+          l_events <- c(l_events, event)
+          l_chr_alleles <- c(l_chr_alleles, result$chr_allele)
+        }
+      }
+
+      # Apply events to right cell
+      if (right_events_count > 0) {
+        right_event_names <- all_event_names[(left_events_count + 1):(left_events_count + right_events_count)]
+        for (event in right_event_names) {
+          result <- apply_single_event(r_sequences, event)
+          r_sequences <- result$sequences
+          r_events <- c(r_events, event)
+          r_chr_alleles <- c(r_chr_alleles, result$chr_allele)
+        }
       }
     }
   }
@@ -284,25 +389,32 @@ process_birth_event <- function(state, current_cell_id) {
     state$time + stats::rexp(1, r_birth_rate + r_death_rate)
   )
 
-  # Update history
+  # Update history - mark parent as dead
   state$history <- state$history %>%
     dplyr::mutate(is_alive = ifelse(.data$cell_id == current_cell_id, F, .data$is_alive))
+
+  # Add left daughter cell to history
   state$history <- dplyr::bind_rows(
     state$history,
     dplyr::tibble(
       cell_id = l_cell_id,
       parent_id = current_cell_id,
-      bfb_event = (event_name == "bfb"),
-      cn_event = ifelse(event_name == "normal", "none", event_name),
-      chr_allele = ifelse(event_name == "normal", NA, selected_chr_allele),
+      bfb_event = bfb_occurred,
+      cn_event = ifelse(length(l_events) == 0, "none", paste(l_events, collapse = ",")),
+      chr_allele = ifelse(length(l_chr_alleles) == 0, NA, paste(l_chr_alleles, collapse = ",")),
       is_alive = TRUE
-    ),
+    )
+  )
+
+  # Add right daughter cell to history
+  state$history <- dplyr::bind_rows(
+    state$history,
     dplyr::tibble(
       cell_id = r_cell_id,
       parent_id = current_cell_id,
-      bfb_event = (event_name == "bfb"),
-      cn_event = ifelse(event_name == "normal", "none", event_name),
-      chr_allele = ifelse(event_name == "normal", NA, selected_chr_allele),
+      bfb_event = bfb_occurred,
+      cn_event = ifelse(length(r_events) == 0, "none", paste(r_events, collapse = ",")),
+      chr_allele = ifelse(length(r_chr_alleles) == 0, NA, paste(r_chr_alleles, collapse = ",")),
       is_alive = TRUE
     )
   )
@@ -462,16 +574,13 @@ sequences_to_cndata <- function(sequences, chr_seq_lengths, bin_length) {
 }
 
 
-
-sim_amp_del <- function(sequence, operation = "dup") {
+sim_amp_del <- function(sequence, operation = "dup", rate = 1e7) {
   # Get sequence properties
   L <- get_seq_length(sequence)
-
   # Ensure there's a sequence to modify
   if (L == 0) {
     return(sequence)
   }
-
   vec <- seq2vec(sequence)
 
   find_consecutive_subvectors <- function(vec) {
@@ -479,22 +588,17 @@ sim_amp_del <- function(sequence, operation = "dup") {
     runs <- rle(abs(diffs) == 1)
     lengths <- runs$lengths
     values <- runs$values
-
     start_indices <- cumsum(c(1, lengths[-length(lengths)]))
     good_starts <- start_indices[values]
     good_lengths <- lengths[values] + 1  # +1 because diff loses one element
-
     # Build a list of consecutive subvectors
     subvecs <- lapply(seq_along(good_starts), function(i) {
       idx_start <- good_starts[i]
       idx_end <- idx_start + good_lengths[i] - 1
       vec[idx_start:idx_end]
     })
-
     return(list(subvecs = subvecs, good_starts = good_starts))
   }
-
-
 
   subvectors <- find_consecutive_subvectors(vec)
   subvecs <- subvectors$subvecs
@@ -510,15 +614,28 @@ sim_amp_del <- function(sequence, operation = "dup") {
   subvec <- subvecs[[idx]]
   start <- good_starts[idx]
 
-  # Sample a section inside the selected subvector
+  # Sample event length from exponential distribution
+  event_length <- max(1, round(stats::rexp(1, rate = 1 / rate)))
+
+  # Sample a section inside the selected subvector with the sampled length
   if (length(subvec) == 1) {
     event_lims <- c(1, 1)
   } else {
-    event_lims <- sort(sample(1:length(subvec), size = 2))
+    # Ensure event_length doesn't exceed subvector length
+    actual_length <- min(event_length, length(subvec))
+
+    # Sample starting position such that we can fit the desired length
+    max_start <- length(subvec) - actual_length + 1
+    if (max_start <= 1) {
+      start_pos <- 1
+    } else {
+      start_pos <- sample(1:max_start, 1)
+    }
+
+    event_lims <- c(start_pos, start_pos + actual_length - 1)
   }
 
   s <- subvec[event_lims[1]:event_lims[2]]
-
   absolute_start <- start + event_lims[1] - 1
   absolute_end <- start + event_lims[2] - 1
 

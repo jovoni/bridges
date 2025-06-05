@@ -17,6 +17,8 @@ bridge_sim(
   amp_rate = 1,
   del_rate = 1,
   allow_wgd = TRUE,
+  lambda = 5,
+  rate = 1e+07,
   positive_selection_rate = 0,
   negative_selection_rate = 0,
   max_time = 300,
