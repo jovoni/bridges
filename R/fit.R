@@ -8,18 +8,18 @@
 #' @param data Input data containing genomic information. Should be in a format
 #'   that can be processed by `process_input_data()`.
 #' @param chromosomes Vector of chromosomes to include in analysis (default: 1:22, "X", "Y").
-#' @param alleles Alleles to consider (default: c("CN", "A", "B")).
-#' @param k_jitter_fix Jitter factor for numerical stability (default: 2).
+#' @param alleles Alleles to consider (default: c(A", "B"), alternative: "CN").
+#' @param k_jitter_fix Jitter factor for numerical stability (default: 0).
 #' @param target_vals Target values for distance calculation (default: c(2, 1, 1)).
 #' @param bfb_penalty Penalty for breakage-fusion-bridge events (default: 0).
 #' @param sum_across_minor_alleles Logical indicating whether to sum distances across
 #'   minor alleles (default: TRUE).
-#' @param tree_func Function to use for tree construction (default: ape::fastme.bal).
+#' @param tree_func Function to use for tree construction (default: ape::nj).
 #' @param fillna Value to fill NA entries (default: 0).
 #' @param g_dist_func Distance function to use for greedy calculation. Must be one
-#'   of the available G functions (default: "G").
+#'   of the available G functions (default: "G_with_steps").
 #' @param b_dist_func Distance function to use for BFB calculation. Must be one
-#'   of the available B functions (default: "avg").
+#'   of the available B functions (default: "A_contig").
 #' @param ... Additional arguments passed to downstream functions.
 #'
 #' @return A list containing:
@@ -48,15 +48,15 @@
 fit = function(data,
                 chromosomes = c(1:22, "X", "Y"),
                 alleles = c("CN", "A", "B"),
-                k_jitter_fix = 2,
+                k_jitter_fix = 0,
                 target_vals = c(2, 1, 1),
                 bfb_penalty = 0,
                 sum_across_minor_alleles = TRUE,
-                tree_func = ape::fastme.bal,
+                tree_func = ape::nj,
                 fillna = 0,
                 # New parameters for distance function selection
-                g_dist_func = "G",
-                b_dist_func = "avg",
+                g_dist_func = "G_with_steps",
+                b_dist_func = "A_contig",
                 ...) {
 
   # Process data
