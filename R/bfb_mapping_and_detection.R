@@ -389,83 +389,51 @@ compare_assignment_wrt_true = function(true_tree, cell_history,
 
   color_map <- stats::setNames(colors, c("Other", "Likely BFB"))
 
-  # True Tree plot
   cell_history$node_type = lapply(cell_history$cell_id, function(c_id) {
     d <- cell_history %>% dplyr::filter(.data$parent_id == c_id)
     if (nrow(d) != 0) {
-      if ("bfb" %in% unique(d$cn_event) ) {
+      if (any(grepl("bfb", d$cn_event))) {
         return("Likely BFB")
       }
     }
     "Other"
-  }) %>%
-    unlist()
+  }) %>% unlist()
 
   true_tree_plot <- ggtree::ggtree(true_tree) %<+% cell_history
   true_tree_plot <- true_tree_plot +
-    ggtree::geom_nodepoint(
-      ggplot2::aes(color = .data$node_type),
-      size = node_size,
-      alpha = 1
-    ) +
-    ggplot2::scale_color_manual(
-      values = color_map,
-      name = "CN event"
-    ) +
+    ggtree::geom_nodepoint(ggplot2::aes(color = .data$node_type),size = node_size, alpha = 1) +
+    ggplot2::scale_color_manual(values = color_map, name = "CN event") +
     ggplot2::ggtitle("True BFB") +
     ggplot2::theme(legend.position = "bottom")
 
-
-  # Assigned Tree plot
-
-  # Get reconstruction results
   fit$tree <- true_tree
-  reconstruction <- reconstruct_tree(fit, chr, allele, B_dist, G_dist)
-
-  # Extract and process delta values
+  reconstruction <- bridges:::reconstruct_tree(fit, chr, allele, B_dist, G_dist)
   internal_nodes <- as.integer(names(reconstruction$deltas))
   delta_values <- unlist(reconstruction$deltas)
-
-  # Create comprehensive node data
-  node_data <- data.frame(
-    node = internal_nodes,
-    delta = delta_values,
-    norm_delta = ifelse(delta_values > 0, 1, -1),
-    decision = ifelse(delta_values > 0, "Likely BFB", "Other"),
-    abs_delta = abs(delta_values),
-    stringsAsFactors = FALSE,
-    isTip = FALSE
-  )
-
-  # Create assigned tree
+  node_data <- data.frame(node = internal_nodes,
+                          delta = delta_values,
+                          norm_delta = ifelse(delta_values > 0, 1, -1),
+                          decision = ifelse(delta_values > 0, "Likely BFB", "Other"),
+                          abs_delta = abs(delta_values),
+                          stringsAsFactors = FALSE,
+                          isTip = FALSE)
   p_tree_assigned <- ggtree::ggtree(true_tree) %<+% node_data
   p_tree_assigned <- p_tree_assigned +
-    ggtree::geom_nodepoint(
-      ggplot2::aes(color = .data$decision),
-      size = node_size,
-      alpha = 1
-    ) +
-    ggplot2::scale_color_manual(
-      values = color_map,
-      name = "CN event"
-    ) +
+    ggtree::geom_nodepoint(ggplot2::aes(color = .data$decision), size = node_size, alpha = 1) +
+    ggplot2::scale_color_manual(values = color_map, name = "CN event") +
     ggplot2::ggtitle("Assigned BFB") +
     ggplot2::theme(legend.position = "bottom")
 
   p_compare <- true_tree_plot | p_tree_assigned
 
-  # Extract values
   df <- lapply(internal_nodes, function(node_id) {
-    pred <- node_data %>%
-      dplyr::filter(.data$node == node_id) %>%
+    pred <- node_data %>% dplyr::filter(.data$node == node_id) %>%
       dplyr::pull(.data$decision)
     true_cell_name <- c(true_tree$tip.label, true_tree$node.label)[node_id]
-    true <- cell_history %>%
-      dplyr::filter(.data$cell_id == true_cell_name) %>%
-      dplyr::pull(.data$node_type)
+    true <- cell_history %>% dplyr::filter(.data$cell_id ==
+                                             true_cell_name) %>% dplyr::pull(.data$node_type)
     dplyr::bind_rows(node_id = node_id, pred = pred, true = true)
-  }) %>%
-    do.call("bind_rows", .)
+  }) %>% do.call("bind_rows", .)
 
   list(p_compare = p_compare, df = df)
 }
