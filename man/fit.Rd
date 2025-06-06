@@ -9,9 +9,7 @@ fit(
   chromosomes = c(1:22, "X", "Y"),
   alleles = c("CN", "A", "B"),
   k_jitter_fix = 0,
-  target_vals = c(2, 1, 1),
   bfb_penalty = 0,
-  sum_across_minor_alleles = TRUE,
   tree_func = ape::nj,
   fillna = 0,
   g_dist_func = "G_with_steps",
@@ -29,12 +27,7 @@ that can be processed by \code{process_input_data()}.}
 
 \item{k_jitter_fix}{Jitter factor for numerical stability (default: 0).}
 
-\item{target_vals}{Target values for distance calculation (default: c(2, 1, 1)).}
-
 \item{bfb_penalty}{Penalty for breakage-fusion-bridge events (default: 0).}
-
-\item{sum_across_minor_alleles}{Logical indicating whether to sum distances across
-minor alleles (default: TRUE).}
 
 \item{tree_func}{Function to use for tree construction (default: ape::nj).}
 

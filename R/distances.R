@@ -1,4 +1,3 @@
-
 # G distances ####
 # Original one
 find_greedy_distance = function(a, b, target_val = 2) {
@@ -10,23 +9,22 @@ find_greedy_distance = function(a, b, target_val = 2) {
   history = list(current)
   cost = 0
 
-  while(!all(x == 0)) {
+  while (!all(x == 0)) {
     # Find first position where vectors differ
-    if(any(x != 0)) {
+    if (any(x != 0)) {
       head = min(which(x != 0))
 
       # Find the end of the contiguous block with same sign
       end = head
       sign_val = sign(x[head])
 
-      while(end < length(x) && sign(x[end + 1]) == sign_val) {
+      while (end < length(x) && sign(x[end + 1]) == sign_val) {
         end = end + 1
       }
 
-
       #step = min(abs(x[head:end]))
       # Apply the operation (add or subtract 1)
-      if(x[head] < 0) {
+      if (x[head] < 0) {
         # Need to increase current to match b
         #current[head:end] = current[head:end] + step
         current[head:end] = current[head:end] + 1
@@ -46,7 +44,9 @@ find_greedy_distance = function(a, b, target_val = 2) {
   }
 
   # Calculate ancestor - vector closest to target_val
-  distances_to_target = sapply(history, function(x) {sum(abs(x - target_val))})
+  distances_to_target = sapply(history, function(x) {
+    sum(abs(x - target_val))
+  })
   ancestor = history[[which.min(distances_to_target)]]
 
   # starting_vec_list = list(a=a, b=b)
@@ -69,22 +69,22 @@ find_greedy_distance_with_steps = function(a, b, target_val = 2) {
   history = list(current)
   cost = 0
 
-  while(!all(x == 0)) {
+  while (!all(x == 0)) {
     # Find first position where vectors differ
-    if(any(x != 0)) {
+    if (any(x != 0)) {
       head = min(which(x != 0))
 
       # Find the end of the contiguous block with same sign
       end = head
       sign_val = sign(x[head])
 
-      while(end < length(x) && sign(x[end + 1]) == sign_val) {
+      while (end < length(x) && sign(x[end + 1]) == sign_val) {
         end = end + 1
       }
 
       step = min(abs(x[head:end]))
       # Apply the operation (add or subtract 1)
-      if(x[head] < 0) {
+      if (x[head] < 0) {
         # Need to increase current to match b
         current[head:end] = current[head:end] + step
         #current[head:end] = current[head:end] + 1
@@ -105,7 +105,9 @@ find_greedy_distance_with_steps = function(a, b, target_val = 2) {
 
   # Calculate ancestor - vector closest to target_val
 
-  distances_to_target = sapply(history, function(x) {sum(abs(x - target_val))})
+  distances_to_target = sapply(history, function(x) {
+    sum(abs(x - target_val))
+  })
   ancestor = history[[which.min(distances_to_target)]]
 
   # starting_vec_list = list(a=a, b=b)
@@ -133,9 +135,9 @@ find_greedy_distance_with_avg = function(a, b, penalty = 0) {
   cost = 0
 
   # Continue until all differences are even (or zero)
-  while(!all(x %% 2 == 0)) {
+  while (!all(x %% 2 == 0)) {
     # Find first position with non-zero difference
-    if(any(x != 0)) {
+    if (any(x != 0)) {
       head = min(which(x != 0))
 
       # Find the end of the contiguous block with same sign
@@ -143,12 +145,12 @@ find_greedy_distance_with_avg = function(a, b, penalty = 0) {
       sign_val = sign(x[head])
 
       # Make sure not to go out of bounds
-      while(end < length(x) && sign(x[end + 1]) == sign_val) {
+      while (end < length(x) && sign(x[end + 1]) == sign_val) {
         end = end + 1
       }
 
       # Apply the operation (add or subtract 1)
-      if(x[head] < 0) {
+      if (x[head] < 0) {
         current[head:end] = current[head:end] + 1
       } else {
         current[head:end] = current[head:end] - 1
@@ -192,12 +194,11 @@ find_greedy_distance_A = function(a, b, penalty = 0) {
   cost = 0
 
   # Continue until all differences are even (or zero)
-  while(!all(x %% 2 == 0)) {
-
+  while (!all(x %% 2 == 0)) {
     # Find positions with odd differences
     odd_positions = which(x %% 2 != 0)
 
-    if(length(odd_positions) > 0) {
+    if (length(odd_positions) > 0) {
       # Find first position with odd difference
       head = min(odd_positions)
 
@@ -206,12 +207,12 @@ find_greedy_distance_A = function(a, b, penalty = 0) {
       sign_val = sign(x[head])
 
       # Extend to consecutive positions with same sign (considering all positions, not just odd)
-      while(end < length(x) && sign(x[end + 1]) == sign_val) {
+      while (end < length(x) && sign(x[end + 1]) == sign_val) {
         end = end + 1
       }
 
       # Apply the operation (add or subtract 1) to the entire block
-      if(x[head] < 0) {
+      if (x[head] < 0) {
         current[head:end] = current[head:end] + 1
       } else {
         current[head:end] = current[head:end] - 1
@@ -255,13 +256,13 @@ find_greedy_distance_A_contig = function(a, b, penalty = 0) {
   cost = 0
 
   # Continue until all differences are even (or zero)
-  while(!all(x %% 2 == 0)) {
+  while (!all(x %% 2 == 0)) {
     #print(x)
 
     # Find positions with odd differences
     odd_positions = which(x %% 2 != 0)
 
-    if(length(odd_positions) > 0) {
+    if (length(odd_positions) > 0) {
       # Find first position with odd difference
       head = min(odd_positions)
 
@@ -270,12 +271,12 @@ find_greedy_distance_A_contig = function(a, b, penalty = 0) {
       sign_val = sign(x[head])
 
       # Extend to consecutive positions with same sign (considering all positions, not just odd)
-      while(end < length(x) && sign(x[end + 1]) == sign_val) {
+      while (end < length(x) && sign(x[end + 1]) == sign_val) {
         end = end + 1
       }
 
       # Apply the operation (add or subtract 1) to the entire block
-      if(x[head] < 0) {
+      if (x[head] < 0) {
         current[head:end] = current[head:end] + 1
       } else {
         current[head:end] = current[head:end] - 1
@@ -291,7 +292,7 @@ find_greedy_distance_A_contig = function(a, b, penalty = 0) {
   }
 
   # Calculate average of final state and target
-  r <- rle(x != 0)
+  r = rle(x != 0)
   avg = (current + b) / 2
   cost = cost + sum(r$values) + penalty
 
@@ -433,7 +434,6 @@ find_greedy_distance_A_contig = function(a, b, penalty = 0) {
 #   ))
 # }
 
-
 # find_greedy_distance_B_each = function(a, b, penalty = 0) {
 #   # Make a copy of input vector to avoid modifying the original
 #   current = a
@@ -509,13 +509,13 @@ find_greedy_distance_B_contig = function(a, b, penalty = 0) {
   cost = 0
 
   # Continue until all differences are even (or zero)
-  while(!all(x %% 2 == 0)) {
+  while (!all(x %% 2 == 0)) {
     #print(x)
 
     # Find positions with odd differences
     odd_positions = which(x %% 2 != 0)
 
-    if(length(odd_positions) > 0) {
+    if (length(odd_positions) > 0) {
       # Find first position with odd difference
       head = min(odd_positions)
 
@@ -523,12 +523,12 @@ find_greedy_distance_B_contig = function(a, b, penalty = 0) {
       end = head
 
       # Extend to consecutive positions with non-zero differences (regardless of sign)
-      while(end < length(x) && x[end + 1] != 0) {
+      while (end < length(x) && x[end + 1] != 0) {
         end = end + 1
       }
 
       # Apply the operation based on the sign at the head position
-      if(x[head] < 0) {
+      if (x[head] < 0) {
         current[head:end] = current[head:end] + 1
       } else {
         current[head:end] = current[head:end] - 1
@@ -544,7 +544,7 @@ find_greedy_distance_B_contig = function(a, b, penalty = 0) {
   }
 
   # Calculate average of final state and target
-  r <- rle(x != 0)
+  r = rle(x != 0)
   avg = (current + b) / 2
   cost = cost + sum(r$values) + penalty
 

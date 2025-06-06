@@ -1,4 +1,3 @@
-
 sum_across_alleles = function(Ds, alleles = c("A", "B")) {
   all_summed_Ds = lapply(names(Ds), function(chromosome) {
     Ds_chr = Ds[[which(names(Ds) == chromosome)]]
@@ -11,6 +10,12 @@ sum_across_alleles = function(Ds, alleles = c("A", "B")) {
   all_summed_Ds
 }
 
+get_target_val = function(allele) {
+  if (allele == "CN") return(2)
+  if (allele %in% c("A", "B")) return(1)
+  stop()
+}
+
 find_minimal_distances = function(Ds_1, Ds_2) {
   alleles = names(Ds_1[[1]])
   chromosomes = names(Ds_1)
@@ -19,7 +24,6 @@ find_minimal_distances = function(Ds_1, Ds_2) {
     D1_chr = Ds_1[[which(names(Ds_1) == chromosome)]]
     D2_chr = Ds_2[[which(names(Ds_2) == chromosome)]]
     min_Ds = lapply(alleles, function(allele) {
-
       D1 = D1_chr[[allele]]
       D2 = D2_chr[[allele]]
       pmin(D1, D2, na.rm = FALSE)
@@ -32,11 +36,12 @@ find_minimal_distances = function(Ds_1, Ds_2) {
 }
 
 # Enhanced distance computation functions
-compute_greedy_distances = function(all_input_Xs,
-                                    chromosomes = c(1:22, "X", "Y"),
-                                    alleles = c("CN", "A", "B"),
-                                    target_vals = c(2, 1, 1),
-                                    g_dist_func = "G") {
+compute_greedy_distances = function(
+  all_input_Xs,
+  chromosomes,
+  alleles,
+  g_dist_func
+) {
   # Get the distance function from G_DISTS
   dist_func = get_g_dist(g_dist_func)
   # if (!g_dist_func %in% names(G_DISTS)) {
@@ -52,7 +57,11 @@ compute_greedy_distances = function(all_input_Xs,
     Xchr = all_input_Xs[[which(names(all_input_Xs) == chromosome)]]
     Ds = lapply(alleles, function(allele) {
       input_X = Xchr[[which(names(Xchr) == allele)]]
-      compute_distance_matrix(input_X, dist_func, target_val = target_vals[which(names(Xchr) == allele)])
+      compute_distance_matrix(
+        input_X,
+        dist_func,
+        target_val = get_target_val(allele)
+      )
     })
     names(Ds) = alleles
     Ds
@@ -61,18 +70,15 @@ compute_greedy_distances = function(all_input_Xs,
   all_Ds
 }
 
-compute_avg_distances = function(all_input_Xs,
-                                 chromosomes = c(1:22, "X", "Y"),
-                                 alleles = c("CN", "A", "B"),
-                                 bfb_penalty = 0,
-                                 b_dist_func = "avg") {
+compute_avg_distances = function(
+  all_input_Xs,
+  chromosomes,
+  alleles,
+  bfb_penalty,
+  b_dist_func
+) {
   # Get the distance function from B_DISTS
   dist_func = get_b_dist(b_dist_func)
-  # if (!b_dist_func %in% names(B_DISTS)) {
-  #   stop(paste("Invalid B distance function:", b_dist_func,
-  #              "\nAvailable options:", paste(names(B_DISTS), collapse = ", ")))
-  # }
-  # dist_func = B_DISTS[[b_dist_func]]
 
   alleles = alleles[alleles %in% names(all_input_Xs[[1]])]
   chromosomes = chromosomes[chromosomes %in% names(all_input_Xs)]
@@ -116,7 +122,9 @@ compute_avg_distances = function(all_input_Xs,
 # }
 
 compute_distance_matrix = function(input_X, dist_func, ...) {
-  sequences = lapply(rownames(input_X), function(r) {input_X[r,]})
+  sequences = lapply(rownames(input_X), function(r) {
+    input_X[r, ]
+  })
   names(sequences) = rownames(input_X)
 
   nodes <- sequences

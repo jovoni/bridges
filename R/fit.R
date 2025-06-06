@@ -10,10 +10,7 @@
 #' @param chromosomes Vector of chromosomes to include in analysis (default: 1:22, "X", "Y").
 #' @param alleles Alleles to consider (default: c(A", "B"), alternative: "CN").
 #' @param k_jitter_fix Jitter factor for numerical stability (default: 0).
-#' @param target_vals Target values for distance calculation (default: c(2, 1, 1)).
 #' @param bfb_penalty Penalty for breakage-fusion-bridge events (default: 0).
-#' @param sum_across_minor_alleles Logical indicating whether to sum distances across
-#'   minor alleles (default: TRUE).
 #' @param tree_func Function to use for tree construction (default: ape::nj).
 #' @param fillna Value to fill NA entries (default: 0).
 #' @param g_dist_func Distance function to use for greedy calculation. Must be one
@@ -49,23 +46,20 @@ fit = function(data,
                 chromosomes = c(1:22, "X", "Y"),
                 alleles = c("CN", "A", "B"),
                 k_jitter_fix = 0,
-                target_vals = c(2, 1, 1),
                 bfb_penalty = 0,
-                sum_across_minor_alleles = TRUE,
                 tree_func = ape::nj,
                 fillna = 0,
                 # New parameters for distance function selection
                 g_dist_func = "G_with_steps",
                 b_dist_func = "A_contig",
                 ...) {
-
   # Process data
   message("Pre-processing input...")
   all_input_Xs = process_input_data(data, chromosomes, alleles, k_jitter_fix, fillna)
 
   # Compute distances with selected functions
   message(paste("Computing G matrices using", g_dist_func, "..."))
-  greedy_Ds = compute_greedy_distances(all_input_Xs, chromosomes, alleles, target_vals, g_dist_func)
+  greedy_Ds = compute_greedy_distances(all_input_Xs, chromosomes, alleles, g_dist_func)
 
   message(paste("Computing B matrices using", b_dist_func, "..."))
   avg_Ds = compute_avg_distances(all_input_Xs, chromosomes, alleles, bfb_penalty, b_dist_func)
@@ -75,9 +69,7 @@ fit = function(data,
   min_Ds = find_minimal_distances(greedy_Ds, avg_Ds)
 
   # Sum across minor alleles
-  if (sum_across_minor_alleles) {
-    min_Ds = sum_across_alleles(min_Ds, alleles)
-  }
+  min_Ds = sum_across_alleles(min_Ds, alleles)
 
   # Sum across chromosomes
   D = Reduce("+", min_Ds)

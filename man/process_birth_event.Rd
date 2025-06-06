@@ -7,16 +7,22 @@
 process_birth_event(state, current_cell_id, lambda, rate)
 }
 \arguments{
-\item{state}{The simulation state}
+\item{state}{The simulation state containing cell information,
+sequences, and parameters}
 
-\item{current_cell_id}{ID of the cell undergoing birth}
+\item{current_cell_id}{ID of the cell undergoing birth/division}
+
+\item{lambda}{Rate parameter for Poisson distribution used to sample
+the number of genomic events per daughter cell}
+
+\item{rate}{Rate parameter used in amplification/deletion simulations.
+Length of event is sample from exponential distribution with parameter 1 / rate.}
 }
 \value{
-Updated simulation state
-Process a birth event (diploid version)
-
-Updated simulation state
+Updated simulation state with new daughter cells and updated history
 }
 \description{
-Process a birth event (diploid version)
+This function handles cell division by creating two daughter cells from a parent cell.
+During division, various genomic events (amplifications, deletions, BFB) can occur
+based on the specified rates and lambda parameter.
 }

@@ -17,8 +17,8 @@ bridge_sim(
   amp_rate = 1,
   del_rate = 1,
   allow_wgd = TRUE,
-  lambda = 5,
-  rate = 1e+07,
+  lambda = 2,
+  rate = 20,
   positive_selection_rate = 0,
   negative_selection_rate = 0,
   max_time = 300,
@@ -52,6 +52,12 @@ bridge_sim(
 \item{del_rate}{Numeric. Rate of deletion events. Default: 0.1}
 
 \item{allow_wgd}{Logical. Whether to allow whole genome duplication. Default: TRUE}
+
+\item{lambda}{Rate parameter for Poisson distribution used to sample
+the number of genomic events per daughter cell}
+
+\item{rate}{Rate parameter used in amplification/deletion simulations.
+Length of event is sample from exponential distribution with parameter 1 / rate.}
 
 \item{positive_selection_rate}{Numeric. Selection advantage for cells with amplified hotspot. Default: 0}
 

@@ -321,8 +321,6 @@ create_tree_annotation <- function(tree_ggplot, tree_width, n_cells) {
 #'   when reconstruction data is provided. Optional parameter.
 #' @param allele_for_coloring Specific allele used for tree branch coloring
 #'   when reconstruction data is provided. Optional parameter.
-#' @param B_dist Distance parameter B for tree coloring algorithm. Optional.
-#' @param G_dist Distance parameter G for tree coloring algorithm. Optional.
 #' @param tree_colors Vector of colors for tree branch coloring. Default:
 #'   c("black", "goldenrod"). First color for one state, second for another.
 #' @param node_size Size of internal nodes in the tree. Default: 1.
@@ -366,8 +364,6 @@ plot_heatmap <- function(data,
                          reconstruction = NULL,
                          chr_for_coloring = NULL,
                          allele_for_coloring = NULL,
-                         B_dist = NULL,
-                         G_dist = NULL,
                          tree_colors = c("black", "goldenrod"),
                          node_size = 1,
                          tip_size = 0) {

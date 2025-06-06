@@ -2,6 +2,7 @@
 
 export("%>%")
 export(bridge_sim)
+export(detect_bfb)
 export(fit)
 export(plot_heatmap)
 importFrom(ggtree,"%<+%")

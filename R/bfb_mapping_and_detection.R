@@ -1,45 +1,199 @@
-
-detect_bfb = function(fit, B_dist, G_dist, threshold = .005) {
+#' Detect Breakpoint-Free Branches (BFB) in Phylogenetic Trees
+#'
+#' This function performs binomial tests across all chromosomes and alleles to detect
+#' breakpoint-free branches in a phylogenetic tree reconstruction. It uses pseudo-cell
+#' analysis to identify branches where copy number changes occur without breakpoints.
+#'
+#' @param fit A fitted model object containing:
+#'   \itemize{
+#'     \item all_input_Xs: List of chromosome data with allele information
+#'     \item b_dist_func: B distance function
+#'     \item g_dist_func: G distance function
+#'     \item tree: Phylogenetic tree structure
+#'   }
+#' @param threshold Numeric threshold for binomial test probability (default: 0.005)
+#'
+#' @return A data frame containing binomial test results for each chromosome-allele combination:
+#'   \itemize{
+#'     \item mean: Estimated proportion of successes
+#'     \item N_trials: Total number of trials
+#'     \item N_successes: Number of successes
+#'     \item chr: Chromosome identifier
+#'     \item allele: Allele type
+#'     \item p.value: P-value from binomial test
+#'     \item threshold: Threshold used for testing
+#'   }
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Assuming 'fitted_model' is a properly fitted model object
+#' bfb_results <- detect_bfb(fitted_model, threshold = 0.01)
+#' }
+detect_bfb = function(fit, threshold = .005) {
   alleles = names(fit$all_input_Xs[[1]])
   chromosomes = names(fit$all_input_Xs)
 
   pseudo_cells_test_df = lapply(alleles, function(allele) {
     lapply(chromosomes, function(chr) {
-      pseudo_cell_bin_test(fit = fit, chr = chr, allele = allele, B_dist = B_dist, G_dist = G_dist, threshold = threshold)
-    }) %>% do.call("bind_rows", .)
-  }) %>% do.call("bind_rows", .)
+      pseudo_cell_bin_test(
+        fit = fit,
+        chr = chr,
+        allele = allele,
+        threshold = threshold
+      )
+    }) %>%
+      do.call("bind_rows", .)
+  }) %>%
+    do.call("bind_rows", .)
 
   pseudo_cells_test_df
 }
 
-pseudo_cell_t_test = function(fit, chr, allele, B_dist, G_dist, mu = 0, sign = F) {
-  r = reconstruct_tree(fit, chr, allele, B_dist, G_dist)
+#' Perform T-Test on Pseudo-Cell Delta Values
+#'
+#' This function reconstructs a phylogenetic tree for a specific chromosome and allele,
+#' then performs a one-sample t-test on the delta values (difference between G and B distances).
+#'
+#' @param fit A fitted model object containing tree structure and distance functions
+#' @param chr Character string specifying the chromosome
+#' @param allele Character string specifying the allele type
+#' @param mu Numeric value for the null hypothesis mean (default: 0)
+#' @param sign Logical indicating whether to use sign of delta values (default: FALSE)
+#'
+#' @return A tibble containing:
+#'   \itemize{
+#'     \item mean: Sample mean of delta values
+#'     \item chr: Chromosome identifier
+#'     \item allele: Allele type
+#'     \item p.value: P-value from t-test (NA if all values are identical)
+#'     \item greater: Logical indicating if mean > mu
+#'   }
+#'
+#' @details If all delta values are identical, no statistical test is performed and
+#' p.value is set to NA.
+pseudo_cell_t_test = function(
+    fit,
+    chr,
+    allele,
+    mu = 0,
+    sign = F
+) {
+  r <- reconstruct_tree(fit, chr, allele)
 
   delta_values <- unlist(r$deltas)
-  if (sign) delta_values = sign(delta_values)
+  if (sign) delta_values <- sign(delta_values)
 
   if (length(unique(delta_values)) == 1) {
     estimate = mean(delta_values)
-    dplyr::tibble(mean = estimate, chr = chr, allele = allele, p.value=NA, greater = estimate > mu)
+    dplyr::tibble(
+      mean = estimate,
+      chr = chr,
+      allele = allele,
+      p.value = NA,
+      greater = estimate > mu
+    )
   } else {
     test = stats::t.test(delta_values, alternative = "greater", mu = mu)
-    dplyr::tibble(mean = test$estimate, chr = chr, allele = allele, p.value=test$p.value, greater = test$estimate > mu)
+    dplyr::tibble(
+      mean = test$estimate,
+      chr = chr,
+      allele = allele,
+      p.value = test$p.value,
+      greater = test$estimate > mu
+    )
   }
 }
 
-pseudo_cell_bin_test = function(fit, chr, allele, B_dist, G_dist, threshold) {
-  r = reconstruct_tree(fit, chr, allele, B_dist, G_dist)
+#' Perform Binomial Test on Pseudo-Cell Delta Values
+#'
+#' This function reconstructs a phylogenetic tree and performs a binomial test
+#' to assess whether the proportion of positive delta values exceeds a given threshold.
+#' Delta values represent the difference between G distance and B distance costs.
+#'
+#' @param fit A fitted model object containing tree structure and distance functions
+#' @param chr Character string specifying the chromosome
+#' @param allele Character string specifying the allele type
+#' @param threshold Numeric threshold probability for the binomial test
+#'
+#' @return A tibble containing:
+#'   \itemize{
+#'     \item mean: Estimated proportion of positive delta values
+#'     \item N_trials: Total number of delta values
+#'     \item N_successes: Number of positive delta values
+#'     \item chr: Chromosome identifier
+#'     \item allele: Allele type
+#'     \item p.value: P-value from binomial test
+#'     \item threshold: Threshold used for testing
+#'   }
+#'
+#' @details The binomial test uses alternative = "greater" to test if the proportion
+#' of positive deltas significantly exceeds the threshold.
+pseudo_cell_bin_test = function(fit, chr, allele, threshold) {
+  # Get the B and G distance functions
+  r = reconstruct_tree(fit, chr, allele)
 
   delta_values <- unlist(r$deltas)
   N = length(delta_values)
   k = sum(delta_values > 0)
 
   test = stats::binom.test(k, N, p = threshold, alternative = "greater")
-  dplyr::tibble(mean = test$estimate, N_trials = N, N_successes = k, chr = chr, allele = allele, p.value=test$p.value, threshold=threshold)
+  dplyr::tibble(
+    mean = test$estimate,
+    N_trials = N,
+    N_successes = k,
+    chr = chr,
+    allele = allele,
+    p.value = test$p.value,
+    threshold = threshold
+  )
 }
 
+#' Reconstruct Phylogenetic Tree with Copy Number Analysis
+#'
+#' This function reconstructs a phylogenetic tree by traversing internal nodes and
+#' computing distances between cell profiles. For each internal node, it calculates
+#' both B distance (breakpoint-aware) and G distance (general) between child nodes,
+#' then selects the reconstruction method that minimizes cost.
+#'
+#' @param fit A fitted model object containing:
+#'   \itemize{
+#'     \item all_input_Xs: List of input data matrices by chromosome and allele
+#'     \item b_dist_func: B distance function for breakpoint-aware reconstruction
+#'     \item g_dist_func: G distance function for general reconstruction
+#'     \item tree: Phylogenetic tree structure (ape format)
+#'   }
+#' @param chr Character string specifying the chromosome to analyze
+#' @param allele Character string specifying the allele type ("CN" for copy number, others for allelic)
+#'
+#' @return A list containing:
+#'   \itemize{
+#'     \item internal_nodes: List of reconstructed internal node profiles
+#'     \item deltas: List of delta values (G cost - B cost) for each internal node
+#'     \item merged_profiles: List of merged profiles when B distance is chosen
+#'     \item final_input: Final working input matrix after all reconstructions
+#'     \item processed_nodes: Number of internal nodes processed
+#'     \item chr: Chromosome identifier
+#'     \item allele: Allele type
+#'   }
+#'
+#' @details The function:
+#' \enumerate{
+#'   \item Sets target values based on allele type (2 for "CN", 1 for others)
+#'   \item Processes internal nodes in post-order traversal
+#'   \item For each internal node, computes B and G distances between children
+#'   \item Calculates delta = G_cost - B_cost
+#'   \item Chooses B reconstruction if delta > 0, otherwise G reconstruction
+#'   \item Creates pseudo-cells for internal nodes and updates working dataset
+#' }
+#'
+#' @note The tree edge lengths are set to 1 for uniform weighting. Node labels
+#' are automatically generated if not present.
+reconstruct_tree <- function(fit, chr, allele) {
+  B_dist = get_b_dist(fit$b_dist_func)
+  G_dist = get_g_dist(fit$g_dist_func)
 
-reconstruct_tree <- function(fit, chr, allele, B_dist, G_dist) {
   # Set target value based on allele type
   target_val <- ifelse(allele == "CN", 2, 1)
 
@@ -56,7 +210,8 @@ reconstruct_tree <- function(fit, chr, allele, B_dist, G_dist) {
 
   # Get post-order traversal of internal nodes to ensure children are processed before parents
   post_order_nodes <- get_post_order_internal_nodes(tree)
-  if (is.null(tree$node.label)) tree$node.label <- paste0("N", seq_len(tree$Nnode))
+  if (is.null(tree$node.label))
+    tree$node.label <- paste0("N", seq_len(tree$Nnode))
 
   # Initialize results storage
   internal_nodes <- list()
@@ -128,7 +283,10 @@ reconstruct_tree <- function(fit, chr, allele, B_dist, G_dist) {
       # Choose internal node based on which distance is lower
       if (delta > 0) {
         internal_node_cell <- b_d$ancestor
-        merged_profiles[[as.character(node_id)]] = list(left = b_d$left, right = b_d$right)
+        merged_profiles[[as.character(node_id)]] = list(
+          left = b_d$left,
+          right = b_d$right
+        )
       } else {
         internal_node_cell <- g_d$ancestor
         merged_profiles[[as.character(node_id)]]
@@ -149,20 +307,25 @@ reconstruct_tree <- function(fit, chr, allele, B_dist, G_dist) {
       rownames(working_input)[nrow(working_input)] <- pseudo_cell_name
 
       # Remove the cells that were combined (but keep other cells)
-      working_input <- working_input[!rownames(working_input) %in% c(left_cell_name, right_cell_name),,drop=F]
+      working_input <- working_input[
+        !rownames(working_input) %in% c(left_cell_name, right_cell_name),
+        ,
+        drop = F
+      ]
       #print(rownames(working_input))
     }
   }
 
   # Return results as a list
-  return(list(
+  list(
     internal_nodes = internal_nodes,
     deltas = deltas,
     merged_profiles = merged_profiles,
     final_input = working_input,
     processed_nodes = length(internal_nodes),
-    chr = chr, allele = allele
-  ))
+    chr = chr,
+    allele = allele
+  )
 }
 
 # Helper function to get post-order traversal of internal nodes
@@ -190,7 +353,8 @@ get_post_order_internal_nodes <- function(tree) {
     children <- children_list[[node]]
     if (!is.null(children)) {
       for (child in children) {
-        if (child > Ntip) {  # Only traverse internal nodes
+        if (child > Ntip) {
+          # Only traverse internal nodes
           post_order_traverse(child)
         }
       }
@@ -207,7 +371,7 @@ get_post_order_internal_nodes <- function(tree) {
   root <- Ntip + 1
   post_order_traverse(root)
 
-  return(post_order)
+  post_order
 }
 
 # Helper function to get direct children of a node
@@ -218,7 +382,7 @@ get_node_children <- function(tree, node) {
       children <- c(children, tree$edge[i, 2])
     }
   }
-  return(children)
+  children
 }
 
 # Helper function to get clade pairs (as provided)
@@ -254,20 +418,30 @@ get_clade_pairs <- function(tree) {
     if (length(children) == 2) {
       left_tips <- get_descendant_tips(children[1])
       right_tips <- get_descendant_tips(children[2])
-      clade_pairs[[as.character(node)]] <- list(left = left_tips, right = right_tips)
+      clade_pairs[[as.character(node)]] <- list(
+        left = left_tips,
+        right = right_tips
+      )
     }
   }
 
-  return(clade_pairs)
+  clade_pairs
 }
 
-plot_tree_colored_by_bfb <- function(fit, chr, allele, B_dist, G_dist,
-                                     add_legend = TRUE, add_title = TRUE,
-                                     node_size = 3, tip_size = 2,
-                                     branch_length = 1,
-                                     colors = c("mediumpurple", "goldenrod"),
-                                     show_tip_labels = FALSE) {
-
+plot_tree_colored_by_bfb <- function(
+  fit,
+  chr,
+  allele,
+  B_dist,
+  G_dist,
+  add_legend = TRUE,
+  add_title = TRUE,
+  node_size = 3,
+  tip_size = 2,
+  branch_length = 1,
+  colors = c("mediumpurple", "goldenrod"),
+  show_tip_labels = FALSE
+) {
   # Prepare tree
   tree <- fit$tree
 
@@ -278,7 +452,7 @@ plot_tree_colored_by_bfb <- function(fit, chr, allele, B_dist, G_dist,
   }
 
   # Get reconstruction results
-  reconstruction <- reconstruct_tree(fit, chr, allele, B_dist, G_dist)
+  reconstruction <- reconstruct_tree(fit, chr, allele)
 
   # Extract and process delta values
   internal_nodes <- as.integer(names(reconstruction$deltas))
@@ -303,7 +477,6 @@ plot_tree_colored_by_bfb <- function(fit, chr, allele, B_dist, G_dist,
     } else {
       tree$edge.length[tree$edge.length == 0] <- min_nonzero * 0.01
     }
-
   }
 
   # Create base tree plot
@@ -381,12 +554,17 @@ plot_tree_colored_by_bfb <- function(fit, chr, allele, B_dist, G_dist,
 
 # Compare True BFB and Assigned BFB
 
-compare_assignment_wrt_true = function(true_tree, cell_history,
-                                       fit, allele, chr,
-                                       B_dist, G_dist,
-                                       colors = c("mediumpurple", "goldenrod"),
-                                       node_size = 1) {
-
+compare_assignment_wrt_true = function(
+  true_tree,
+  cell_history,
+  fit,
+  allele,
+  chr,
+  B_dist,
+  G_dist,
+  colors = c("mediumpurple", "goldenrod"),
+  node_size = 1
+) {
   color_map <- stats::setNames(colors, c("Other", "Likely BFB"))
 
   cell_history$node_type = lapply(cell_history$cell_id, function(c_id) {
@@ -397,29 +575,40 @@ compare_assignment_wrt_true = function(true_tree, cell_history,
       }
     }
     "Other"
-  }) %>% unlist()
+  }) %>%
+    unlist()
 
   true_tree_plot <- ggtree::ggtree(true_tree) %<+% cell_history
   true_tree_plot <- true_tree_plot +
-    ggtree::geom_nodepoint(ggplot2::aes(color = .data$node_type),size = node_size, alpha = 1) +
+    ggtree::geom_nodepoint(
+      ggplot2::aes(color = .data$node_type),
+      size = node_size,
+      alpha = 1
+    ) +
     ggplot2::scale_color_manual(values = color_map, name = "CN event") +
     ggplot2::ggtitle("True BFB") +
     ggplot2::theme(legend.position = "bottom")
 
   fit$tree <- true_tree
-  reconstruction <- bridges:::reconstruct_tree(fit, chr, allele, B_dist, G_dist)
+  reconstruction <- reconstruct_tree(fit, chr, allele)
   internal_nodes <- as.integer(names(reconstruction$deltas))
   delta_values <- unlist(reconstruction$deltas)
-  node_data <- data.frame(node = internal_nodes,
-                          delta = delta_values,
-                          norm_delta = ifelse(delta_values > 0, 1, -1),
-                          decision = ifelse(delta_values > 0, "Likely BFB", "Other"),
-                          abs_delta = abs(delta_values),
-                          stringsAsFactors = FALSE,
-                          isTip = FALSE)
+  node_data <- data.frame(
+    node = internal_nodes,
+    delta = delta_values,
+    norm_delta = ifelse(delta_values > 0, 1, -1),
+    decision = ifelse(delta_values > 0, "Likely BFB", "Other"),
+    abs_delta = abs(delta_values),
+    stringsAsFactors = FALSE,
+    isTip = FALSE
+  )
   p_tree_assigned <- ggtree::ggtree(true_tree) %<+% node_data
   p_tree_assigned <- p_tree_assigned +
-    ggtree::geom_nodepoint(ggplot2::aes(color = .data$decision), size = node_size, alpha = 1) +
+    ggtree::geom_nodepoint(
+      ggplot2::aes(color = .data$decision),
+      size = node_size,
+      alpha = 1
+    ) +
     ggplot2::scale_color_manual(values = color_map, name = "CN event") +
     ggplot2::ggtitle("Assigned BFB") +
     ggplot2::theme(legend.position = "bottom")
@@ -427,13 +616,16 @@ compare_assignment_wrt_true = function(true_tree, cell_history,
   p_compare <- true_tree_plot | p_tree_assigned
 
   df <- lapply(internal_nodes, function(node_id) {
-    pred <- node_data %>% dplyr::filter(.data$node == node_id) %>%
+    pred <- node_data %>%
+      dplyr::filter(.data$node == node_id) %>%
       dplyr::pull(.data$decision)
     true_cell_name <- c(true_tree$tip.label, true_tree$node.label)[node_id]
-    true <- cell_history %>% dplyr::filter(.data$cell_id ==
-                                             true_cell_name) %>% dplyr::pull(.data$node_type)
+    true <- cell_history %>%
+      dplyr::filter(.data$cell_id == true_cell_name) %>%
+      dplyr::pull(.data$node_type)
     dplyr::bind_rows(node_id = node_id, pred = pred, true = true)
-  }) %>% do.call("bind_rows", .)
+  }) %>%
+    do.call("bind_rows", .)
 
   list(p_compare = p_compare, df = df)
 }

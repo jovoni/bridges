@@ -21,8 +21,6 @@ plot_heatmap(
   reconstruction = NULL,
   chr_for_coloring = NULL,
   allele_for_coloring = NULL,
-  B_dist = NULL,
-  G_dist = NULL,
   tree_colors = c("black", "goldenrod"),
   node_size = 1,
   tip_size = 0
@@ -76,10 +74,6 @@ when reconstruction data is provided. Optional parameter.}
 
 \item{allele_for_coloring}{Specific allele used for tree branch coloring
 when reconstruction data is provided. Optional parameter.}
-
-\item{B_dist}{Distance parameter B for tree coloring algorithm. Optional.}
-
-\item{G_dist}{Distance parameter G for tree coloring algorithm. Optional.}
 
 \item{tree_colors}{Vector of colors for tree branch coloring. Default:
 c("black", "goldenrod"). First color for one state, second for another.}

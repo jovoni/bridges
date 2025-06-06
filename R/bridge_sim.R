@@ -19,6 +19,10 @@
 #' @param amp_rate Numeric. Rate of amplification events. Default: 0.1
 #' @param del_rate Numeric. Rate of deletion events. Default: 0.1
 #' @param allow_wgd Logical. Whether to allow whole genome duplication. Default: TRUE
+#' @param lambda Rate parameter for Poisson distribution used to sample
+#' the number of genomic events per daughter cell
+#' @param rate Rate parameter used in amplification/deletion simulations.
+#'  Length of event is sample from exponential distribution with parameter 1 / rate.
 #' @param positive_selection_rate Numeric. Selection advantage for cells with amplified hotspot. Default: 0
 #' @param negative_selection_rate Numeric. Selection disadvantage for cells without amplified hotspot. Default: 0
 #' @param max_time Numeric. Maximum simulation time. Default: 50
@@ -40,43 +44,78 @@
 #'
 #' @export
 bridge_sim <- function(
-    initial_cells = 1,
-    chromosomes = c(1:22, "X", "Y"),
-    bin_length = 1e6,
-    birth_rate = 0.1,
-    death_rate = 0.001,
-    bfb_allele = "1:A",
-    normal_dup_rate = 0,
-    bfb_prob = 0.5,
-    amp_rate = 1,
-    del_rate = 1,
-    allow_wgd = TRUE,
-    lambda = 5,
-    rate = 1e7,
-    positive_selection_rate = 0,
-    negative_selection_rate = 0,
-    max_time = 300,
-    max_cells = 256,
-    first_round_of_bfb = TRUE,
-    breakpoint_support = "uniform",
-    hotspot = list(chr = "1:A", pos = 100),
-    alpha = NULL,
-    beta = NULL
+  initial_cells = 1,
+  chromosomes = c(1:22, "X", "Y"),
+  bin_length = 1e6,
+  birth_rate = 0.1,
+  death_rate = 0.001,
+  bfb_allele = "1:A",
+  normal_dup_rate = 0,
+  bfb_prob = 0.5,
+  amp_rate = 1,
+  del_rate = 1,
+  allow_wgd = TRUE,
+  lambda = 2,
+  rate = 20,
+  positive_selection_rate = 0,
+  negative_selection_rate = 0,
+  max_time = 300,
+  max_cells = 256,
+  first_round_of_bfb = TRUE,
+  breakpoint_support = "uniform",
+  hotspot = list(chr = "1:A", pos = 100),
+  alpha = NULL,
+  beta = NULL
 ) {
-  validate_bridge_sim_params(initial_cells, chromosomes, bin_length, birth_rate, death_rate,
-                             bfb_allele, normal_dup_rate, bfb_prob, amp_rate, del_rate,
-                             allow_wgd, positive_selection_rate, negative_selection_rate,
-                             max_time, max_cells, first_round_of_bfb, breakpoint_support,
-                             hotspot, alpha, beta)
+  validate_bridge_sim_params(
+    initial_cells,
+    chromosomes,
+    bin_length,
+    birth_rate,
+    death_rate,
+    bfb_allele,
+    normal_dup_rate,
+    bfb_prob,
+    amp_rate,
+    del_rate,
+    allow_wgd,
+    positive_selection_rate,
+    negative_selection_rate,
+    max_time,
+    max_cells,
+    first_round_of_bfb,
+    breakpoint_support,
+    hotspot,
+    alpha,
+    beta
+  )
 
   # Default human chromosome lengths (approximate, in base pairs)
   default_chr_lengths <- c(
-    "1" = 247249719, "2" = 242193529, "3" = 198295559, "4" = 190214555,
-    "5" = 181538259, "6" = 170805979, "7" = 159345973, "8" = 145138636,
-    "9" = 138394717, "10" = 133797422, "11" = 135086622, "12" = 133275309,
-    "13" = 114364328, "14" = 107043718, "15" = 101991189, "16" = 90338345,
-    "17" = 83257441, "18" = 80373285, "19" = 58617616, "20" = 64444167,
-    "21" = 46709983, "22" = 50818468, "X" = 156040895, "Y" = 57227415
+    "1" = 247249719,
+    "2" = 242193529,
+    "3" = 198295559,
+    "4" = 190214555,
+    "5" = 181538259,
+    "6" = 170805979,
+    "7" = 159345973,
+    "8" = 145138636,
+    "9" = 138394717,
+    "10" = 133797422,
+    "11" = 135086622,
+    "12" = 133275309,
+    "13" = 114364328,
+    "14" = 107043718,
+    "15" = 101991189,
+    "16" = 90338345,
+    "17" = 83257441,
+    "18" = 80373285,
+    "19" = 58617616,
+    "20" = 64444167,
+    "21" = 46709983,
+    "22" = 50818468,
+    "X" = 156040895,
+    "Y" = 57227415
   )
   chr_lengths <- default_chr_lengths[as.character(chromosomes)]
 
@@ -138,7 +177,12 @@ bridge_sim <- function(
 
     if (current_event_type == "birth") {
       # Handle birth event
-      sim_state <- process_birth_event(sim_state, current_cell_id, lambda = lambda, rate = rate)
+      sim_state <- process_birth_event(
+        sim_state,
+        current_cell_id,
+        lambda = lambda,
+        rate = rate
+      )
     } else {
       # Handle death event
       sim_state <- process_death_event(sim_state, current_cell_id)
@@ -147,7 +191,11 @@ bridge_sim <- function(
 
   # Finalize and prepare results (without subsampling)
   sim_state <- prepare_results(sim_state)
-  sim_state$cna_data <- sequences_to_cndata(sim_state$cells, chr_seq_lengths, bin_length)
+  sim_state$cna_data <- sequences_to_cndata(
+    sim_state$cells,
+    chr_seq_lengths,
+    bin_length
+  )
 
   return(sim_state)
 }
