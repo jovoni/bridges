@@ -12,6 +12,7 @@ Imports:
     ape,
     circlize,
     ComplexHeatmap,
+    data.table,
     dplyr,
     ggplot2,
     ggtree,

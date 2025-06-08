@@ -606,42 +606,42 @@ get_next_event <- function(state) {
 
 
 # Cell to cn copy data
-sequences_to_cndata <- function(sequences, chr_seq_lengths, bin_length) {
-  cndata <- lapply(names(sequences), function(cell_id) {
-    seqs <- sequences[[cell_id]]
-    lapply(names(seqs), function(chr_allele) {
-      s <- seqs[[chr_allele]]
-
-      chr <- strsplit(chr_allele, ":")[[1]][1]
-      allele <- strsplit(chr_allele, ":")[[1]][2]
-
-      bin_idxs <- 1:chr_seq_lengths[[chr]]
-      t <- table(seq2vec(s))[bin_idxs]
-      d <- dplyr::tibble(
-        cell_id = cell_id,
-        bin_idx = bin_idxs,
-        allele = allele,
-        chr = chr,
-        state = as.integer(t[as.character(bin_idxs)])
-      )
-      d$state[is.na(d$state)] <- 0
-      d
-    }) %>%
-      do.call(dplyr::bind_rows, .)
-  }) %>%
-    do.call(dplyr::bind_rows, .)
-
-  cndata <- cndata %>%
-    dplyr::group_by(.data$cell_id, .data$chr) %>%
-    tidyr::pivot_wider(values_from = .data$state, names_from = .data$allele) %>%
-    dplyr::mutate(CN = .data$A + .data$B) %>%
-    dplyr::mutate(
-      start = (.data$bin_idx - 1) * bin_length + 1,
-      end = .data$bin_idx * bin_length
-    )
-
-  cndata
-}
+# sequences_to_cndata <- function(sequences, chr_seq_lengths, bin_length) {
+#   cndata <- lapply(names(sequences), function(cell_id) {
+#     seqs <- sequences[[cell_id]]
+#     lapply(names(seqs), function(chr_allele) {
+#       s <- seqs[[chr_allele]]
+#
+#       chr <- strsplit(chr_allele, ":")[[1]][1]
+#       allele <- strsplit(chr_allele, ":")[[1]][2]
+#
+#       bin_idxs <- 1:chr_seq_lengths[[chr]]
+#       t <- table(seq2vec(s))[bin_idxs]
+#       d <- dplyr::tibble(
+#         cell_id = cell_id,
+#         bin_idx = bin_idxs,
+#         allele = allele,
+#         chr = chr,
+#         state = as.integer(t[as.character(bin_idxs)])
+#       )
+#       d$state[is.na(d$state)] <- 0
+#       d
+#     }) %>%
+#       do.call(dplyr::bind_rows, .)
+#   }) %>%
+#     do.call(dplyr::bind_rows, .)
+#
+#   cndata <- cndata %>%
+#     dplyr::group_by(.data$cell_id, .data$chr) %>%
+#     tidyr::pivot_wider(values_from = .data$state, names_from = .data$allele) %>%
+#     dplyr::mutate(CN = .data$A + .data$B) %>%
+#     dplyr::mutate(
+#       start = (.data$bin_idx - 1) * bin_length + 1,
+#       end = .data$bin_idx * bin_length
+#     )
+#
+#   cndata
+# }
 
 
 sim_amp_del <- function(sequence, operation = "dup", rate = 1e7) {
@@ -1349,4 +1349,74 @@ subsample_sim <- function(sim_result, f_subsample = 1) {
   )
 
   return(subsampled_result)
+}
+
+sequences_to_cndata <- function(sequences, chr_seq_lengths, bin_length) {
+  # Pre-compute total rows needed
+  total_rows <- sum(unlist(lapply(sequences, function(seqs) {
+    sum(chr_seq_lengths[sapply(names(seqs), function(x) strsplit(x, ":")[[1]][1])])
+  })))
+
+  # Pre-allocate vectors for maximum efficiency
+  cell_ids <- character(total_rows)
+  bin_idxs <- integer(total_rows)
+  alleles <- character(total_rows)
+  chrs <- character(total_rows)
+  states <- integer(total_rows)
+
+  row_idx <- 1
+
+  for (cell_id in names(sequences)) {
+    seqs <- sequences[[cell_id]]
+
+    for (chr_allele in names(seqs)) {
+      s <- seqs[[chr_allele]]
+      chr_parts <- strsplit(chr_allele, ":", fixed = TRUE)[[1]]
+      chr <- chr_parts[1]
+      allele <- chr_parts[2]
+
+      n_bins <- chr_seq_lengths[[chr]]
+      bin_range <- seq_len(n_bins)
+
+      # Fill pre-allocated vectors
+      end_idx <- row_idx + n_bins - 1
+      cell_ids[row_idx:end_idx] <- cell_id
+      bin_idxs[row_idx:end_idx] <- bin_range
+      alleles[row_idx:end_idx] <- allele
+      chrs[row_idx:end_idx] <- chr
+
+      # Process states
+      seq_vec <- seq2vec(s)
+      t <- table(seq_vec)
+      state_vec <- integer(n_bins)
+      matching_bins <- intersect(as.integer(names(t)), bin_range)
+      if (length(matching_bins) > 0) {
+        state_vec[matching_bins] <- t[as.character(matching_bins)]
+      }
+      states[row_idx:end_idx] <- state_vec
+
+      row_idx <- end_idx + 1
+    }
+  }
+
+  # Create data.table from pre-allocated vectors
+  cndata <- data.table::data.table(
+    cell_id = cell_ids,
+    bin_idx = bin_idxs,
+    allele = alleles,
+    chr = chrs,
+    state = states
+  )
+
+  # Pivot and compute final columns
+  cndata_wide <- data.table::dcast(cndata, cell_id + chr + bin_idx ~ allele,
+                       value.var = "state", fill = 0)
+
+  cndata_wide[, CN := A + B]
+  cndata_wide[, `:=`(
+    start = (bin_idx - 1) * bin_length + 1,
+    end = bin_idx * bin_length
+  )]
+
+  dplyr::as_tibble(cndata_wide)
 }

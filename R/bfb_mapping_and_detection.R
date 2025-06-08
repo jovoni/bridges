@@ -329,50 +329,50 @@ reconstruct_tree <- function(fit, chr, allele) {
 }
 
 # Helper function to get post-order traversal of internal nodes
-get_post_order_internal_nodes <- function(tree) {
-  Ntip <- length(tree$tip.label)
-  Nnode <- tree$Nnode
-  all_internal_nodes <- (Ntip + 1):(Ntip + Nnode)
+# get_post_order_internal_nodes <- function(tree) {
+#   Ntip <- length(tree$tip.label)
+#   Nnode <- tree$Nnode
+#   all_internal_nodes <- (Ntip + 1):(Ntip + Nnode)
 
-  # Build children list
-  children_list <- vector("list", max(tree$edge))
-  for (i in seq_len(nrow(tree$edge))) {
-    parent <- tree$edge[i, 1]
-    child <- tree$edge[i, 2]
-    children_list[[parent]] <- c(children_list[[parent]], child)
-  }
+#   # Build children list
+#   children_list <- vector("list", max(tree$edge))
+#   for (i in seq_len(nrow(tree$edge))) {
+#     parent <- tree$edge[i, 1]
+#     child <- tree$edge[i, 2]
+#     children_list[[parent]] <- c(children_list[[parent]], child)
+#   }
 
-  # Post-order traversal
-  visited <- rep(FALSE, max(tree$edge))
-  post_order <- c()
+#   # Post-order traversal
+#   visited <- rep(FALSE, max(tree$edge))
+#   post_order <- c()
 
-  post_order_traverse <- function(node) {
-    if (visited[node]) return()
+#   post_order_traverse <- function(node) {
+#     if (visited[node]) return()
 
-    # Visit children first
-    children <- children_list[[node]]
-    if (!is.null(children)) {
-      for (child in children) {
-        if (child > Ntip) {
-          # Only traverse internal nodes
-          post_order_traverse(child)
-        }
-      }
-    }
+#     # Visit children first
+#     children <- children_list[[node]]
+#     if (!is.null(children)) {
+#       for (child in children) {
+#         if (child > Ntip) {
+#           # Only traverse internal nodes
+#           post_order_traverse(child)
+#         }
+#       }
+#     }
 
-    # Then visit this node
-    visited[node] <<- TRUE
-    if (node > Ntip) {
-      post_order <<- c(post_order, node)
-    }
-  }
+#     # Then visit this node
+#     visited[node] <<- TRUE
+#     if (node > Ntip) {
+#       post_order <<- c(post_order, node)
+#     }
+#   }
 
-  # Start from root
-  root <- Ntip + 1
-  post_order_traverse(root)
+#   # Start from root
+#   root <- Ntip + 1
+#   post_order_traverse(root)
 
-  post_order
-}
+#   post_order
+# }
 
 # Helper function to get direct children of a node
 get_node_children <- function(tree, node) {
@@ -385,14 +385,13 @@ get_node_children <- function(tree, node) {
   children
 }
 
-# Helper function to get clade pairs (as provided)
-get_clade_pairs <- function(tree) {
-  # Total number of tips and nodes
+
+
+get_post_order_internal_nodes = function(tree) {
   Ntip <- length(tree$tip.label)
   Nnode <- tree$Nnode
-  all_nodes <- (Ntip + 1):(Ntip + Nnode)
-
-  # Build a list to store children of each node
+  
+  # Build children list
   children_list <- vector("list", max(tree$edge))
   for (i in seq_len(nrow(tree$edge))) {
     parent <- tree$edge[i, 1]
@@ -400,32 +399,33 @@ get_clade_pairs <- function(tree) {
     children_list[[parent]] <- c(children_list[[parent]], child)
   }
 
-  # Recursive function to get all descendant tips of a node
-  get_descendant_tips <- function(node) {
-    if (node <= Ntip) {
-      return(tree$tip.label[node])
+  # Iterative post-order traversal using a stack
+  stack <- list(list(node = Ntip + 1, visited = FALSE))
+  post_order <- c()
+
+  while (length(stack) > 0) {
+    current <- stack[[length(stack)]]
+    stack <- stack[-length(stack)]  # pop
+
+    if (current$visited) {
+      if (current$node > Ntip) {
+        post_order <- c(post_order, current$node)
+      }
     } else {
-      children <- children_list[[node]]
-      unlist(lapply(children, get_descendant_tips))
+      # Mark as visited and push back
+      stack <- c(stack, list(list(node = current$node, visited = TRUE)))
+
+      # Push children (in reverse order for correct post-order)
+      children <- children_list[[current$node]]
+      if (!is.null(children)) {
+        internal_children <- children[children > Ntip]
+        for (child in rev(internal_children)) {
+          stack <- c(stack, list(list(node = child, visited = FALSE)))
+        }
+      }
     }
   }
-
-  # Store pairs of clades
-  clade_pairs <- list()
-
-  for (node in all_nodes) {
-    children <- children_list[[node]]
-    if (length(children) == 2) {
-      left_tips <- get_descendant_tips(children[1])
-      right_tips <- get_descendant_tips(children[2])
-      clade_pairs[[as.character(node)]] <- list(
-        left = left_tips,
-        right = right_tips
-      )
-    }
-  }
-
-  clade_pairs
+  post_order
 }
 
 plot_tree_colored_by_bfb <- function(
