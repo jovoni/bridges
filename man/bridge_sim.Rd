@@ -27,7 +27,8 @@ bridge_sim(
   breakpoint_support = "uniform",
   hotspot = list(chr = "1:A", pos = 100),
   alpha = NULL,
-  beta = NULL
+  beta = NULL,
+  custom_breakpoints = NULL
 )
 }
 \arguments{

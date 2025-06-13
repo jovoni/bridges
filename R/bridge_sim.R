@@ -65,7 +65,8 @@ bridge_sim <- function(
   breakpoint_support = "uniform",
   hotspot = list(chr = "1:A", pos = 100),
   alpha = NULL,
-  beta = NULL
+  beta = NULL,
+  custom_breakpoints = NULL
 ) {
   validate_bridge_sim_params(
     initial_cells,
@@ -161,7 +162,8 @@ bridge_sim <- function(
     breakpoint_support = breakpoint_support,
     hotspot = hotspot,
     alpha = alpha,
-    beta = beta
+    beta = beta,
+    custom_breakpoints = custom_breakpoints
   )
 
   # Initialize simulation state
@@ -192,9 +194,9 @@ bridge_sim <- function(
   # Finalize and prepare results (without subsampling)
   sim_state <- prepare_results(sim_state)
   sim_state$cna_data <- sequences_to_cndata(
-    sim_state$cells,
-    chr_seq_lengths,
-    bin_length
+    sequences = sim_state$cells,
+    chr_seq_lengths = chr_seq_lengths,
+    bin_length = bin_length
   )
 
   return(sim_state)

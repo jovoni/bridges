@@ -8,7 +8,8 @@ sim_bfb_left_and_right_sequences(
   sequence,
   support = "uniform",
   alpha = NULL,
-  beta = NULL
+  beta = NULL,
+  custom_breakpoints = NULL
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ sim_bfb_left_and_right_sequences(
 \item{alpha}{Shape parameter for beta distribution (only used if support="beta")}
 
 \item{beta}{Shape parameter for beta distribution (only used if support="beta")}
+
+\item{custom_breakpoints}{.}
 }
 \value{
 List containing left and right sequences
