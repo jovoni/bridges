@@ -195,7 +195,7 @@ abc_inference = function(cna_data, allele, chromosome, chr, pos,
   # Calculate summary statistics
   param_summary = data.frame(
     parameter = names(accepted_params)[-8], # Exclude distance column
-    mean = sapply(accepted_params[,-8], stats::mean),
+    mean = sapply(accepted_params[,-8], mean),
     median = sapply(accepted_params[,-8], stats::median),
     sd = sapply(accepted_params[,-8], stats::sd),
     q025 = sapply(accepted_params[,-8], stats::quantile, 0.025),
