@@ -40,7 +40,7 @@ run_ABC = function(cna_data, allele, chromosome, chr, pos, params) {
   lambda = params$lambda
 
   base_value = ifelse(allele == "CN", 2, 1)
-  target_cna_matrix = bridges:::tibble_to_matrix(cna_data, chromosome = chromosome, value_column = allele)
+  target_cna_matrix = tibble_to_matrix(cna_data, chromosome = chromosome, value_column = allele)
   target_gain_dist = get_gain_profile(target_cna_matrix, base_value = base_value)
   target_loss_dist = get_loss_profile(target_cna_matrix, base_value = base_value)
   target_avg_cn_dist = get_avg_cn_profile(target_cna_matrix)
@@ -51,7 +51,6 @@ run_ABC = function(cna_data, allele, chromosome, chr, pos, params) {
   # Run simulation with provided parameters
   sim = bridge_sim(initial_cells = 1,
                    bin_length = 5e5,
-                   allow_wgd = TRUE,
                    max_time = 300,
                    max_cells = n_target_cells,
                    normal_dup_rate = 0,
@@ -72,7 +71,7 @@ run_ABC = function(cna_data, allele, chromosome, chr, pos, params) {
                    custom_breakpoints = custom_breakpoint_dist)
 
   # Calculate summary statistics
-  sim_cna_mat = bridges:::tibble_to_matrix(sim$cna_data, chromosome = chromosome, value_column = allele)
+  sim_cna_mat = tibble_to_matrix(sim$cna_data, chromosome = chromosome, value_column = allele)
   pred_gain_dist = get_gain_profile(sim_cna_mat, base_value = base_value)
   pred_loss_dist = get_loss_profile(sim_cna_mat, base_value = base_value)
   pred_avg_cn_dist = get_avg_cn_profile(sim_cna_mat)
@@ -109,7 +108,7 @@ sample_priors = function() {
 
   # Fix birth rate to 1 and sample death rate as fraction of birth rate
   birth_rate = 1.0
-  death_fraction = runif(1, 0, 0.8)  # Death rate as fraction of birth rate [0, 0.8]
+  death_fraction = stats::runif(1, 0, 0.8)  # Death rate as fraction of birth rate [0, 0.8]
   death_rate = birth_rate * death_fraction
 
   list(
@@ -118,7 +117,7 @@ sample_priors = function() {
     bfb_prob = bfb_prob,
     birth_rate = birth_rate,
     death_rate = death_rate,
-    lambda = runif(1, 0.001, 0.1),      # Keep lambda as before
+    lambda = stats::runif(1, 0.001, 0.1),      # Keep lambda as before
     death_fraction = death_fraction     # Store for analysis
   )
 }
@@ -214,9 +213,6 @@ abc_inference = function(cna_data, allele, chromosome, chr, pos,
 
 # Diagnostic plotting function
 plot_abc_results = function(abc_results) {
-  library(ggplot2)
-  library(gridExtra)
-
   params = abc_results$accepted_params
 
   plots = list()

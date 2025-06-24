@@ -14,6 +14,7 @@ fit(
   fillna = 0,
   g_dist_func = "G_with_steps",
   b_dist_func = "A_contig",
+  avoid_reconstruction = FALSE,
   ...
 )
 }

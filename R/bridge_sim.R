@@ -18,7 +18,8 @@
 #' @param bfb_prob Numeric. Probability of BFB event occurring during replication. Default: 0.01
 #' @param amp_rate Numeric. Rate of amplification events. Default: 0.1
 #' @param del_rate Numeric. Rate of deletion events. Default: 0.1
-#' @param allow_wgd Logical. Whether to allow whole genome duplication. Default: TRUE
+#' @param wgd_available Numeric. Number of whole-genome duplication events available. Default: 1
+#' @param wgd_probability Numeric. Probability of whole-genome duplication event occurring. Default: 0.05
 #' @param lambda Rate parameter for Poisson distribution used to sample
 #' the number of genomic events per daughter cell
 #' @param rate Rate parameter used in amplification/deletion simulations.
@@ -54,7 +55,8 @@ bridge_sim <- function(
   bfb_prob = 0.5,
   amp_rate = 1,
   del_rate = 1,
-  allow_wgd = TRUE,
+  wgd_available = 1,
+  wgd_probability = .05,
   lambda = 2,
   rate = 20,
   positive_selection_rate = 0,
@@ -79,7 +81,6 @@ bridge_sim <- function(
     bfb_prob,
     amp_rate,
     del_rate,
-    allow_wgd,
     positive_selection_rate,
     negative_selection_rate,
     max_time,
@@ -153,7 +154,8 @@ bridge_sim <- function(
     death_rate = death_rate,
     bfb_allele = bfb_allele,
     rates = rates,
-    allow_wgd = allow_wgd,
+    wgd_available = wgd_available,
+    wgd_probability = wgd_probability,
     positive_selection_rate = positive_selection_rate,
     negative_selection_rate = negative_selection_rate,
     max_time = max_time,
@@ -180,8 +182,8 @@ bridge_sim <- function(
     if (current_event_type == "birth") {
       # Handle birth event
       sim_state <- process_birth_event(
-        sim_state,
-        current_cell_id,
+        state = sim_state,
+        current_cell_id = current_cell_id,
         lambda = lambda,
         rate = rate
       )

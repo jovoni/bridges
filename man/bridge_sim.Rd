@@ -16,7 +16,8 @@ bridge_sim(
   bfb_prob = 0.5,
   amp_rate = 1,
   del_rate = 1,
-  allow_wgd = TRUE,
+  wgd_available = 1,
+  wgd_probability = 0.05,
   lambda = 2,
   rate = 20,
   positive_selection_rate = 0,
@@ -52,7 +53,9 @@ bridge_sim(
 
 \item{del_rate}{Numeric. Rate of deletion events. Default: 0.1}
 
-\item{allow_wgd}{Logical. Whether to allow whole genome duplication. Default: TRUE}
+\item{wgd_available}{Numeric. Number of whole-genome duplication events available. Default: 1}
+
+\item{wgd_probability}{Numeric. Probability of whole-genome duplication event occurring. Default: 0.05}
 
 \item{lambda}{Rate parameter for Poisson distribution used to sample
 the number of genomic events per daughter cell}

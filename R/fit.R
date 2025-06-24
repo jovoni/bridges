@@ -52,6 +52,7 @@ fit = function(data,
                 # New parameters for distance function selection
                 g_dist_func = "G_with_steps",
                 b_dist_func = "A_contig",
+                avoid_reconstruction = FALSE,
                 ...) {
   # Process data
   message("Pre-processing input...")
@@ -79,9 +80,10 @@ fit = function(data,
   # Build tree
   message("Building tree...")
   tree = tree_func(D)
+  tree = phangorn::midpoint(tree)
 
   # Return results with metadata about chosen functions
-  list(
+  res = list(
     tree = tree,
     all_input_Xs = all_input_Xs,
     D = D,
@@ -90,4 +92,29 @@ fit = function(data,
     g_dist_func = g_dist_func,
     b_dist_func = b_dist_func
   )
+
+  if (!avoid_reconstruction) {
+    chromosomes = names(res$all_input_Xs)
+    alleles = names(res$all_input_Xs[[chromosomes[1]]])
+
+    new_edges = NULL
+
+    whole_history = dplyr::tibble()
+    for (chr in chromosomes) {
+      for (all in alleles) {
+        reconstruction = reconstruct_tree(fit = res, chr = chr, allele = all)
+        whole_history = dplyr::bind_rows(whole_history, reconstruction$history)
+        if (!is.null(new_edges)) {
+          new_edges = new_edges + reconstruction$new_edge_lengths
+        } else {
+          new_edges = reconstruction$new_edge_lengths
+        }
+      }
+    }
+
+    res$tree$edge.length = new_edges
+    res$history = whole_history
+  }
+
+  res
 }

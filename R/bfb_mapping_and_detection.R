@@ -190,7 +190,7 @@ pseudo_cell_bin_test = function(fit, chr, allele, threshold) {
 #'
 #' @note The tree edge lengths are set to 1 for uniform weighting. Node labels
 #' are automatically generated if not present.
-reconstruct_tree <- function(fit, chr, allele) {
+reconstruct_tree = function(fit, chr, allele) {
   B_dist = get_b_dist(fit$b_dist_func)
   G_dist = get_g_dist(fit$g_dist_func)
 
@@ -203,20 +203,22 @@ reconstruct_tree <- function(fit, chr, allele) {
   # Get tree structure
   tree <- fit$tree
 
-  # if (!ape::is.rooted(tree)) {
-  #   tree = phangorn::midpoint(tree)
-  # }
+  if (!ape::is.rooted(tree)) {
+    tree = phangorn::midpoint(tree)
+  }
   tree$edge.length = rep(1, length(tree$edge.length))
 
   # Get post-order traversal of internal nodes to ensure children are processed before parents
   post_order_nodes <- get_post_order_internal_nodes(tree)
-  if (is.null(tree$node.label))
-    tree$node.label <- paste0("N", seq_len(tree$Nnode))
+  if (is.null(tree$node.label)) tree$node.label <- paste0("N", seq_len(tree$Nnode))
 
   # Initialize results storage
   internal_nodes <- list()
   deltas <- list()
   merged_profiles = list()
+
+  # Initialize branch costs storage
+  branch_costs <- list()
 
   # Create a working copy of input data that will be modified
   working_input <- input
@@ -238,6 +240,7 @@ reconstruct_tree <- function(fit, chr, allele) {
   #node_id = 13
 
   node_id = post_order_nodes[1]
+  history = dplyr::tibble()
   for (node_id in post_order_nodes) {
     #print(which(post_order_nodes == node_id))
     # print(working_input)
@@ -263,6 +266,8 @@ reconstruct_tree <- function(fit, chr, allele) {
         right_cell_name <- paste0("pseudo_", all_names[right_child])
       }
 
+      #if ("cell_14" %in% c(left_cell_name, right_cell_name)) stop()
+
       # Extract left and right cells from working input
       left_cell <- working_input[left_cell_name, ]
       right_cell <- working_input[right_cell_name, ]
@@ -282,16 +287,44 @@ reconstruct_tree <- function(fit, chr, allele) {
 
       # Choose internal node based on which distance is lower
       if (delta > 0) {
+        if (mean(left_cell) > mean(right_cell)) {
+          left_cost = b_d$a_cost
+          right_cost = b_d$b_cost
+        } else {
+          left_cost = b_d$b_cost
+          right_cost = b_d$a_cost
+        }
+
+        left_event = right_event = "bfb"
+
         internal_node_cell <- b_d$ancestor
-        merged_profiles[[as.character(node_id)]] = list(
-          left = b_d$left,
-          right = b_d$right
-        )
-      } else {
-        internal_node_cell <- g_d$ancestor
         merged_profiles[[as.character(node_id)]]
         merged_profiles[[as.character(node_id)]] = NULL
+      } else {
+        left_cost = g_d$a_cost
+        right_cost = g_d$b_cost
+
+        get_event_type = function(delta) {
+          signs = unique(sign(delta))
+          if (all(signs == 0)) return("none")
+          if ((1 %in% signs) & (-1 %in% signs)) return("gain and loss")
+          if ((1 %in% signs)) return("gain")
+          if ((-1 %in% signs)) return("loss")
+        }
+
+        left_event = get_event_type(g_d$a_delta)
+        right_event = get_event_type(g_d$b_delta)
+
+        internal_node_cell <- g_d$ancestor
+        merged_profiles[[as.character(node_id)]] = list(
+          left = g_d$left,
+          right = g_d$right
+        )
       }
+
+      # Store branch costs for left and right children
+      branch_costs[[as.character(left_child)]] <- left_cost
+      branch_costs[[as.character(right_child)]] <- right_cost
 
       if (length(internal_node_cell) == 1) {
         internal_node_cell = matrix(internal_node_cell, nrow = 1, ncol = 1)
@@ -312,7 +345,27 @@ reconstruct_tree <- function(fit, chr, allele) {
         ,
         drop = F
       ]
+
+      history = dplyr::bind_rows(
+        history,
+        dplyr::tibble(cell_id = left_cell_name, parent_id = pseudo_cell_name, event = left_event),
+        dplyr::tibble(cell_id = right_cell_name, parent_id = pseudo_cell_name, event = right_event)
+      )
+
       #print(rownames(working_input))
+    }
+  }
+  history = history %>% dplyr::mutate(chr = chr, allele = allele)
+
+  # Create new branch lengths based on costs
+  new_edge_lengths <- rep(NA, nrow(tree$edge))
+  for (i in 1:nrow(tree$edge)) {
+    child_node <- tree$edge[i, 2]
+    if (as.character(child_node) %in% names(branch_costs)) {
+      new_edge_lengths[i] <- branch_costs[[as.character(child_node)]]
+    } else {
+      # If no cost available, keep original length or set to 1
+      new_edge_lengths[i] <- 1
     }
   }
 
@@ -324,7 +377,10 @@ reconstruct_tree <- function(fit, chr, allele) {
     final_input = working_input,
     processed_nodes = length(internal_nodes),
     chr = chr,
-    allele = allele
+    allele = allele,
+    branch_costs = branch_costs,
+    new_edge_lengths = new_edge_lengths,
+    history = history
   )
 }
 
@@ -390,7 +446,7 @@ get_node_children <- function(tree, node) {
 get_post_order_internal_nodes = function(tree) {
   Ntip <- length(tree$tip.label)
   Nnode <- tree$Nnode
-  
+
   # Build children list
   children_list <- vector("list", max(tree$edge))
   for (i in seq_len(nrow(tree$edge))) {

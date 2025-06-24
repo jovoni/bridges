@@ -47,7 +47,10 @@ find_greedy_distance = function(a, b, target_val = 2) {
   distances_to_target = sapply(history, function(x) {
     sum(abs(x - target_val))
   })
-  ancestor = history[[which.min(distances_to_target)]]
+  ancestor_index = which.min(distances_to_target)
+  ancestor = history[[ancestor_index]]
+  b_cost = length(history) - ancestor_index
+  a_cost = cost - b_cost
 
   # starting_vec_list = list(a=a, b=b)
   # distances_to_target = sapply(starting_vec_list, function(x) {sum(abs(x - target_val))})
@@ -56,7 +59,11 @@ find_greedy_distance = function(a, b, target_val = 2) {
   return(list(
     history = history,
     cost = cost,
-    ancestor = ancestor
+    ancestor = ancestor,
+    b_cost = b_cost,
+    a_cost = a_cost,
+    a_delta = a - ancestor,
+    b_delta = b - ancestor
   ))
 }
 
@@ -105,10 +112,11 @@ find_greedy_distance_with_steps = function(a, b, target_val = 2) {
 
   # Calculate ancestor - vector closest to target_val
 
-  distances_to_target = sapply(history, function(x) {
-    sum(abs(x - target_val))
-  })
-  ancestor = history[[which.min(distances_to_target)]]
+  distances_to_target = sapply(history, function(x) sum(abs(x - target_val)))
+  ancestor_index = which.min(distances_to_target)
+  ancestor = history[[ancestor_index]]
+  b_cost = length(history) - ancestor_index
+  a_cost = cost - b_cost
 
   # starting_vec_list = list(a=a, b=b)
   # distances_to_target = sapply(starting_vec_list, function(x) {sum(abs(x - target_val))})
@@ -117,11 +125,16 @@ find_greedy_distance_with_steps = function(a, b, target_val = 2) {
   return(list(
     history = history,
     cost = cost,
-    ancestor = ancestor
+    ancestor = ancestor,
+    b_cost = b_cost,
+    a_cost = a_cost,
+    a_delta = a - ancestor,
+    b_delta = b - ancestor
   ))
 }
 
 # B matrices ####
+
 find_greedy_distance_with_avg = function(a, b, penalty = 0) {
   # Make a copy of input vector to avoid modifying the original
   current = a
@@ -168,15 +181,21 @@ find_greedy_distance_with_avg = function(a, b, penalty = 0) {
 
   # Calculate average of final state and target
   avg = (current + b) / 2
-  cost = cost + 1 + penalty
+  a_cost = cost + 0.5 + penalty / 2
+  b_cost = 0.5 + penalty / 2
 
   # Add average and final state to history
   history = c(history, list(avg), list(b))
+  cost = cost + 1 + penalty
 
   return(list(
     history = history,
     cost = cost,
     ancestor = avg,
+    b_cost = b_cost,
+    a_cost = a_cost,
+    a_delta = a - avg,
+    b_delta = b - avg,
     left = current,
     right = b
   ))
@@ -229,16 +248,21 @@ find_greedy_distance_A = function(a, b, penalty = 0) {
 
   # Calculate average of final state and target
   avg = (current + b) / 2
-  cost = cost + 1 + penalty
+  a_cost = cost + 0.5 + penalty / 2
+  b_cost = 0.5 + penalty / 2
 
   # Add average and final state to history
   history = c(history, list(avg), list(b))
+  cost = cost + 1 + penalty
 
-  # Return results (assuming the original function returns something)
   return(list(
     history = history,
     cost = cost,
     ancestor = avg,
+    b_cost = b_cost,
+    a_cost = a_cost,
+    a_delta = a - avg,
+    b_delta = b - avg,
     left = current,
     right = b
   ))
@@ -296,14 +320,23 @@ find_greedy_distance_A_contig = function(a, b, penalty = 0) {
   avg = (current + b) / 2
   cost = cost + sum(r$values) + penalty
 
+  # if (all(x == 0)) cost = Inf
+
+  avg = (current + b) / 2
+  a_cost = cost - 1
+  b_cost = 1
+
   # Add average and final state to history
   history = c(history, list(avg), list(b))
 
-  # Return results (assuming the original function returns something)
   return(list(
     history = history,
     cost = cost,
     ancestor = avg,
+    b_cost = b_cost,
+    a_cost = a_cost,
+    a_delta = a - avg,
+    b_delta = b - avg,
     left = current,
     right = b
   ))
@@ -548,14 +581,21 @@ find_greedy_distance_B_contig = function(a, b, penalty = 0) {
   avg = (current + b) / 2
   cost = cost + sum(r$values) + penalty
 
+  avg = (current + b) / 2
+  a_cost = cost - 1
+  b_cost = 1
+
   # Add average and final state to history
   history = c(history, list(avg), list(b))
 
-  # Return results (assuming the original function returns something)
   return(list(
     history = history,
     cost = cost,
     ancestor = avg,
+    b_cost = b_cost,
+    a_cost = a_cost,
+    a_delta = a - avg,
+    b_delta = b - avg,
     left = current,
     right = b
   ))

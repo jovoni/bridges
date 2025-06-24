@@ -237,8 +237,9 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
   l_sequences <- parent_sequences
   r_sequences <- parent_sequences
 
-  # Track if BFB has occurred and which events happened
+  # Track if special events have occurred and which events happened
   bfb_occurred <- FALSE
+  wgd_occurred <- FALSE
   l_events <- character(0)
   r_events <- character(0)
   l_chr_alleles <- character(0)
@@ -251,7 +252,7 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
     selected_chr_allele = NULL
   ) {
     if (event_name == "normal") {
-      return(sequences) # No change for normal events
+      return(list(sequences = sequences, chr_allele = selected_chr_allele))
     } else if (event_name == "amp") {
       if (is.null(selected_chr_allele)) {
         selected_chr_allele <- sample(names(sequences), 1)
@@ -270,6 +271,12 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
         operation = "del",
         rate = rate
       )
+    } else if (event_name == "wgd") {
+      # WGD affects all chromosomes
+      for (chr_name in names(sequences)) {
+        sequences[[chr_name]] <- sim_wgd(sequences[[chr_name]])
+      }
+      return(list(sequences = sequences, chr_allele = "all"))
     } else if (event_name == "bfb") {
       selected_chr_allele <- state$input_parameters$bfb_allele
       bfb_result <- sim_bfb_left_and_right_sequences(
@@ -290,25 +297,51 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
     return(list(sequences = sequences, chr_allele = selected_chr_allele))
   }
 
-  # Check if we need to do a BFB event first
+  # Check if WGD should occur first (randomly and if available)
+  wgd_will_occur <- FALSE
+  if (state$input_parameters$wgd_available > 0) {
+    # Random chance for WGD to occur (you can adjust this probability)
+    wgd_probability <- 0.01  # 1% chance per division
+    wgd_will_occur <- stats::runif(1) < wgd_probability
+  }
+
+  # Check if we need to do special events first (BFB or WGD)
   total_events <- n_left + n_right
   if (total_events > 0) {
-    # Sample all events that will occur
+    # Sample all events that will occur (excluding WGD from rates)
+    event_rates <- state$input_parameters$rates
+    if ("wgd" %in% names(event_rates)) {
+      event_rates <- event_rates[names(event_rates) != "wgd"]
+    }
+
     all_event_names <- sample(
-      names(state$input_parameters$rates),
+      names(event_rates),
       size = total_events,
-      prob = unlist(state$input_parameters$rates),
+      prob = unlist(event_rates),
       replace = TRUE
     )
 
-    # Check if BFB is among the events
+    # Check for BFB events only (WGD is handled separately)
     bfb_indices <- which(all_event_names == "bfb")
 
-    if (length(bfb_indices) > 0) {
-      # If there are BFB events, only keep the first one and make it the first event
-      bfb_occurred <- TRUE
+    # Handle special events (only one can occur per division)
+    special_event_occurred <- FALSE
 
-      # Apply BFB first (affects both daughter cells)
+    if (wgd_will_occur && length(bfb_indices) > 0) {
+      # If both BFB and WGD are scheduled, randomly choose one
+      chosen_event <- sample(c("bfb", "wgd"), 1)
+      if (chosen_event == "wgd") {
+        bfb_indices <- integer(0)  # Cancel BFB
+      } else {
+        wgd_will_occur <- FALSE  # Cancel WGD
+      }
+    }
+
+    if (length(bfb_indices) > 0) {
+      # Apply BFB (affects both daughter cells differently)
+      bfb_occurred <- TRUE
+      special_event_occurred <- TRUE
+
       bfb_result <- apply_single_event(parent_sequences, "bfb")
       l_sequences[[bfb_result$chr_allele]] <- bfb_result$l_seq
       r_sequences[[bfb_result$chr_allele]] <- bfb_result$r_seq
@@ -319,57 +352,83 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
       l_chr_alleles <- c(l_chr_alleles, bfb_result$chr_allele)
       r_chr_alleles <- c(r_chr_alleles, bfb_result$chr_allele)
 
-      # Remove BFB events from the list and redistribute remaining events
+      # Remove BFB events from the list
       remaining_events <- all_event_names[-bfb_indices]
+
+    } else if (wgd_will_occur) {
+      # Apply WGD (affects both daughter cells identically)
+      wgd_occurred <- TRUE
+      special_event_occurred <- TRUE
+
+      wgd_result <- apply_single_event(parent_sequences, "wgd")
+      l_sequences <- wgd_result$sequences
+      r_sequences <- wgd_result$sequences
+
+      # Record WGD event for both cells
+      l_events <- c(l_events, "wgd")
+      r_events <- c(r_events, "wgd")
+      l_chr_alleles <- c(l_chr_alleles, wgd_result$chr_allele)
+      r_chr_alleles <- c(r_chr_alleles, wgd_result$chr_allele)
+
+      # Decrement available WGD count
+      state$input_parameters$wgd_available <- state$input_parameters$wgd_available - 1
+
+      # All originally sampled events remain
+      remaining_events <- all_event_names
+
+    } else {
+      remaining_events <- all_event_names
+    }
+
+    # Handle remaining events after special events
+    if (special_event_occurred) {
       total_remaining <- length(remaining_events)
 
-      # Adjust n_left and n_right to account for BFB
+      # Adjust n_left and n_right to account for special event
       n_left <- max(0, n_left - 1)
       n_right <- max(0, n_right - 1)
 
       # Redistribute remaining events
-      if (total_remaining > 0) {
-        if (n_left + n_right > 0) {
-          # Randomly assign remaining events to left and right
-          left_additional <- min(n_left, total_remaining)
-          right_additional <- min(n_right, total_remaining - left_additional)
+      if (total_remaining > 0 && (n_left + n_right) > 0) {
+        # Randomly assign remaining events to left and right
+        left_additional <- min(n_left, total_remaining)
+        right_additional <- min(n_right, total_remaining - left_additional)
 
-          if (left_additional > 0) {
-            left_events_idx <- sample(total_remaining, left_additional)
-            left_additional_events <- remaining_events[left_events_idx]
-            remaining_events <- remaining_events[-left_events_idx]
-            total_remaining <- total_remaining - left_additional
-          } else {
-            left_additional_events <- character(0)
-          }
+        if (left_additional > 0) {
+          left_events_idx <- sample(total_remaining, left_additional)
+          left_additional_events <- remaining_events[left_events_idx]
+          remaining_events <- remaining_events[-left_events_idx]
+          total_remaining <- total_remaining - left_additional
+        } else {
+          left_additional_events <- character(0)
+        }
 
-          if (right_additional > 0 && total_remaining > 0) {
-            right_additional_events <- remaining_events[
-              1:min(right_additional, total_remaining)
-            ]
-          } else {
-            right_additional_events <- character(0)
-          }
+        if (right_additional > 0 && total_remaining > 0) {
+          right_additional_events <- remaining_events[
+            1:min(right_additional, total_remaining)
+          ]
+        } else {
+          right_additional_events <- character(0)
+        }
 
-          # Apply additional events to left cell
-          for (event in left_additional_events) {
-            result <- apply_single_event(l_sequences, event)
-            l_sequences <- result$sequences
-            l_events <- c(l_events, event)
-            l_chr_alleles <- c(l_chr_alleles, result$chr_allele)
-          }
+        # Apply additional events to left cell
+        for (event in left_additional_events) {
+          result <- apply_single_event(l_sequences, event)
+          l_sequences <- result$sequences
+          l_events <- c(l_events, event)
+          l_chr_alleles <- c(l_chr_alleles, result$chr_allele)
+        }
 
-          # Apply additional events to right cell
-          for (event in right_additional_events) {
-            result <- apply_single_event(r_sequences, event)
-            r_sequences <- result$sequences
-            r_events <- c(r_events, event)
-            r_chr_alleles <- c(r_chr_alleles, result$chr_allele)
-          }
+        # Apply additional events to right cell
+        for (event in right_additional_events) {
+          result <- apply_single_event(r_sequences, event)
+          r_sequences <- result$sequences
+          r_events <- c(r_events, event)
+          r_chr_alleles <- c(r_chr_alleles, result$chr_allele)
         }
       }
     } else {
-      # No BFB events - distribute events normally
+      # No special events - distribute events normally
       left_events_count <- min(n_left, total_events)
       right_events_count <- min(n_right, total_events - left_events_count)
 
@@ -397,6 +456,23 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
         }
       }
     }
+    # Handle WGD separately if no other events are sampled but WGD should occur
+  } else if (wgd_will_occur) {
+    # Apply WGD even when no other events are sampled
+    wgd_occurred <- TRUE
+
+    wgd_result <- apply_single_event(parent_sequences, "wgd")
+    l_sequences <- wgd_result$sequences
+    r_sequences <- wgd_result$sequences
+
+    # Record WGD event for both cells
+    l_events <- c(l_events, "wgd")
+    r_events <- c(r_events, "wgd")
+    l_chr_alleles <- c(l_chr_alleles, wgd_result$chr_allele)
+    r_chr_alleles <- c(r_chr_alleles, wgd_result$chr_allele)
+
+    # Decrement available WGD count
+    state$input_parameters$wgd_available <- state$input_parameters$wgd_available - 1
   }
 
   # Create new cell IDs
@@ -412,10 +488,10 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
   hotspot <- state$input_parameters$hotspot
   l_hotspot <- if (!is.null(hotspot))
     is_hotspot_gained(l_sequences[[hotspot$chr]], hotspot = hotspot$pos) else
-    FALSE
+      FALSE
   r_hotspot <- if (!is.null(hotspot))
     is_hotspot_gained(r_sequences[[hotspot$chr]], hotspot = hotspot$pos) else
-    FALSE
+      FALSE
 
   # Store new cell data
   state$cell_ids <- c(state$cell_ids, l_cell_id, r_cell_id)
@@ -455,6 +531,7 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
       cell_id = l_cell_id,
       parent_id = current_cell_id,
       bfb_event = bfb_occurred,
+      wgd_event = wgd_occurred,  # Add WGD tracking
       cn_event = ifelse(
         length(l_events) == 0,
         "none",
@@ -476,6 +553,7 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
       cell_id = r_cell_id,
       parent_id = current_cell_id,
       bfb_event = bfb_occurred,
+      wgd_event = wgd_occurred,  # Add WGD tracking
       cn_event = ifelse(
         length(r_events) == 0,
         "none",
@@ -1091,7 +1169,6 @@ validate_bridge_sim_params <- function(
   bfb_prob,
   amp_rate,
   del_rate,
-  allow_wgd,
   positive_selection_rate,
   negative_selection_rate,
   max_time,
@@ -1224,7 +1301,6 @@ validate_bridge_sim_params <- function(
   # --- Logical Parameter Validation ---
 
   logical_params <- list(
-    allow_wgd = allow_wgd,
     first_round_of_bfb = first_round_of_bfb
   )
 
