@@ -290,16 +290,26 @@ reconstruct_tree = function(fit, chr, allele) {
         if (mean(left_cell) > mean(right_cell)) {
           left_cost = b_d$a_cost
           right_cost = b_d$b_cost
+
+          merged_profiles[[as.character(node_id)]] = list(
+            left = b_d$left,
+            right = b_d$right
+          )
+
         } else {
           left_cost = b_d$b_cost
           right_cost = b_d$a_cost
+
+          merged_profiles[[as.character(node_id)]] = list(
+            left = b_d$right,
+            right = b_d$left
+          )
         }
 
         left_event = right_event = "bfb"
 
         internal_node_cell <- b_d$ancestor
-        merged_profiles[[as.character(node_id)]]
-        merged_profiles[[as.character(node_id)]] = NULL
+
       } else {
         left_cost = g_d$a_cost
         right_cost = g_d$b_cost
