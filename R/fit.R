@@ -54,6 +54,9 @@ fit = function(data,
                 b_dist_func = "A_contig",
                 avoid_reconstruction = FALSE,
                 ...) {
+  # Add diploid cell
+  data = dplyr::bind_rows(data, create_diploid_data(data))
+
   # Process data
   message("Pre-processing input...")
   all_input_Xs = process_input_data(data, chromosomes, alleles, k_jitter_fix, fillna)
@@ -80,7 +83,8 @@ fit = function(data,
   # Build tree
   message("Building tree...")
   tree = tree_func(D)
-  tree = phangorn::midpoint(tree)
+  tree <- ape::root(tree, outgroup = "diploid", resolve.root = TRUE)
+  tree <- ape::drop.tip(tree, "diploid") # remove diploid cell from tree
 
   # Return results with metadata about chosen functions
   res = list(

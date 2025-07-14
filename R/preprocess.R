@@ -188,3 +188,15 @@ reduce_X = function(X, breakpoints) {
   rownames(new_X) = rownames(X)
   new_X
 }
+
+create_diploid_data = function(data) {
+  cid = data$cell_id[1] # sample any cell_id
+  data %>%
+    dplyr::filter(cell_id == cid) %>%
+    dplyr::mutate(
+      cell_id = "diploid",
+      A = ifelse(chr %in% c("X", "Y"), 1, 1),
+      B = ifelse(chr %in% c("X", "Y"), 0, 1),
+      CN = A + B
+    )
+}

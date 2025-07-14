@@ -301,7 +301,7 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
   wgd_will_occur <- FALSE
   if (state$input_parameters$wgd_available > 0) {
     # Random chance for WGD to occur (you can adjust this probability)
-    wgd_probability <- 0.01  # 1% chance per division
+    wgd_probability <- state$input_parameters$wgd_probability  # 1% chance per division
     wgd_will_occur <- stats::runif(1) < wgd_probability
   }
 
