@@ -174,7 +174,8 @@ reduce_X = function(X, breakpoints) {
   sorted_bps = sort(breakpoints)
   sorted_bps = c(0, sorted_bps, ncol(X))
 
-  row = X[1,]
+  original_colnames = colnames(X)
+
   reduce_row = function(row) {
     lapply(2:length(sorted_bps), function(i) {
       idxs = (sorted_bps[i-1]+1):(sorted_bps[i])
@@ -186,6 +187,17 @@ reduce_X = function(X, breakpoints) {
     reduce_row(X[j,])
   }) %>% do.call("rbind", .)
   rownames(new_X) = rownames(X)
+
+  # Now assign new column names based on segment ranges
+  new_colnames = sapply(2:length(sorted_bps), function(i) {
+    start_idx = sorted_bps[i-1] + 1
+    end_idx = sorted_bps[i]
+    start_pos = sub("-.*", "", original_colnames[start_idx])
+    end_pos = sub(".*-", "", original_colnames[end_idx])
+    paste0(start_pos, ":", end_pos)
+  })
+
+  colnames(new_X) = new_colnames
   new_X
 }
 

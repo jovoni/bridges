@@ -16,7 +16,7 @@ bridge_sim(
   bfb_prob = 0.5,
   amp_rate = 1,
   del_rate = 1,
-  wgd_available = 1,
+  wgd_available = 0,
   wgd_probability = 0.05,
   lambda = 2,
   rate = 20,
@@ -53,7 +53,7 @@ bridge_sim(
 
 \item{del_rate}{Numeric. Rate of deletion events. Default: 0.1}
 
-\item{wgd_available}{Numeric. Number of whole-genome duplication events available. Default: 1}
+\item{wgd_available}{Numeric. Number of whole-genome duplication events available. Default: 0}
 
 \item{wgd_probability}{Numeric. Probability of whole-genome duplication event occurring. Default: 0.05}
 

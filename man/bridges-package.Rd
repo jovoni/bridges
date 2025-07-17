@@ -8,6 +8,13 @@
 \description{
 What the package does (one paragraph).
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://jovoni.github.io/bridges/}
+}
+
+}
 \author{
 \strong{Maintainer}: Giovanni Santacatterina \email{first.last@example.com}
 

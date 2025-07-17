@@ -44,9 +44,9 @@ detect_bfb = function(fit, threshold = .005) {
         threshold = threshold
       )
     }) %>%
-      do.call("bind_rows", .)
+      do.call(dplyr::bind_rows, .)
   }) %>%
-    do.call("bind_rows", .)
+    do.call(dplyr::bind_rows, .)
 
   pseudo_cells_test_df
 }
@@ -131,9 +131,7 @@ pseudo_cell_t_test = function(
 #' @details The binomial test uses alternative = "greater" to test if the proportion
 #' of positive deltas significantly exceeds the threshold.
 pseudo_cell_bin_test = function(fit, chr, allele, threshold) {
-  # Get the B and G distance functions
-  r = reconstruct_tree(fit, chr, allele)
-
+  r = fit$reconstructions[[chr]][[allele]]  # use precomputed
   delta_values <- unlist(r$deltas)
   N = length(delta_values)
   k = sum(delta_values > 0)
@@ -149,6 +147,7 @@ pseudo_cell_bin_test = function(fit, chr, allele, threshold) {
     threshold = threshold
   )
 }
+
 
 #' Reconstruct Phylogenetic Tree with Copy Number Analysis
 #'
@@ -694,4 +693,38 @@ compare_assignment_wrt_true = function(
     do.call("bind_rows", .)
 
   list(p_compare = p_compare, df = df)
+}
+
+
+compute_reconstructions = function(fit, chromosomes = NULL, alleles = NULL) {
+  if (is.null(chromosomes)) {
+    chromosomes = names(fit$all_input_Xs)
+  }
+  if (is.null(alleles)) {
+    alleles = names(fit$all_input_Xs[[chromosomes[1]]])
+  }
+
+  new_edges = NULL
+  whole_history = dplyr::tibble()
+  reconstructions = list()
+
+  for (chr in chromosomes) {
+    reconstructions[[chr]] <- list()
+    for (all in alleles) {
+      reconstruction = reconstruct_tree(fit = fit, chr = chr, allele = all)
+      reconstructions[[chr]][[all]] <- reconstruction
+      whole_history = dplyr::bind_rows(whole_history, reconstruction$history)
+      if (!is.null(new_edges)) {
+        new_edges = new_edges + reconstruction$new_edge_lengths
+      } else {
+        new_edges = reconstruction$new_edge_lengths
+      }
+    }
+  }
+
+  list(
+    reconstructions = reconstructions,
+    edge.length = new_edges,
+    history = whole_history
+  )
 }

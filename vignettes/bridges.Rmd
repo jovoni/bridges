@@ -1,0 +1,111 @@
+---
+title: "Using bridges"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Using bridges}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This tutorial demonstrates how to simulate copy number evolution with BFB (Breakage-Fusion-Bridge) events, infer phylogenies from allele-specific CNAs, and visualize the output using the `bridges` R package.
+
+## Load Required Libraries
+
+```{r libraries}
+library(bridges)
+library(ggplot2)
+library(dplyr)
+library(phangorn)
+```
+
+## Step 1: Simulate Copy Number Evolution
+
+We simulate a single BFB event on chromosome 8, allele A, across 128 cells.
+
+```{r simulate}
+alleles_to_use <- c("A", "B")
+
+sim <- bridges::bridge_sim(
+  max_cells = 128,
+  bfb_allele = c("8:A"),
+  normal_dup_rate = 0,
+  lambda = 2
+)
+
+head(sim$cna_data)
+```
+
+## Step 2: Fit the Phylogeny to the CNA Data
+
+We run inference on the simulated data, disabling jitter smoothing.
+
+```{r fit}
+k_jitter_fix <- 0
+
+res <- bridges::fit(
+  data = sim$cna_data,
+  alleles = alleles_to_use,
+  k_jitter_fix = k_jitter_fix
+)
+```
+
+## Step 3: Compare Inferred and True Trees
+
+We compare the inferred tree to the true simulated one using Robinson-Foulds distance.
+
+```{r compare-trees}
+true_tree <- sim$tree
+inferred_tree <- res$tree
+
+phangorn::RF.dist(true_tree, inferred_tree, normalize = TRUE)
+```
+
+## Step 4: Visualize CN Profiles with Trees
+
+We can visualize both the true and inferred trees alongside allele-specific CN profiles.
+
+```{r plot-true-tree}
+bridges::plot_heatmap(
+  sim$cna_data,
+  tree = sim$tree,
+  use_raster = FALSE,
+  ladderize = TRUE,
+  to_plot = c("CN", "A", "B"),
+  branch_length = 1
+)
+```
+
+```{r plot-inferred-tree}
+bridges::plot_heatmap(
+  sim$cna_data,
+  tree = res$tree,
+  use_raster = FALSE,
+  ladderize = TRUE,
+  to_plot = c("CN", "A", "B"),
+  branch_length = 1
+)
+```
+
+## Step 5: Detect BFB Signatures
+
+We use the built-in BFB detection function to quantify "BFB-ness" per chromosome and allele.
+
+```{r detect-bfb}
+bfb_detection_df <- bridges::detect_bfb(res)
+head(bfb_detection_df)
+
+bfb_detection_df %>%
+  dplyr::mutate(chr = factor(chr, levels = c(1:22, "X", "Y"))) %>%
+  ggplot(aes(x = chr, y = mean, fill = allele)) +
+  geom_col(position = "dodge") +
+  theme_bw() +
+  lims(y = c(0, 1)) +
+  labs(x = "Chromosome", y = "BFB-ness", fill = "Allele")
+```

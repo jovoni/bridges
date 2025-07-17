@@ -7,20 +7,27 @@
 fit(
   data,
   chromosomes = c(1:22, "X", "Y"),
-  alleles = c("CN", "A", "B"),
+  alleles = c("A", "B"),
   k_jitter_fix = 0,
   bfb_penalty = 0,
   tree_func = ape::nj,
   fillna = 0,
   g_dist_func = "G_with_steps",
   b_dist_func = "A_contig",
-  avoid_reconstruction = FALSE,
   ...
 )
 }
 \arguments{
-\item{data}{Input data containing genomic information. Should be in a format
-that can be processed by \code{process_input_data()}.}
+\item{data}{Input data containing genomic information. Should be a data frame with columns
+\itemize{
+\item cell_id - Cell identifier
+\item chr - Chromosome name
+\item start - Start of genomic bin
+\item end - End of genomic bin
+\item CN - Total copy number
+\item A - Copy number of allele A
+\item B - Copy number of allele B
+}}
 
 \item{chromosomes}{Vector of chromosomes to include in analysis (default: 1:22, "X", "Y").}
 

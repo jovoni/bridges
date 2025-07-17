@@ -18,7 +18,7 @@
 #' @param bfb_prob Numeric. Probability of BFB event occurring during replication. Default: 0.01
 #' @param amp_rate Numeric. Rate of amplification events. Default: 0.1
 #' @param del_rate Numeric. Rate of deletion events. Default: 0.1
-#' @param wgd_available Numeric. Number of whole-genome duplication events available. Default: 1
+#' @param wgd_available Numeric. Number of whole-genome duplication events available. Default: 0
 #' @param wgd_probability Numeric. Probability of whole-genome duplication event occurring. Default: 0.05
 #' @param lambda Rate parameter for Poisson distribution used to sample
 #' the number of genomic events per daughter cell
@@ -55,7 +55,7 @@ bridge_sim <- function(
   bfb_prob = 0.5,
   amp_rate = 1,
   del_rate = 1,
-  wgd_available = 1,
+  wgd_available = 0,
   wgd_probability = .05,
   lambda = 2,
   rate = 20,
