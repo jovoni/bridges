@@ -48,6 +48,7 @@ detect_bfb = function(fit, threshold = .005) {
   }) %>%
     do.call(dplyr::bind_rows, .)
 
+  pseudo_cells_test_df$adj.pval = p.adjust(pseudo_cells_test_df$p.value, method = "BH")
   pseudo_cells_test_df
 }
 
@@ -695,13 +696,25 @@ compare_assignment_wrt_true = function(
   list(p_compare = p_compare, df = df)
 }
 
-
 compute_reconstructions = function(fit, chromosomes = NULL, alleles = NULL) {
   if (is.null(chromosomes)) {
-    chromosomes = names(fit$all_input_Xs)
+    chromosomes <- names(fit$all_input_Xs)
+  } else {
+    chromosomes <- intersect(chromosomes, names(fit$all_input_Xs))
+    if (length(chromosomes) == 0) {
+      stop("None of the specified chromosomes are present in the fit object.")
+    }
   }
+
   if (is.null(alleles)) {
-    alleles = names(fit$all_input_Xs[[chromosomes[1]]])
+    alleles <- names(fit$all_input_Xs[[chromosomes[1]]])
+  } else {
+    # Ensure all selected chromosomes have the requested alleles
+    common_alleles <- Reduce(intersect, lapply(fit$all_input_Xs[chromosomes], names))
+    alleles <- intersect(alleles, common_alleles)
+    if (length(alleles) == 0) {
+      stop("None of the specified alleles are present in the selected chromosomes of the fit object.")
+    }
   }
 
   new_edges = NULL
@@ -709,8 +722,10 @@ compute_reconstructions = function(fit, chromosomes = NULL, alleles = NULL) {
   reconstructions = list()
 
   for (chr in chromosomes) {
+    print(chr)
     reconstructions[[chr]] <- list()
     for (all in alleles) {
+      print(all)
       reconstruction = reconstruct_tree(fit = fit, chr = chr, allele = all)
       reconstructions[[chr]][[all]] <- reconstruction
       whole_history = dplyr::bind_rows(whole_history, reconstruction$history)

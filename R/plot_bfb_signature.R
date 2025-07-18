@@ -40,7 +40,7 @@ plot_bfb_signature = function(res, chr_of_interest, allele_of_interest) {
     df_s = dplyr::tibble(bfb_value = bfb_signature[,segment_idx], node_name = bfb_nodes, segment = segment_idx)
 
     dplyr::left_join(df_s, dplyr::tibble(segment=segment_idx, start=start, end=end, width=width), by = "segment")
-  }) %>% do.call("bind_rows", .)
+  }) %>% do.call(rbind, .)
 
   bfb_signature_df %>%
     dplyr::mutate(bfb_value = as.numeric(.data$bfb_value != 0)) %>%
