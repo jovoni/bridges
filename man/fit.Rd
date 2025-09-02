@@ -12,8 +12,8 @@ fit(
   bfb_penalty = 0,
   tree_func = ape::nj,
   fillna = 0,
-  g_dist_func = "G_with_steps",
-  b_dist_func = "A_contig",
+  g_dist_func = "greedy_fast",
+  b_dist_func = "bfb_fast",
   ...
 )
 }
@@ -42,10 +42,10 @@ fit(
 \item{fillna}{Value to fill NA entries (default: 0).}
 
 \item{g_dist_func}{Distance function to use for greedy calculation. Must be one
-of the available G functions (default: "G_with_steps").}
+of the available G functions (default: "greedy_fast").}
 
 \item{b_dist_func}{Distance function to use for BFB calculation. Must be one
-of the available B functions (default: "A_contig").}
+of the available B functions (default: "bfb_fast").}
 
 \item{...}{Additional arguments passed to downstream functions.}
 }

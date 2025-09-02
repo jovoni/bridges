@@ -22,9 +22,9 @@
 #' @param tree_func Function to use for tree construction (default: ape::nj).
 #' @param fillna Value to fill NA entries (default: 0).
 #' @param g_dist_func Distance function to use for greedy calculation. Must be one
-#'   of the available G functions (default: "G_with_steps").
+#'   of the available G functions (default: "greedy_fast").
 #' @param b_dist_func Distance function to use for BFB calculation. Must be one
-#'   of the available B functions (default: "A_contig").
+#'   of the available B functions (default: "bfb_fast").
 #' @param ... Additional arguments passed to downstream functions.
 #'
 #' @return A list containing:
@@ -57,8 +57,8 @@ fit = function(data,
                bfb_penalty = 0,
                tree_func = ape::nj,
                fillna = 0,
-               g_dist_func = "G_with_steps",
-               b_dist_func = "A_contig",
+               g_dist_func = "greedy_fast",
+               b_dist_func = "bfb_fast",
                ...) {
 
   data = dplyr::bind_rows(data, create_diploid_data(data))

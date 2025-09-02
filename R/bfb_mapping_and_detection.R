@@ -48,7 +48,7 @@ detect_bfb = function(fit, threshold = .005) {
   }) %>%
     do.call(dplyr::bind_rows, .)
 
-  pseudo_cells_test_df$adj.pval = p.adjust(pseudo_cells_test_df$p.value, method = "BH")
+  pseudo_cells_test_df$adj.pval = stats::p.adjust(pseudo_cells_test_df$p.value, method = "BH")
   pseudo_cells_test_df
 }
 
@@ -722,10 +722,10 @@ compute_reconstructions = function(fit, chromosomes = NULL, alleles = NULL) {
   reconstructions = list()
 
   for (chr in chromosomes) {
-    print(chr)
+    #print(chr)
     reconstructions[[chr]] <- list()
     for (all in alleles) {
-      print(all)
+      #print(all)
       reconstruction = reconstruct_tree(fit = fit, chr = chr, allele = all)
       reconstructions[[chr]][[all]] <- reconstruction
       whole_history = dplyr::bind_rows(whole_history, reconstruction$history)
