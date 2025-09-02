@@ -4,7 +4,7 @@
 \alias{reconstruct_tree}
 \title{Reconstruct Phylogenetic Tree with Copy Number Analysis}
 \usage{
-reconstruct_tree(fit, chr, allele)
+reconstruct_tree(fit, chr, allele, store_profiles = TRUE)
 }
 \arguments{
 \item{fit}{A fitted model object containing:

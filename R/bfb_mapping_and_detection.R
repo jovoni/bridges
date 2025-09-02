@@ -149,250 +149,205 @@ pseudo_cell_bin_test = function(fit, chr, allele, threshold) {
   )
 }
 
-
-#' Reconstruct Phylogenetic Tree with Copy Number Analysis
-#'
-#' This function reconstructs a phylogenetic tree by traversing internal nodes and
-#' computing distances between cell profiles. For each internal node, it calculates
-#' both B distance (breakpoint-aware) and G distance (general) between child nodes,
-#' then selects the reconstruction method that minimizes cost.
-#'
-#' @param fit A fitted model object containing:
-#'   \itemize{
-#'     \item all_input_Xs: List of input data matrices by chromosome and allele
-#'     \item b_dist_func: B distance function for breakpoint-aware reconstruction
-#'     \item g_dist_func: G distance function for general reconstruction
-#'     \item tree: Phylogenetic tree structure (ape format)
-#'   }
-#' @param chr Character string specifying the chromosome to analyze
-#' @param allele Character string specifying the allele type ("CN" for copy number, others for allelic)
-#'
-#' @return A list containing:
-#'   \itemize{
-#'     \item internal_nodes: List of reconstructed internal node profiles
-#'     \item deltas: List of delta values (G cost - B cost) for each internal node
-#'     \item merged_profiles: List of merged profiles when B distance is chosen
-#'     \item final_input: Final working input matrix after all reconstructions
-#'     \item processed_nodes: Number of internal nodes processed
-#'     \item chr: Chromosome identifier
-#'     \item allele: Allele type
-#'   }
-#'
-#' @details The function:
-#' \enumerate{
-#'   \item Sets target values based on allele type (2 for "CN", 1 for others)
-#'   \item Processes internal nodes in post-order traversal
-#'   \item For each internal node, computes B and G distances between children
-#'   \item Calculates delta = G_cost - B_cost
-#'   \item Chooses B reconstruction if delta > 0, otherwise G reconstruction
-#'   \item Creates pseudo-cells for internal nodes and updates working dataset
-#' }
-#'
-#' @note The tree edge lengths are set to 1 for uniform weighting. Node labels
-#' are automatically generated if not present.
-reconstruct_tree = function(fit, chr, allele) {
-  B_dist = get_b_dist(fit$b_dist_func)
-  G_dist = get_g_dist(fit$g_dist_func)
-
-  # Set target value based on allele type
-  target_val <- ifelse(allele == "CN", 2, 1)
-
-  # Get input data for the specified chromosome and allele
-  input <- fit$all_input_Xs[[chr]][[allele]]
-
-  # Get tree structure
-  tree <- fit$tree
-
-  if (!ape::is.rooted(tree)) {
-    tree = phangorn::midpoint(tree)
-  }
-  tree$edge.length = rep(1, length(tree$edge.length))
-
-  # Get post-order traversal of internal nodes to ensure children are processed before parents
-  post_order_nodes <- get_post_order_internal_nodes(tree)
-  if (is.null(tree$node.label)) tree$node.label <- paste0("N", seq_len(tree$Nnode))
-
-  # Initialize results storage
-  internal_nodes <- list()
-  deltas <- list()
-  merged_profiles = list()
-
-  # Initialize branch costs storage
-  branch_costs <- list()
-
-  # Create a working copy of input data that will be modified
-  working_input <- input
-
-  # Create a mapping from node to its representative cell name
-  node_to_cell <- list()
-
-  leaves_names = tree$tip.label
-  node_names = tree$node.label
-  all_names = c(leaves_names, node_names)
-
-  # Initialize leaf nodes to map to themselves
-  for (tip_name in tree$tip.label) {
-    node_to_cell[[tip_name]] <- tip_name
-  }
-
-  # Process each internal node in post-order
-  #plot(tree, show.node.label = T)
-  #node_id = 13
-
-  node_id = post_order_nodes[1]
-  history = dplyr::tibble()
-  for (node_id in post_order_nodes) {
-    #print(which(post_order_nodes == node_id))
-    # print(working_input)
-    # print(all_names[node_id])
-    # Get children of this node
-    children <- get_node_children(tree, node_id)
-
-    if (length(children) == 2) {
-      # Get the cell representatives for left and right children
-      left_child <- children[1]
-      right_child <- children[2]
-
-      # Get cell names (either original tip names or pseudo-cell names)
-      if (left_child <= length(tree$tip.label)) {
-        left_cell_name <- all_names[left_child]
-      } else {
-        left_cell_name <- paste0("pseudo_", all_names[left_child])
-      }
-
-      if (right_child <= length(tree$tip.label)) {
-        right_cell_name <- all_names[right_child]
-      } else {
-        right_cell_name <- paste0("pseudo_", all_names[right_child])
-      }
-
-      #if ("cell_14" %in% c(left_cell_name, right_cell_name)) stop()
-
-      # Extract left and right cells from working input
-      left_cell <- working_input[left_cell_name, ]
-      right_cell <- working_input[right_cell_name, ]
-
-      # Calculate G distance
-      g_d <- G_dist(left_cell, right_cell, target_val = target_val)
-
-      # Calculate B distance (order matters based on mean)
-      if (mean(left_cell) > mean(right_cell)) {
-        b_d <- B_dist(left_cell, right_cell, penalty = 0)
-      } else {
-        b_d <- B_dist(right_cell, left_cell, penalty = 0)
-      }
-
-      # Calculate delta
-      delta <- g_d$cost - b_d$cost
-
-      # Choose internal node based on which distance is lower
-      if (delta > 0) {
-        if (mean(left_cell) > mean(right_cell)) {
-          left_cost = b_d$a_cost
-          right_cost = b_d$b_cost
-
-          merged_profiles[[as.character(node_id)]] = list(
-            left = b_d$left,
-            right = b_d$right
-          )
-
-        } else {
-          left_cost = b_d$b_cost
-          right_cost = b_d$a_cost
-
-          merged_profiles[[as.character(node_id)]] = list(
-            left = b_d$right,
-            right = b_d$left
-          )
-        }
-
-        left_event = right_event = "bfb"
-
-        internal_node_cell <- b_d$ancestor
-
-      } else {
-        left_cost = g_d$a_cost
-        right_cost = g_d$b_cost
-
-        get_event_type = function(delta) {
-          signs = unique(sign(delta))
-          if (all(signs == 0)) return("none")
-          if ((1 %in% signs) & (-1 %in% signs)) return("gain and loss")
-          if ((1 %in% signs)) return("gain")
-          if ((-1 %in% signs)) return("loss")
-        }
-
-        left_event = get_event_type(g_d$a_delta)
-        right_event = get_event_type(g_d$b_delta)
-
-        internal_node_cell <- g_d$ancestor
-        merged_profiles[[as.character(node_id)]] = list(
-          left = g_d$left,
-          right = g_d$right
-        )
-      }
-
-      # Store branch costs for left and right children
-      branch_costs[[as.character(left_child)]] <- left_cost
-      branch_costs[[as.character(right_child)]] <- right_cost
-
-      if (length(internal_node_cell) == 1) {
-        internal_node_cell = matrix(internal_node_cell, nrow = 1, ncol = 1)
-      }
-
-      # Store results
-      internal_nodes[[as.character(node_id)]] <- internal_node_cell
-      deltas[[as.character(node_id)]] <- delta
-
-      # Add pseudo-cell to working input
-      pseudo_cell_name <- paste0("pseudo_", all_names[node_id])
-      working_input <- rbind(working_input, internal_node_cell)
-      rownames(working_input)[nrow(working_input)] <- pseudo_cell_name
-
-      # Remove the cells that were combined (but keep other cells)
-      working_input <- working_input[
-        !rownames(working_input) %in% c(left_cell_name, right_cell_name),
-        ,
-        drop = F
-      ]
-
-      history = dplyr::bind_rows(
-        history,
-        dplyr::tibble(cell_id = left_cell_name, parent_id = pseudo_cell_name, event = left_event),
-        dplyr::tibble(cell_id = right_cell_name, parent_id = pseudo_cell_name, event = right_event)
-      )
-
-      #print(rownames(working_input))
-    }
-  }
-  history = history %>% dplyr::mutate(chr = chr, allele = allele)
-
-  # Create new branch lengths based on costs
-  new_edge_lengths <- rep(NA, nrow(tree$edge))
-  for (i in 1:nrow(tree$edge)) {
-    child_node <- tree$edge[i, 2]
-    if (as.character(child_node) %in% names(branch_costs)) {
-      new_edge_lengths[i] <- branch_costs[[as.character(child_node)]]
-    } else {
-      # If no cost available, keep original length or set to 1
-      new_edge_lengths[i] <- 1
-    }
-  }
-
-  # Return results as a list
-  list(
-    internal_nodes = internal_nodes,
-    deltas = deltas,
-    merged_profiles = merged_profiles,
-    final_input = working_input,
-    processed_nodes = length(internal_nodes),
-    chr = chr,
-    allele = allele,
-    branch_costs = branch_costs,
-    new_edge_lengths = new_edge_lengths,
-    history = history
-  )
-}
+# _old_reconstruct_tree = function(fit, chr, allele) {
+#   if (!is.null(fit$b_dist_func)) {
+#     B_dist = get_b_dist(fit$b_dist_func)
+#   } else {
+#     B_dist = function(a, b, penalty) {list(cost = Inf)}
+#   }
+#   G_dist = get_g_dist(fit$g_dist_func)
+#
+#   # Set target value based on allele type
+#   target_val <- ifelse(allele == "CN", 2, 1)
+#
+#   # Get input data for the specified chromosome and allele
+#   input <- fit$all_input_Xs[[chr]][[allele]]
+#
+#   # Get tree structure
+#   tree <- fit$tree
+#
+#   if (!ape::is.rooted(tree)) {
+#     tree = phangorn::midpoint(tree)
+#   }
+#   tree$edge.length = rep(1, length(tree$edge.length))
+#
+#   # Get post-order traversal of internal nodes to ensure children are processed before parents
+#   post_order_nodes <- get_post_order_internal_nodes(tree)
+#   if (is.null(tree$node.label)) tree$node.label <- paste0("N", seq_len(tree$Nnode))
+#
+#   # Initialize results storage
+#   internal_nodes <- list()
+#   deltas <- list()
+#   merged_profiles = list()
+#
+#   # Initialize branch costs storage
+#   branch_costs <- list()
+#
+#   # Create a working copy of input data that will be modified
+#   working_input <- input
+#
+#   # Create a mapping from node to its representative cell name
+#   node_to_cell <- list()
+#
+#   leaves_names = tree$tip.label
+#   node_names = tree$node.label
+#   all_names = c(leaves_names, node_names)
+#
+#   # Initialize leaf nodes to map to themselves
+#   for (tip_name in tree$tip.label) {
+#     node_to_cell[[tip_name]] <- tip_name
+#   }
+#
+#   # Process each internal node in post-order
+#   node_id = post_order_nodes[1]
+#   history = dplyr::tibble()
+#   for (node_id in post_order_nodes) {
+#     # Get children of this node
+#     children <- get_node_children(tree, node_id)
+#
+#     if (length(children) == 2) {
+#       # Get the cell representatives for left and right children
+#       left_child <- children[1]
+#       right_child <- children[2]
+#
+#       # Get cell names (either original tip names or pseudo-cell names)
+#       if (left_child <= length(tree$tip.label)) {
+#         left_cell_name <- all_names[left_child]
+#       } else {
+#         left_cell_name <- paste0("pseudo_", all_names[left_child])
+#       }
+#
+#       if (right_child <= length(tree$tip.label)) {
+#         right_cell_name <- all_names[right_child]
+#       } else {
+#         right_cell_name <- paste0("pseudo_", all_names[right_child])
+#       }
+#
+#       # Extract left and right cells from working input
+#       left_cell <- working_input[left_cell_name, ]
+#       right_cell <- working_input[right_cell_name, ]
+#
+#       # Calculate G distance
+#       g_d <- G_dist(left_cell, right_cell, target_val = target_val)
+#
+#       # Calculate B distance (order matters based on mean)
+#       if (mean(left_cell) > mean(right_cell)) {
+#         b_d <- B_dist(left_cell, right_cell, penalty = 0)
+#       } else {
+#         b_d <- B_dist(right_cell, left_cell, penalty = 0)
+#       }
+#
+#       # Calculate delta
+#       delta <- g_d$cost - b_d$cost
+#
+#       # Choose internal node based on which distance is lower
+#       if (delta > 0) {
+#         if (mean(left_cell) > mean(right_cell)) {
+#           left_cost = b_d$a_cost
+#           right_cost = b_d$b_cost
+#
+#           merged_profiles[[as.character(node_id)]] = list(
+#             left = b_d$left,
+#             right = b_d$right
+#           )
+#
+#         } else {
+#           left_cost = b_d$b_cost
+#           right_cost = b_d$a_cost
+#
+#           merged_profiles[[as.character(node_id)]] = list(
+#             left = b_d$right,
+#             right = b_d$left
+#           )
+#         }
+#
+#         left_event = right_event = "bfb"
+#
+#         internal_node_cell <- b_d$ancestor
+#
+#       } else {
+#         left_cost = g_d$a_cost
+#         right_cost = g_d$b_cost
+#
+#         get_event_type = function(delta) {
+#           signs = unique(sign(delta))
+#           if (all(signs == 0)) return("none")
+#           if ((1 %in% signs) & (-1 %in% signs)) return("gain and loss")
+#           if ((1 %in% signs)) return("gain")
+#           if ((-1 %in% signs)) return("loss")
+#         }
+#
+#         left_event = get_event_type(g_d$a_delta)
+#         right_event = get_event_type(g_d$b_delta)
+#
+#         internal_node_cell <- g_d$ancestor
+#         merged_profiles[[as.character(node_id)]] = list(
+#           left = g_d$left,
+#           right = g_d$right
+#         )
+#       }
+#
+#       # Store branch costs for left and right children
+#       branch_costs[[as.character(left_child)]] <- left_cost
+#       branch_costs[[as.character(right_child)]] <- right_cost
+#
+#       if (length(internal_node_cell) == 1) {
+#         internal_node_cell = matrix(internal_node_cell, nrow = 1, ncol = 1)
+#       }
+#
+#       # Store results
+#       internal_nodes[[as.character(node_id)]] <- internal_node_cell
+#       deltas[[as.character(node_id)]] <- delta
+#
+#       # Add pseudo-cell to working input
+#       pseudo_cell_name <- paste0("pseudo_", all_names[node_id])
+#       working_input <- rbind(working_input, internal_node_cell)
+#       rownames(working_input)[nrow(working_input)] <- pseudo_cell_name
+#
+#       # Remove the cells that were combined (but keep other cells)
+#       working_input <- working_input[
+#         !rownames(working_input) %in% c(left_cell_name, right_cell_name),
+#         ,
+#         drop = F
+#       ]
+#
+#       history = dplyr::bind_rows(
+#         history,
+#         dplyr::tibble(cell_id = left_cell_name, parent_id = pseudo_cell_name, event = left_event),
+#         dplyr::tibble(cell_id = right_cell_name, parent_id = pseudo_cell_name, event = right_event)
+#       )
+#
+#       #print(rownames(working_input))
+#     }
+#   }
+#   history = history %>% dplyr::mutate(chr = chr, allele = allele)
+#
+#   # Create new branch lengths based on costs
+#   new_edge_lengths <- rep(NA, nrow(tree$edge))
+#   for (i in 1:nrow(tree$edge)) {
+#     child_node <- tree$edge[i, 2]
+#     if (as.character(child_node) %in% names(branch_costs)) {
+#       new_edge_lengths[i] <- branch_costs[[as.character(child_node)]]
+#     } else {
+#       # If no cost available, keep original length or set to 1
+#       new_edge_lengths[i] <- 1
+#     }
+#   }
+#
+#   # Return results as a list
+#   list(
+#     internal_nodes = internal_nodes,
+#     deltas = deltas,
+#     merged_profiles = merged_profiles,
+#     final_input = working_input,
+#     processed_nodes = length(internal_nodes),
+#     chr = chr,
+#     allele = allele,
+#     branch_costs = branch_costs,
+#     new_edge_lengths = new_edge_lengths,
+#     history = history
+#   )
+# }
 
 # Helper function to get post-order traversal of internal nodes
 # get_post_order_internal_nodes <- function(tree) {
@@ -696,6 +651,54 @@ compare_assignment_wrt_true = function(
   list(p_compare = p_compare, df = df)
 }
 
+# _old_compute_reconstructions = function(fit, chromosomes = NULL, alleles = NULL) {
+#   if (is.null(chromosomes)) {
+#     chromosomes <- names(fit$all_input_Xs)
+#   } else {
+#     chromosomes <- intersect(chromosomes, names(fit$all_input_Xs))
+#     if (length(chromosomes) == 0) {
+#       stop("None of the specified chromosomes are present in the fit object.")
+#     }
+#   }
+#
+#   if (is.null(alleles)) {
+#     alleles <- names(fit$all_input_Xs[[chromosomes[1]]])
+#   } else {
+#     # Ensure all selected chromosomes have the requested alleles
+#     common_alleles <- Reduce(intersect, lapply(fit$all_input_Xs[chromosomes], names))
+#     alleles <- intersect(alleles, common_alleles)
+#     if (length(alleles) == 0) {
+#       stop("None of the specified alleles are present in the selected chromosomes of the fit object.")
+#     }
+#   }
+#
+#   new_edges = NULL
+#   whole_history = dplyr::tibble()
+#   reconstructions = list()
+#
+#   for (chr in chromosomes) {
+#     #print(chr)
+#     reconstructions[[chr]] <- list()
+#     for (all in alleles) {
+#       #print(all)
+#       reconstruction = reconstruct_tree(fit = fit, chr = chr, allele = all)
+#       reconstructions[[chr]][[all]] <- reconstruction
+#       whole_history = dplyr::bind_rows(whole_history, reconstruction$history)
+#       if (!is.null(new_edges)) {
+#         new_edges = new_edges + reconstruction$new_edge_lengths
+#       } else {
+#         new_edges = reconstruction$new_edge_lengths
+#       }
+#     }
+#   }
+#
+#   list(
+#     reconstructions = reconstructions,
+#     edge.length = new_edges,
+#     history = whole_history
+#   )
+# }
+
 compute_reconstructions = function(fit, chromosomes = NULL, alleles = NULL) {
   if (is.null(chromosomes)) {
     chromosomes <- names(fit$all_input_Xs)
@@ -741,5 +744,237 @@ compute_reconstructions = function(fit, chromosomes = NULL, alleles = NULL) {
     reconstructions = reconstructions,
     edge.length = new_edges,
     history = whole_history
+  )
+}
+
+#' Reconstruct Phylogenetic Tree with Copy Number Analysis
+#'
+#' This function reconstructs a phylogenetic tree by traversing internal nodes and
+#' computing distances between cell profiles. For each internal node, it calculates
+#' both B distance (breakpoint-aware) and G distance (general) between child nodes,
+#' then selects the reconstruction method that minimizes cost.
+#'
+#' @param fit A fitted model object containing:
+#'   \itemize{
+#'     \item all_input_Xs: List of input data matrices by chromosome and allele
+#'     \item b_dist_func: B distance function for breakpoint-aware reconstruction
+#'     \item g_dist_func: G distance function for general reconstruction
+#'     \item tree: Phylogenetic tree structure (ape format)
+#'   }
+#' @param chr Character string specifying the chromosome to analyze
+#' @param allele Character string specifying the allele type ("CN" for copy number, others for allelic)
+#'
+#' @return A list containing:
+#'   \itemize{
+#'     \item internal_nodes: List of reconstructed internal node profiles
+#'     \item deltas: List of delta values (G cost - B cost) for each internal node
+#'     \item merged_profiles: List of merged profiles when B distance is chosen
+#'     \item final_input: Final working input matrix after all reconstructions
+#'     \item processed_nodes: Number of internal nodes processed
+#'     \item chr: Chromosome identifier
+#'     \item allele: Allele type
+#'   }
+#'
+#' @details The function:
+#' \enumerate{
+#'   \item Sets target values based on allele type (2 for "CN", 1 for others)
+#'   \item Processes internal nodes in post-order traversal
+#'   \item For each internal node, computes B and G distances between children
+#'   \item Calculates delta = G_cost - B_cost
+#'   \item Chooses B reconstruction if delta > 0, otherwise G reconstruction
+#'   \item Creates pseudo-cells for internal nodes and updates working dataset
+#' }
+#'
+#' @note The tree edge lengths are set to 1 for uniform weighting. Node labels
+#' are automatically generated if not present.
+reconstruct_tree <- function(fit, chr, allele, store_profiles = TRUE) {
+  # Get distances
+  B_dist <- if (!is.null(fit$b_dist_func)) get_b_dist(fit$b_dist_func) else function(a, b, penalty) list(cost = Inf)
+  G_dist <- get_g_dist(fit$g_dist_func)
+
+  # Inputs and tree prep
+  target_val <- if (allele == "CN") 2 else 1
+  input <- fit$all_input_Xs[[chr]][[allele]]  # rows are cells (tips), cols are bins
+
+  tree <- fit$tree
+  if (!ape::is.rooted(tree)) tree <- phangorn::midpoint(tree)
+  tree$edge.length[] <- 1
+
+  if (is.null(tree$node.label)) tree$node.label <- paste0("N", seq_len(tree$Nnode))
+
+  n_tip  <- length(tree$tip.label)
+  n_int  <- tree$Nnode
+  n_node <- n_tip + n_int
+  p      <- ncol(input)
+
+  # Names by phylo indexing (tips 1..n_tip, internals n_tip+1..n_node)
+  all_names <- c(tree$tip.label, tree$node.label)
+
+  # Postorder internal traversal
+  post_order_nodes <- get_post_order_internal_nodes(tree) # numeric IDs of internal nodes in post-order
+
+  # Children map (one pass)
+  edge <- tree$edge
+  children_of <- split(edge[, 2], edge[, 1])  # list: parentID -> integer vector of children (length 2)
+
+  # Preallocate profiles and means
+  profiles <- matrix(NA_real_, nrow = n_node, ncol = p,
+                     dimnames = list(c(tree$tip.label, paste0("pseudo_", tree$node.label)), colnames(input)))
+
+  # Reorder input to match phylo tip order
+  profiles[seq_len(n_tip), ] <- input[tree$tip.label, , drop = FALSE]
+  row_means <- rep(NA_real_, n_node)
+  row_means[seq_len(n_tip)] <- rowMeans(profiles[seq_len(n_tip), , drop = FALSE])
+
+  # branch costs indexed by child node id
+  branch_costs_vec <- rep(NA_real_, n_node)
+
+  # internal node results keyed by node id (as character) for compatibility
+  idx_names <- as.character(post_order_nodes)
+  internal_nodes <- vector("list", length(post_order_nodes)); names(internal_nodes) <- idx_names
+  merged_profiles <- vector("list", length(post_order_nodes)); names(merged_profiles) <- idx_names
+  deltas_vec <- stats::setNames(numeric(length(post_order_nodes)), idx_names)
+
+  # history: two rows per internal node
+  H <- 2L * length(post_order_nodes)
+  hist_cell_id   <- character(H)
+  hist_parent_id <- character(H)
+  hist_event     <- character(H)
+  h <- 0L
+
+  event_type <- function(d) {
+    pos <- any(d > 0)
+    neg <- any(d < 0)
+    if (!pos && !neg) "none" else if (pos && neg) "gain and loss" else if (pos) "gain" else "loss"
+  }
+
+  for (node_id in post_order_nodes) {
+    kids <- children_of[[as.character(node_id)]]
+    # safety: ensure binary
+    if (length(kids) != 2L) next
+    kL <- kids[1]; kR <- kids[2]
+
+    left  <- profiles[kL, ]
+    right <- profiles[kR, ]
+
+    # Compute row means lazily for ordering in B distance
+    mL <- row_means[kL]; if (is.na(mL)) { mL <- mean(left);  row_means[kL] <- mL }
+    mR <- row_means[kR]; if (is.na(mR)) { mR <- mean(right); row_means[kR] <- mR }
+
+    # Greedy distance
+    g_d <- G_dist(left, right, target_val = target_val)
+
+    # BFB distance (order matters)
+    if (mL > mR) {
+      b_d <- B_dist(left, right, penalty = 0)
+      b_left_cost  <- b_d$a_cost
+      b_right_cost <- b_d$b_cost
+      b_left_vec   <- b_d$left
+      b_right_vec  <- b_d$right
+    } else {
+      b_d <- B_dist(right, left, penalty = 0)
+      b_left_cost  <- b_d$b_cost
+      b_right_cost <- b_d$a_cost
+      b_left_vec   <- b_d$right
+      b_right_vec  <- b_d$left
+    }
+
+    delta <- g_d$cost - b_d$cost
+    deltas_vec[as.character(node_id)] <- delta
+
+    if (is.finite(b_d$cost) && delta > 0) {
+      # BFB wins
+      left_cost  <- b_left_cost
+      right_cost <- b_right_cost
+      internal_cell <- b_d$ancestor
+      left_event  <- "bfb"
+      right_event <- "bfb"
+      left_vec  <- b_left_vec
+      right_vec <- b_right_vec
+    } else {
+      # Greedy wins (or BFB not available)
+      left_cost  <- g_d$a_cost
+      right_cost <- g_d$b_cost
+      internal_cell <- g_d$ancestor
+      left_event  <- event_type(g_d$a_delta)
+      right_event <- event_type(g_d$b_delta)
+      left_vec  <- g_d$left
+      right_vec <- g_d$right
+    }
+
+    # Save branch costs by child id
+    branch_costs_vec[kL] <- left_cost
+    branch_costs_vec[kR] <- right_cost
+
+    # Save internal node profile
+    profiles[node_id, ] <- if (length(internal_cell) == 1L) rep(internal_cell, p) else internal_cell
+    row_means[node_id]  <- mean(profiles[node_id, ])
+
+    # Store results (keyed by node id as character)
+    internal_nodes[[as.character(node_id)]] <- profiles[node_id, ]
+    if (store_profiles) {
+      merged_profiles[[as.character(node_id)]] <- list(left = left_vec, right = right_vec)
+    } else {
+      merged_profiles[[as.character(node_id)]] <- NULL
+    }
+
+    # History rows (use same names as your original: leaves keep names; internals are "pseudo_<name>")
+    parent_name <- paste0("pseudo_", all_names[node_id])
+    childL_name <- if (kL <= n_tip) all_names[kL] else paste0("pseudo_", all_names[kL])
+    childR_name <- if (kR <= n_tip) all_names[kR] else paste0("pseudo_", all_names[kR])
+
+    h <- h + 1L
+    hist_cell_id[h]   <- childL_name
+    hist_parent_id[h] <- parent_name
+    hist_event[h]     <- left_event
+
+    h <- h + 1L
+    hist_cell_id[h]   <- childR_name
+    hist_parent_id[h] <- parent_name
+    hist_event[h]     <- right_event
+  }
+
+  # Trim preallocated history (in case of non-binary nodes)
+  if (h < H) {
+    keep <- seq_len(h)
+    hist_cell_id   <- hist_cell_id[keep]
+    hist_parent_id <- hist_parent_id[keep]
+    hist_event     <- hist_event[keep]
+  }
+  history <- data.frame(
+    cell_id = hist_cell_id,
+    parent_id = hist_parent_id,
+    event = hist_event,
+    chr = chr,
+    allele = allele,
+    stringsAsFactors = FALSE
+  )
+
+  # New edge lengths from child-specific costs, default 1 if missing
+  new_edge_lengths <- rep(1, nrow(edge))
+  bc_child <- branch_costs_vec[edge[, 2]]
+  new_edge_lengths[is.finite(bc_child)] <- bc_child[is.finite(bc_child)]
+
+  # Root node & final_input (root profile as 1xP matrix)
+  root_id <- setdiff(edge[, 1], edge[, 2])[1]
+  final_input <- matrix(profiles[root_id, ], nrow = 1, dimnames = list(paste0("pseudo_", all_names[root_id]), colnames(input)))
+
+  # Convert vectors to lists keyed like your original
+  branch_costs <- as.list(branch_costs_vec[is.finite(branch_costs_vec)])
+  names(branch_costs) <- as.character(which(is.finite(branch_costs_vec)))
+
+  deltas <- as.list(deltas_vec)
+
+  list(
+    internal_nodes = internal_nodes,
+    deltas = deltas,
+    merged_profiles = merged_profiles,
+    final_input = final_input,
+    processed_nodes = length(internal_nodes),
+    chr = chr,
+    allele = allele,
+    branch_costs = branch_costs,
+    new_edge_lengths = new_edge_lengths,
+    history = history
   )
 }
