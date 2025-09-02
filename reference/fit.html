@@ -55,8 +55,8 @@ BFB (B) distance calculations.</p>
 <span>  bfb_penalty <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  tree_func <span class="op">=</span> <span class="fu">ape</span><span class="fu">::</span><span class="va"><a href="https://rdrr.io/pkg/ape/man/nj.html" class="external-link">nj</a></span>,</span>
 <span>  fillna <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  g_dist_func <span class="op">=</span> <span class="st">"G_with_steps"</span>,</span>
-<span>  b_dist_func <span class="op">=</span> <span class="st">"A_contig"</span>,</span>
+<span>  g_dist_func <span class="op">=</span> <span class="st">"greedy_fast"</span>,</span>
+<span>  b_dist_func <span class="op">=</span> <span class="st">"bfb_fast"</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -102,12 +102,12 @@ BFB (B) distance calculations.</p>
 
 <dt id="arg-g-dist-func">g_dist_func<a class="anchor" aria-label="anchor" href="#arg-g-dist-func"></a></dt>
 <dd><p>Distance function to use for greedy calculation. Must be one
-of the available G functions (default: "G_with_steps").</p></dd>
+of the available G functions (default: "greedy_fast").</p></dd>
 
 
 <dt id="arg-b-dist-func">b_dist_func<a class="anchor" aria-label="anchor" href="#arg-b-dist-func"></a></dt>
 <dd><p>Distance function to use for BFB calculation. Must be one
-of the available B functions (default: "A_contig").</p></dd>
+of the available B functions (default: "bfb_fast").</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
