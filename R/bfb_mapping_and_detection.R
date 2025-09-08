@@ -898,8 +898,8 @@ reconstruct_tree <- function(fit, chr, allele, store_profiles = TRUE) {
       internal_cell <- g_d$ancestor
       left_event  <- event_type(g_d$a_delta)
       right_event <- event_type(g_d$b_delta)
-      left_vec  <- g_d$left
-      right_vec <- g_d$right
+      left_vec <- g_d$ancestor + g_d$a_delta
+      right_vec <- g_d$ancestor + g_d$b_delta
     }
 
     # Save branch costs by child id
