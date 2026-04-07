@@ -1,0 +1,87 @@
+# Package index
+
+## All functions
+
+- [`abc_inference()`](https://jovoni.github.io/bridges/reference/abc_inference.md)
+  : ABC inference of BFB simulation parameters
+- [`bridge_sim()`](https://jovoni.github.io/bridges/reference/bridge_sim.md)
+  : Gillespie Simulation for Break-Fusion-Bridge (BFB) Processes
+  Modified to support diploid chromosomes (alleles A and B)
+- [`clonal_params()`](https://jovoni.github.io/bridges/reference/clonal_params.md)
+  : Build a parameter list for clonal simulations
+- [`compare_clonal_params()`](https://jovoni.github.io/bridges/reference/compare_clonal_params.md)
+  : Compare summary statistics across multiple parameter sets
+- [`compute_observed_stats()`](https://jovoni.github.io/bridges/reference/compute_observed_stats.md)
+  : Compute summary statistics from a real CNA sample
+- [`continue_simulation()`](https://jovoni.github.io/bridges/reference/continue_simulation.md)
+  : Check if simulation should continue
+- [`create_initial_chromosome_sequences()`](https://jovoni.github.io/bridges/reference/create_initial_chromosome_sequences.md)
+  : Create initial chromosome sequences for all alleles
+- [`create_tree_annotation()`](https://jovoni.github.io/bridges/reference/create_tree_annotation.md)
+  : Create tree annotation for heatmap
+- [`derive_hotspot_pos()`](https://jovoni.github.io/bridges/reference/derive_hotspot_pos.md)
+  : Derive hotspot bin position from a CN matrix
+- [`detect_bfb()`](https://jovoni.github.io/bridges/reference/detect_bfb.md)
+  : Detect Breakpoint-Free Branches (BFB) in Phylogenetic Trees
+- [`fit()`](https://jovoni.github.io/bridges/reference/fit.md) : Main
+  Function for Genomic Distance Calculation and Phylogenetic Tree
+  Construction
+- [`get_next_event()`](https://jovoni.github.io/bridges/reference/get_next_event.md)
+  : Determine the next event to occur
+- [`get_seq_length()`](https://jovoni.github.io/bridges/reference/get_seq_length.md)
+  : Compute the Length of a Sequence
+- [`infer_bin_length()`](https://jovoni.github.io/bridges/reference/infer_bin_length.md)
+  : Infer bin length from a CNA data frame
+- [`initialize_simulation()`](https://jovoni.github.io/bridges/reference/initialize_simulation.md)
+  : Helper functions modified for diploid chromosome modeling Initialize
+  simulation state for diploid chromosomes
+- [`initialize_with_bfb()`](https://jovoni.github.io/bridges/reference/initialize_with_bfb.md)
+  : Initialize simulation with BFB events for initial cells (diploid
+  version)
+- [`initialize_without_bfb()`](https://jovoni.github.io/bridges/reference/initialize_without_bfb.md)
+  : Initialize simulation without BFB for initial cells (diploid
+  version)
+- [`optimize_tree_ordering()`](https://jovoni.github.io/bridges/reference/optimize_tree_ordering.md)
+  : Optimize tree tip ordering based on distance matrix
+- [`plot_abc_results()`](https://jovoni.github.io/bridges/reference/plot_abc_results.md)
+  : Plot ABC posterior distributions
+- [`plot_bfb_signature()`](https://jovoni.github.io/bridges/reference/plot_bfb_signature.md)
+  : Plot BFB-like Signatures Along the Genome
+- [`plot_chr_all_heatmap()`](https://jovoni.github.io/bridges/reference/plot_chr_all_heatmap.md)
+  : Plot Chromosome-wide Heatmap of Copy Number Alterations
+- [`plot_clonal_comparison()`](https://jovoni.github.io/bridges/reference/plot_clonal_comparison.md)
+  : Plot summary statistics across clonal simulation conditions
+- [`plot_heatmap()`](https://jovoni.github.io/bridges/reference/plot_heatmap.md)
+  : Create comprehensive heatmap with optional phylogenetic tree
+- [`prepare_heatmap_matrix()`](https://jovoni.github.io/bridges/reference/prepare_heatmap_matrix.md)
+  : Prepare matrix data for heatmap plotting
+- [`prepare_results()`](https://jovoni.github.io/bridges/reference/prepare_results.md)
+  : Prepare final results from simulation
+- [`prepare_row_annotations()`](https://jovoni.github.io/bridges/reference/prepare_row_annotations.md)
+  : Prepare row annotations from a single data frame
+- [`process_birth_event()`](https://jovoni.github.io/bridges/reference/process_birth_event.md)
+  : Process a birth event (diploid version)
+- [`process_death_event()`](https://jovoni.github.io/bridges/reference/process_death_event.md)
+  : Process a death event
+- [`process_tree()`](https://jovoni.github.io/bridges/reference/process_tree.md)
+  : Process tree for heatmap visualization
+- [`pseudo_cell_bin_test()`](https://jovoni.github.io/bridges/reference/pseudo_cell_bin_test.md)
+  : Perform Binomial Test on Pseudo-Cell Delta Values
+- [`pseudo_cell_t_test()`](https://jovoni.github.io/bridges/reference/pseudo_cell_t_test.md)
+  : Perform T-Test on Pseudo-Cell Delta Values
+- [`reconstruct_tree()`](https://jovoni.github.io/bridges/reference/reconstruct_tree.md)
+  : Reconstruct Phylogenetic Tree with Copy Number Analysis
+- [`run_ABC()`](https://jovoni.github.io/bridges/reference/run_ABC.md) :
+  Run a single ABC simulation and compute distance to observed data
+- [`run_clonal_replicates()`](https://jovoni.github.io/bridges/reference/run_clonal_replicates.md)
+  : Run N independent clonal simulations and summarise each
+- [`sample_priors()`](https://jovoni.github.io/bridges/reference/sample_priors.md)
+  : Sample parameters from prior distributions
+- [`sim_bfb_left_and_right_sequences()`](https://jovoni.github.io/bridges/reference/sim_bfb_left_and_right_sequences.md)
+  : Simulate Breakage-Fusion-Bridge (BFB) Cycle for both daughters
+- [`simulate_clone()`](https://jovoni.github.io/bridges/reference/simulate_clone.md)
+  : Simulate one clonal evolution and return the CN matrix
+- [`summarise_clone()`](https://jovoni.github.io/bridges/reference/summarise_clone.md)
+  : Compute summary statistics for a single clonal CN matrix
+- [`validate_heatmap_inputs()`](https://jovoni.github.io/bridges/reference/validate_heatmap_inputs.md)
+  : Validate input parameters for heatmap plotting
