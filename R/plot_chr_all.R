@@ -42,7 +42,7 @@ plot_chr_all_heatmap = function(cna_data, chr, allele,
   }
 
   if (add_avg_CN_profile) {
-    numeric_matrix <- tibble_to_matrix(cna_data, chr, value_column = allele)
+    numeric_matrix <- tibble_to_matrix(cna_data, value_column = allele)
     avg_CN_profile = colMeans(numeric_matrix)
     top_anno <- ComplexHeatmap::HeatmapAnnotation(
       AverageCN = ComplexHeatmap::anno_barplot(

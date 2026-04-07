@@ -145,8 +145,7 @@ simulate_clone = function(
     ))
   }
 
-  cna_matrix = tibble_to_matrix(sim$cna_data, chromosome = chromosome,
-                                value_column = allele)
+  cna_matrix = tibble_to_matrix(sim$cna_data, value_column = allele)
   list(
     cna_matrix = cna_matrix,
     n_alive    = n_alive,
@@ -384,7 +383,7 @@ compute_observed_stats = function(data, chromosome, allele, hotspot_pos) {
   }
 
   base_value = ifelse(allele == "CN", 2, 1)
-  cna_matrix = tibble_to_matrix(data, chromosome = chromosome, value_column = allele)
+  cna_matrix = tibble_to_matrix(data, value_column = allele)
 
   summarise_clone(cna_matrix, hotspot_col = hotspot_pos,
                   base_value = base_value, n_alive = nrow(cna_matrix))

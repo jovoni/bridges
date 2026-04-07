@@ -95,7 +95,7 @@ derive_hotspot_pos = function(cna_matrix) {
 run_ABC = function(cna_data, allele, chromosome, params, pos = NULL, bin_length = NULL) {
   base_value = ifelse(allele == "CN", 2, 1)
 
-  target_cna_matrix = tibble_to_matrix(cna_data, chromosome = chromosome, value_column = allele)
+  target_cna_matrix = tibble_to_matrix(cna_data, value_column = allele)
   n_target_cells    = nrow(target_cna_matrix)
   n_target_bins     = ncol(target_cna_matrix)
 
@@ -144,7 +144,7 @@ run_ABC = function(cna_data, allele, chromosome, params, pos = NULL, bin_length 
     custom_breakpoints      = custom_breakpoint_dist
   )
 
-  sim_cna_matrix = tibble_to_matrix(sim$cna_data, chromosome = chromosome, value_column = allele)
+  sim_cna_matrix = tibble_to_matrix(sim$cna_data, value_column = allele)
   n_sim_bins     = ncol(sim_cna_matrix)
 
   # Guard: bin counts must match for a meaningful profile comparison
@@ -270,7 +270,7 @@ abc_inference = function(cna_data,
   }
 
   if (is.null(pos)) {
-    obs_matrix = tibble_to_matrix(cna_data, chromosome = chromosome, value_column = allele)
+    obs_matrix = tibble_to_matrix(cna_data, value_column = allele)
     pos = derive_hotspot_pos(obs_matrix)
     message("Derived hotspot pos from data: bin ", pos)
   }
