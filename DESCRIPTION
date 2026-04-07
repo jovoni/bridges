@@ -24,9 +24,12 @@ Imports:
     RColorBrewer,
     rlang,
     seriation,
+    Rcpp,
     stats,
     tibble,
     tidyr
+LinkingTo: 
+    Rcpp
 Suggests: 
     knitr,
     rmarkdown,
