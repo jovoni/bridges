@@ -1,25 +1,21 @@
 # Helper function to convert seq back to a vector
 seq2vec <- function(seq) {
-  result <- c()
-
-  for (interval in seq) {
+  # Pre-compute each interval's elements into a list, then concatenate once
+  pieces <- vector("list", length(seq))
+  for (j in seq_along(seq)) {
+    interval <- seq[[j]]
     start <- interval$start
     end <- interval$end
     direction <- interval$direction
 
     if (direction == 0) {
-      # Single element
-      result <- c(result, start)
-    } else if (direction == 1) {
-      # Increasing sequence
-      result <- c(result, seq(start, end))
-    } else if (direction == -1) {
-      # Decreasing sequence
-      result <- c(result, seq(start, end))
+      pieces[[j]] <- start
+    } else {
+      # seq() handles both increasing (direction=1) and decreasing (direction=-1)
+      pieces[[j]] <- base::seq.int(start, end)
     }
   }
-
-  return(result)
+  unlist(pieces, use.names = FALSE)
 }
 
 
@@ -38,7 +34,10 @@ vec2seq <- function(vector) {
     return(list(list(start = vector[1], end = vector[1], direction = 0)))
   }
 
-  intervals <- list()
+  # Pre-allocate to avoid O(n²) append growth; trim at the end
+  intervals <- vector("list", length(vector))
+  n_intervals <- 0L
+
   current_start <- vector[1]
   current_value <- vector[1]
   current_seen <- c(vector[1])
@@ -52,11 +51,12 @@ vec2seq <- function(vector) {
 
     if (!contiguous || already_seen) {
       # Close current interval
-      intervals <- append(intervals, list(list(
+      n_intervals <- n_intervals + 1L
+      intervals[[n_intervals]] <- list(
         start = current_start,
         end = current_value,
         direction = if(is.na(current_direction)) 0 else current_direction
-      )))
+      )
       # Start new interval
       current_start <- vector[i]
       current_value <- vector[i]
@@ -81,11 +81,12 @@ vec2seq <- function(vector) {
   }
 
   # Add the last interval
-  intervals <- append(intervals, list(list(
+  n_intervals <- n_intervals + 1L
+  intervals[[n_intervals]] <- list(
     start = current_start,
     end = current_value,
     direction = if(is.na(current_direction)) 0 else current_direction
-  )))
+  )
 
-  return(intervals)
+  intervals[seq_len(n_intervals)]
 }

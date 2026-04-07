@@ -76,7 +76,10 @@ fit = function(data,
   min_Ds = sum_across_alleles(min_Ds, alleles)
   D = Reduce("+", min_Ds)
   if (is.list(D)) D = D[[1]]
-  D[D == Inf] = 0
+  if (any(is.infinite(D))) {
+    warning("Infinite distances detected; replacing with max finite distance. Check input data for pathological cell pairs.")
+    D[is.infinite(D)] = max(D[is.finite(D)], na.rm = TRUE)
+  }
 
   message("Building tree...")
   tree = tree_func(D)

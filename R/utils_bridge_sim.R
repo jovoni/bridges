@@ -21,7 +21,8 @@ initialize_simulation <- function(input_parameters) {
     #cell_hotspot_gained = logical(0),
     #cell_hotspot_copies = numeric(0),
     cell_is_alive = logical(0),
-    cell_next_event_times = numeric(0) #
+    cell_next_event_times = numeric(0),
+    hotspot_status = logical(0)
     #cell_bfb_history = list()
   )
   state$input_parameters = input_parameters
@@ -623,9 +624,9 @@ process_death_event <- function(state, current_cell_id) {
   # Mark the cell as dead
   state$cell_is_alive[cell_idx] <- FALSE
 
-  # Update history (optional, to track death in history table)
+  # Mark cell as dead in history (preserves lineage information)
   state$history <- state$history %>%
-    dplyr::filter(.data$cell_id != current_cell_id)
+    dplyr::mutate(is_alive = ifelse(.data$cell_id == current_cell_id, FALSE, .data$is_alive))
 
   state
 }
@@ -664,7 +665,7 @@ get_next_event <- function(state) {
   next_event_idx <- alive_indices[min_event_idx]
   next_event_time <- next_event_times[min_event_idx]
   current_cell_id <- state$cell_ids[next_event_idx]
-  hotspot_status = state$hotspot_status[min_event_idx]
+  hotspot_status = state$hotspot_status[next_event_idx]
 
   # Calculate modified birth and death rates for this specific cell
   cell_birth_rate <- state$input_parameters$birth_rate *
@@ -875,12 +876,9 @@ sim_bfb_left_and_right_sequences <- function(
           "None of the custom breakpoints are present in the sequence"
         )
       }
-      valid_idx = sample(c(valid_indices, valid_indices), size = 1, replace = F)
+      valid_idx = sample(valid_indices, size = 1)
       breakpoint_positions <- vec[valid_idx]
-      if (length(breakpoint_positions) == 0) {
-        print("here")
-      }
-      bp_idx = sample(c(breakpoint_positions, breakpoint_positions), size = 1, replace = F)
+      bp_idx = sample(breakpoint_positions, size = 1)
     } else {
       stop("Unsupported distribution type. Use 'uniform', 'beta', or 'custom'.")
     }
@@ -888,7 +886,7 @@ sim_bfb_left_and_right_sequences <- function(
 
   # Check if we exceeded maximum attempts
   if (attempts >= max_attempts && bp_idx %in% c(L, bps)) {
-    # Return twice the initial sequence as fallback
+    warning("BFB breakpoint selection failed after ", max_attempts, " attempts (sequence may be too fragmented). Returning unchanged sequence as fallback.")
     return(list(l_seq = sequence, r_seq = sequence))
   }
 
@@ -1440,11 +1438,11 @@ subsample_sim <- function(sim_result, f_subsample = 1) {
   subsampled_cell_history <- sim_result$cell_history %>%
     dplyr::filter(!.data$cell_id %in% alive_cells_not_sampled)
 
-  # Rebuild tree from filtered history
+  # Rebuild tree from filtered history, then prune to exactly the sampled alive
+  # cells. Dead cells with no children remain in cell_history (is_alive = FALSE)
+  # and would otherwise appear as spurious tips not present in cna_data.
   subsampled_tree = build_phylo_from_lineage(subsampled_cell_history)
-  # subsampled_tree <- ape::read.tree(
-  #   text = cell_history_to_newick(subsampled_cell_history)
-  # )
+  subsampled_tree = ape::keep.tip(subsampled_tree, sampled_cell_ids)
 
   # Create new CNA data for subsampled cells
   chr_seq_lengths <- sim_result$input_parameters$chr_seq_lengths

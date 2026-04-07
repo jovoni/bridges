@@ -1,281 +1,378 @@
 
-# Takes a CNA data format and returns set of breakpoints
-get_breakpoints_dist = function(cna_matrix, allele) {
-  lapply(1:nrow(cna_matrix), function(j) {
-    which(diff(cna_matrix[j,]) != 0)
-  }) %>% unlist()
-}
+# ── Summary statistics ────────────────────────────────────────────────────────
 
-get_cn_length_rate = function(cna_matrix, allele) {
-  cna_lengths = lapply(1:nrow(cna_matrix), function(j) {
-    idxs = which(diff(cna_matrix[j,]) != 0)
-    if (length(idxs) > 1) {
-      return(diff(idxs))
-    } else {
-      return(NULL)
-    }
-  }) %>% unlist()
-  return(mean(cna_lengths))
-}
-
+# Per-bin gain rate (fraction of cells above baseline)
 get_gain_profile = function(cna_matrix, base_value) {
   colMeans(cna_matrix > base_value)
 }
 
+# Per-bin loss rate (fraction of cells below baseline)
 get_loss_profile = function(cna_matrix, base_value) {
   colMeans(cna_matrix < base_value)
 }
 
+# Per-bin mean CN
 get_avg_cn_profile = function(cna_matrix) {
   colMeans(cna_matrix)
 }
 
-run_ABC = function(cna_data, allele, chromosome, chr, pos, params) {
-  # Extract parameters
-  amp_rate = params$amp_rate
-  del_rate = params$del_rate
-  bfb_prob = params$bfb_prob
-  birth_rate = params$birth_rate
-  death_rate = params$death_rate
-  lambda = params$lambda
-
-  base_value = ifelse(allele == "CN", 2, 1)
-  target_cna_matrix = tibble_to_matrix(cna_data, chromosome = chromosome, value_column = allele)
-  target_gain_dist = get_gain_profile(target_cna_matrix, base_value = base_value)
-  target_loss_dist = get_loss_profile(target_cna_matrix, base_value = base_value)
-  target_avg_cn_dist = get_avg_cn_profile(target_cna_matrix)
-  n_target_cells = nrow(target_cna_matrix)
-  target_cna_rate = get_cn_length_rate(target_cna_matrix, allele)
-  custom_breakpoint_dist = get_breakpoints_dist(target_cna_matrix, allele = allele)
-
-  # Run simulation with provided parameters
-  sim = bridge_sim(initial_cells = 1,
-                   bin_length = 5e5,
-                   max_time = 300,
-                   max_cells = n_target_cells,
-                   normal_dup_rate = 0,
-                   amp_rate = amp_rate,        # Now using parameter
-                   del_rate = del_rate,        # Now using parameter
-                   bfb_prob = bfb_prob,        # Now using parameter
-                   birth_rate = birth_rate,    # Now using parameter
-                   death_rate = death_rate,    # Now using parameter
-                   rate = target_cna_rate,
-                   lambda = lambda,            # Now using parameter
-                   bfb_allele = paste0(chromosome, ":", allele),
-                   chromosomes = c(chr),
-                   first_round_of_bfb = TRUE,
-                   positive_selection_rate = 0,
-                   negative_selection_rate = 0,
-                   hotspot = list(chr = paste0(chr, ":", allele), pos = pos),
-                   breakpoint_support = "custom",
-                   custom_breakpoints = custom_breakpoint_dist)
-
-  # Calculate summary statistics
-  sim_cna_mat = tibble_to_matrix(sim$cna_data, chromosome = chromosome, value_column = allele)
-  pred_gain_dist = get_gain_profile(sim_cna_mat, base_value = base_value)
-  pred_loss_dist = get_loss_profile(sim_cna_mat, base_value = base_value)
-  pred_avg_cn_dist = get_avg_cn_profile(sim_cna_mat)
-
-  # Calculate and return distance metrics
-  rmse_gain = caret::RMSE(pred_gain_dist, target_gain_dist)
-  rmse_loss = caret::RMSE(pred_loss_dist, target_loss_dist)
-  rmse_avg_cn = caret::RMSE(pred_avg_cn_dist, target_avg_cn_dist)
-
-  # Combined distance metric (weighted sum)
-  total_distance = rmse_gain + rmse_loss + rmse_avg_cn
-
-  return(list(
-    distance = total_distance,
-    rmse_gain = rmse_gain,
-    rmse_loss = rmse_loss,
-    rmse_avg_cn = rmse_avg_cn,
-    params = params
-  ))
+# Per-bin CN variance across cells — captures clonal heterogeneity
+get_cn_variance_profile = function(cna_matrix) {
+  apply(cna_matrix, 2, stats::var)
 }
 
-# Prior sampling function
-sample_priors = function() {
-  # Sample relative proportions for amp_rate, del_rate, bfb_prob from Dirichlet
-  # Using symmetric Dirichlet with alpha = 1 (uniform on simplex)
-  # You can adjust alpha values to encode prior beliefs about relative rates
-  dirichlet_alpha = c(1, 1, 1)  # Equal prior weight for amp, del, bfb
-  relative_rates = MCMCpack::rdirichlet(1, dirichlet_alpha)[1, ]
+# Mean number of CN breakpoints per cell — BFB creates many segment boundaries
+get_mean_breakpoints_per_cell = function(cna_matrix) {
+  bp_counts = apply(cna_matrix, 1, function(row) sum(diff(row) != 0))
+  mean(bp_counts)
+}
 
-  # Use relative rates directly (they sum to 1)
-  amp_rate = relative_rates[1]
-  del_rate = relative_rates[2]
-  bfb_prob = relative_rates[3]
+# Maximum CN value across all cells — BFB drives extreme focal amplification
+get_max_cn = function(cna_matrix) {
+  max(cna_matrix)
+}
 
-  # Fix birth rate to 1 and sample death rate as fraction of birth rate
-  birth_rate = 1.0
-  death_fraction = stats::runif(1, 0, 0.8)  # Death rate as fraction of birth rate [0, 0.8]
-  death_rate = birth_rate * death_fraction
+# Mean CN-segment length (used to calibrate the `rate` param of bridge_sim)
+get_cn_length_rate = function(cna_matrix) {
+  cna_lengths = lapply(1:nrow(cna_matrix), function(j) {
+    idxs = which(diff(cna_matrix[j, ]) != 0)
+    if (length(idxs) > 1) diff(idxs) else NULL
+  })
+  vals = unlist(cna_lengths)
+  if (length(vals) == 0) return(ncol(cna_matrix))  # fallback: whole chromosome
+  mean(vals)
+}
+
+# Breakpoint position distribution (used for custom_breakpoints in bridge_sim)
+get_breakpoints_dist = function(cna_matrix) {
+  lapply(1:nrow(cna_matrix), function(j) {
+    which(diff(cna_matrix[j, ]) != 0)
+  }) %>% unlist()
+}
+
+
+# ── Data-driven calibration helpers ──────────────────────────────────────────
+
+#' Infer bin length from a CNA data frame
+#'
+#' Computes the median (end - start) for the given chromosome so the simulator
+#' uses the same resolution as the observed data.
+#'
+#' @param data CNA data frame with columns cell_id, chr, start, end.
+#' @param chromosome Chromosome to use (character, e.g. "7").
+#' @return Numeric bin length in base pairs.
+infer_bin_length = function(data, chromosome) {
+  chr_data = data[data$chr == chromosome, ]
+  as.integer(stats::median(chr_data$end - chr_data$start))
+}
+
+#' Derive hotspot bin position from a CN matrix
+#'
+#' Returns the 1-based bin index of the genomic region most likely to be the
+#' BFB hotspot, defined as the bin with the highest CN variance across cells.
+#' This is data-driven and removes the need for the caller to supply `pos`.
+#'
+#' @param cna_matrix Numeric matrix (cells x bins).
+#' @return Integer bin index.
+derive_hotspot_pos = function(cna_matrix) {
+  which.max(apply(cna_matrix, 2, stats::var))
+}
+
+
+# ── Core ABC simulation ───────────────────────────────────────────────────────
+
+#' Run a single ABC simulation and compute distance to observed data
+#'
+#' @param cna_data Observed CNA data frame (cell_id, chr, start, end, CN, A, B).
+#' @param allele Allele column to use ("A", "B", or "CN").
+#' @param chromosome Chromosome name as it appears in cna_data$chr (e.g. "7").
+#' @param params Named list of simulation parameters from \code{sample_priors()}.
+#' @param pos Optional integer bin index for the BFB hotspot. Derived automatically
+#'   from the observed data if NULL (default).
+#' @param bin_length Optional bin size in bp. Inferred from observed data if NULL.
+#'
+#' @return Named list with distance components and the parameter set used.
+run_ABC = function(cna_data, allele, chromosome, params, pos = NULL, bin_length = NULL) {
+  base_value = ifelse(allele == "CN", 2, 1)
+
+  target_cna_matrix = tibble_to_matrix(cna_data, chromosome = chromosome, value_column = allele)
+  n_target_cells    = nrow(target_cna_matrix)
+  n_target_bins     = ncol(target_cna_matrix)
+
+  # ── Infer bin_length from observed data if not supplied ──────────────────
+  if (is.null(bin_length)) {
+    bin_length = infer_bin_length(cna_data, chromosome)
+  }
+
+  # ── Auto-derive hotspot position if not supplied ─────────────────────────
+  if (is.null(pos)) {
+    pos = derive_hotspot_pos(target_cna_matrix)
+  }
+
+  # ── Compute observed summary statistics ──────────────────────────────────
+  target_gain_profile     = get_gain_profile(target_cna_matrix, base_value)
+  target_loss_profile     = get_loss_profile(target_cna_matrix, base_value)
+  target_avg_cn_profile   = get_avg_cn_profile(target_cna_matrix)
+  target_var_profile      = get_cn_variance_profile(target_cna_matrix)
+  target_max_cn           = get_max_cn(target_cna_matrix)
+  target_mean_bp          = get_mean_breakpoints_per_cell(target_cna_matrix)
+  target_cna_rate         = get_cn_length_rate(target_cna_matrix)
+  custom_breakpoint_dist  = get_breakpoints_dist(target_cna_matrix)
+
+  # ── Run simulation ────────────────────────────────────────────────────────
+  chr_allele = paste0(chromosome, ":", allele)
+  sim = bridge_sim(
+    initial_cells           = 1,
+    bin_length              = bin_length,
+    max_time                = 300,
+    max_cells               = n_target_cells,
+    normal_dup_rate         = 0,
+    amp_rate                = params$amp_rate,
+    del_rate                = params$del_rate,
+    bfb_prob                = params$bfb_prob,
+    birth_rate              = params$birth_rate,
+    death_rate              = params$death_rate,
+    rate                    = target_cna_rate,
+    lambda                  = params$lambda,
+    bfb_allele              = chr_allele,
+    chromosomes             = c(chromosome),
+    first_round_of_bfb      = TRUE,
+    positive_selection_rate = 0,
+    negative_selection_rate = 0,
+    hotspot                 = list(chr = chr_allele, pos = pos),
+    breakpoint_support      = "custom",
+    custom_breakpoints      = custom_breakpoint_dist
+  )
+
+  sim_cna_matrix = tibble_to_matrix(sim$cna_data, chromosome = chromosome, value_column = allele)
+  n_sim_bins     = ncol(sim_cna_matrix)
+
+  # Guard: bin counts must match for a meaningful profile comparison
+  if (n_sim_bins != n_target_bins) {
+    stop(sprintf(
+      "Simulated data has %d bins but observed data has %d bins (chromosome %s). ",
+      n_sim_bins, n_target_bins, chromosome,
+      "Check that bin_length matches the resolution of your input data."
+    ))
+  }
+
+  # ── Compute predicted summary statistics ─────────────────────────────────
+  pred_gain_profile   = get_gain_profile(sim_cna_matrix, base_value)
+  pred_loss_profile   = get_loss_profile(sim_cna_matrix, base_value)
+  pred_avg_cn_profile = get_avg_cn_profile(sim_cna_matrix)
+  pred_var_profile    = get_cn_variance_profile(sim_cna_matrix)
+  pred_max_cn         = get_max_cn(sim_cna_matrix)
+  pred_mean_bp        = get_mean_breakpoints_per_cell(sim_cna_matrix)
+
+  # ── Distance components ───────────────────────────────────────────────────
+  rmse = function(a, b) sqrt(mean((a - b)^2))
+
+  d_gain    = rmse(pred_gain_profile,   target_gain_profile)
+  d_loss    = rmse(pred_loss_profile,   target_loss_profile)
+  d_avg_cn  = rmse(pred_avg_cn_profile, target_avg_cn_profile)
+  d_var     = rmse(pred_var_profile,    target_var_profile)
+  # Scalars: normalise by observed value so they are scale-invariant
+  d_max_cn  = abs(pred_max_cn  - target_max_cn)  / max(target_max_cn,  1)
+  d_mean_bp = abs(pred_mean_bp - target_mean_bp) / max(target_mean_bp, 1)
+
+  total_distance = d_gain + d_loss + d_avg_cn + d_var + d_max_cn + d_mean_bp
 
   list(
-    amp_rate = amp_rate,
-    del_rate = del_rate,
-    bfb_prob = bfb_prob,
-    birth_rate = birth_rate,
-    death_rate = death_rate,
-    lambda = stats::runif(1, 0.001, 0.1),      # Keep lambda as before
-    death_fraction = death_fraction     # Store for analysis
+    distance  = total_distance,
+    d_gain    = d_gain,
+    d_loss    = d_loss,
+    d_avg_cn  = d_avg_cn,
+    d_var     = d_var,
+    d_max_cn  = d_max_cn,
+    d_mean_bp = d_mean_bp,
+    params    = params
   )
 }
 
-# Main ABC algorithm
-abc_inference = function(cna_data, allele, chromosome, chr, pos,
-                         n_simulations = 10000,
+
+# ── Prior sampling ────────────────────────────────────────────────────────────
+
+#' Sample parameters from prior distributions
+#'
+#' Draws one candidate parameter set:
+#' - amp_rate / del_rate / bfb_prob as relative proportions from a symmetric
+#'   Dirichlet(1,1,1) — uniform on the 2-simplex.
+#' - death_rate as a fraction of birth_rate, uniform on (0, 0.8).
+#' - lambda (mean genomic events per daughter cell) uniform on (0.5, 5).
+#'
+#' @return Named list of parameter values.
+sample_priors = function() {
+  relative_rates = MCMCpack::rdirichlet(1, c(1, 1, 1))[1, ]
+
+  birth_rate     = 1.0
+  death_fraction = stats::runif(1, 0, 0.8)
+  death_rate     = birth_rate * death_fraction
+
+  list(
+    amp_rate       = relative_rates[1],
+    del_rate       = relative_rates[2],
+    bfb_prob       = relative_rates[3],
+    birth_rate     = birth_rate,
+    death_rate     = death_rate,
+    lambda         = stats::runif(1, 0.5, 5),
+    death_fraction = death_fraction
+  )
+}
+
+
+# ── Main ABC rejection algorithm ──────────────────────────────────────────────
+
+#' ABC inference of BFB simulation parameters
+#'
+#' Uses rejection ABC to infer simulation parameters that reproduce the
+#' copy number distribution of an observed single-cell dataset. The simulator
+#' (\code{bridge_sim}) is run \code{n_simulations} times with parameters drawn
+#' from \code{sample_priors()}. The \code{tolerance_quantile} fraction with
+#' the smallest distance to the observed summary statistics is retained as the
+#' approximate posterior.
+#'
+#' @param cna_data Data frame with columns cell_id, chr, start, end, CN, A, B.
+#' @param allele Allele to match ("A", "B", or "CN").
+#' @param chromosome Chromosome to focus on (character, e.g. "7").
+#' @param n_simulations Total number of simulations to run. Default: 10000.
+#' @param tolerance_quantile Fraction of simulations to accept. Default: 0.01.
+#' @param n_cores Number of parallel cores (uses \code{parallel::mclapply} when > 1).
+#'   Default: 1.
+#' @param pos Optional integer bin index for the BFB hotspot in the simulation.
+#'   Automatically derived from the observed data as the bin with the highest CN
+#'   variance if NULL (default).
+#' @param bin_length Optional bin size in bp. Inferred from observed data if NULL.
+#'
+#' @return A list containing:
+#' \describe{
+#'   \item{accepted_params}{Data frame of accepted parameter draws.}
+#'   \item{param_summary}{Per-parameter mean / median / SD / 95\% CI.}
+#'   \item{n_simulations}{Total simulations attempted.}
+#'   \item{n_accepted}{Number of accepted simulations.}
+#'   \item{acceptance_rate}{Fraction accepted out of valid (non-error) simulations.}
+#'   \item{tolerance_threshold}{Distance cutoff used for acceptance.}
+#' }
+#'
+#' @export
+abc_inference = function(cna_data,
+                         allele,
+                         chromosome,
+                         n_simulations      = 10000,
                          tolerance_quantile = 0.01,
-                         n_cores = 1) {
+                         n_cores            = 1,
+                         pos                = NULL,
+                         bin_length         = NULL) {
 
-  # Storage for results
-  results = vector("list", n_simulations)
+  # Pre-compute bin_length and pos once so every simulation reuses them
+  if (is.null(bin_length)) {
+    bin_length = infer_bin_length(cna_data, chromosome)
+    message("Inferred bin_length from data: ", bin_length, " bp")
+  }
 
-  # Progress bar
-  pb = utils::txtProgressBar(min = 0, max = n_simulations, style = 3)
+  if (is.null(pos)) {
+    obs_matrix = tibble_to_matrix(cna_data, chromosome = chromosome, value_column = allele)
+    pos = derive_hotspot_pos(obs_matrix)
+    message("Derived hotspot pos from data: bin ", pos)
+  }
 
-  # Run simulations
+  run_one = function(i) {
+    params = sample_priors()
+    tryCatch(
+      run_ABC(cna_data, allele, chromosome, params, pos = pos, bin_length = bin_length),
+      error = function(e) list(distance = Inf, params = params, error = e$message)
+    )
+  }
+
   if (n_cores > 1) {
-
-    results = parallel::mclapply(1:n_simulations, function(i) {
-      params = sample_priors()
-      tryCatch({
-        run_ABC(cna_data, allele, chromosome, chr, pos, params)
-      }, error = function(e) {
-        list(distance = Inf, params = params, error = e$message)
-      })
-    }, mc.cores = n_cores)
-
+    results = parallel::mclapply(1:n_simulations, run_one, mc.cores = n_cores)
   } else {
-    # Sequential execution
+    pb = utils::txtProgressBar(min = 0, max = n_simulations, style = 3)
+    results = vector("list", n_simulations)
     for (i in 1:n_simulations) {
-      params = sample_priors()
-
-      results[[i]] = tryCatch({
-        run_ABC(cna_data, allele, chromosome, chr, pos, params)
-      }, error = function(e) {
-        list(distance = Inf, params = params, error = e$message)
-      })
-
-
+      results[[i]] = run_one(i)
       utils::setTxtProgressBar(pb, i)
     }
+    close(pb)
   }
-  close(pb)
 
-  # Filter out failed simulations
   valid_results = results[sapply(results, function(x) is.finite(x$distance))]
 
   if (length(valid_results) == 0) {
     stop("No valid simulations completed. Check your model parameters and data.")
   }
 
-  # Extract distances and sort
-  distances = sapply(valid_results, function(x) x$distance)
-  sorted_indices = order(distances)
+  distances      = sapply(valid_results, function(x) x$distance)
+  n_accept       = max(1L, floor(length(valid_results) * tolerance_quantile))
+  accepted       = valid_results[order(distances)[seq_len(n_accept)]]
 
-  # Apply tolerance threshold
-  n_accept = max(1, floor(length(valid_results) * tolerance_quantile))
-  accepted_indices = sorted_indices[1:n_accept]
-  accepted_results = valid_results[accepted_indices]
-
-  # Extract accepted parameters
   accepted_params = data.frame(
-    amp_rate = sapply(accepted_results, function(x) x$params$amp_rate),
-    del_rate = sapply(accepted_results, function(x) x$params$del_rate),
-    bfb_prob = sapply(accepted_results, function(x) x$params$bfb_prob),
-    birth_rate = sapply(accepted_results, function(x) x$params$birth_rate),
-    death_rate = sapply(accepted_results, function(x) x$params$death_rate),
-    lambda = sapply(accepted_results, function(x) x$params$lambda),
-    death_fraction = sapply(accepted_results, function(x) x$params$death_fraction),
-    distance = sapply(accepted_results, function(x) x$distance)
+    amp_rate       = sapply(accepted, function(x) x$params$amp_rate),
+    del_rate       = sapply(accepted, function(x) x$params$del_rate),
+    bfb_prob       = sapply(accepted, function(x) x$params$bfb_prob),
+    birth_rate     = sapply(accepted, function(x) x$params$birth_rate),
+    death_rate     = sapply(accepted, function(x) x$params$death_rate),
+    lambda         = sapply(accepted, function(x) x$params$lambda),
+    death_fraction = sapply(accepted, function(x) x$params$death_fraction),
+    distance       = sapply(accepted, function(x) x$distance)
   )
 
-  # Calculate summary statistics
+  param_cols   = setdiff(names(accepted_params), "distance")
   param_summary = data.frame(
-    parameter = names(accepted_params)[-8], # Exclude distance column
-    mean = sapply(accepted_params[,-8], mean),
-    median = sapply(accepted_params[,-8], stats::median),
-    sd = sapply(accepted_params[,-8], stats::sd),
-    q025 = sapply(accepted_params[,-8], stats::quantile, 0.025),
-    q975 = sapply(accepted_params[,-8], stats::quantile, 0.975)
+    parameter = param_cols,
+    mean      = sapply(accepted_params[param_cols], mean),
+    median    = sapply(accepted_params[param_cols], stats::median),
+    sd        = sapply(accepted_params[param_cols], stats::sd),
+    q025      = sapply(accepted_params[param_cols], stats::quantile, 0.025),
+    q975      = sapply(accepted_params[param_cols], stats::quantile, 0.975),
+    row.names = NULL
   )
 
-  return(list(
-    accepted_params = accepted_params,
-    param_summary = param_summary,
-    n_simulations = n_simulations,
-    n_accepted = n_accept,
-    acceptance_rate = n_accept / length(valid_results),
+  list(
+    accepted_params    = accepted_params,
+    param_summary      = param_summary,
+    n_simulations      = n_simulations,
+    n_accepted         = n_accept,
+    acceptance_rate    = n_accept / length(valid_results),
     tolerance_threshold = max(accepted_params$distance)
-  ))
+  )
 }
 
-# Diagnostic plotting function
+
+# ── Diagnostics ───────────────────────────────────────────────────────────────
+
+#' Plot ABC posterior distributions
+#'
+#' @param abc_results Output of \code{abc_inference()}.
+#' @export
 plot_abc_results = function(abc_results) {
   params = abc_results$accepted_params
 
-  plots = list()
-
-  # Plot the three relative rates (they sum to 1)
-  relative_params = c("amp_rate", "del_rate", "bfb_prob")
-  for (i in 1:3) {
-    param_name = relative_params[i]
-
-
-    p = ggplot2::ggplot(params, ggplot2::aes_string(x = param_name)) +
-      ggplot2::geom_histogram(bins = 30, alpha = 0.7, fill = "steelblue") +
-      ggplot2::geom_vline(xintercept = stats::median(params[[param_name]]),
-                 color = "red", linetype = "dashed") +
-      ggplot2::labs(title = paste("Relative:", param_name),
-           x = "Relative frequency", y = "Count") +
-      ggplot2::xlim(0, 1) +
+  make_hist = function(df, x, fill, title) {
+    ggplot2::ggplot(df, ggplot2::aes(x = .data[[x]])) +
+      ggplot2::geom_histogram(bins = 30, alpha = 0.7, fill = fill) +
+      ggplot2::geom_vline(xintercept = stats::median(df[[x]]),
+                          color = "red", linetype = "dashed") +
+      ggplot2::labs(title = title, x = x, y = "Count") +
       ggplot2::theme_minimal()
-
-    plots[[i]] = p
   }
 
-  # Plot other parameters
-  other_params = c("death_rate", "death_fraction", "lambda")
-  for (i in 1:3) {
-    param_name = other_params[i]
+  plots = list(
+    make_hist(params, "amp_rate",       "steelblue", "Relative: amp_rate"),
+    make_hist(params, "del_rate",       "steelblue", "Relative: del_rate"),
+    make_hist(params, "bfb_prob",       "steelblue", "Relative: bfb_prob"),
+    make_hist(params, "death_fraction", "darkgreen", "Posterior: death_fraction"),
+    make_hist(params, "lambda",         "darkgreen", "Posterior: lambda"),
+    make_hist(params, "distance",       "grey40",    "Accepted distances")
+  )
 
-    p = ggplot2::ggplot(params, ggplot2::aes_string(x = param_name)) +
-      ggplot2::geom_histogram(bins = 30, alpha = 0.7, fill = "darkgreen") +
-      ggplot2::geom_vline(xintercept = stats::median(params[[param_name]]),
-                 color = "red", linetype = "dashed") +
-      ggplot2::labs(title = paste("Posterior:", param_name),
-           x = param_name, y = "Count") +
-      ggplot2::theme_minimal()
-
-    plots[[i + 3]] = p
-  }
-
-  # Ternary-like plot showing the three relative rates
-  # Since they sum to 1, we can show relationships between pairs
-  p = ggplot2::ggplot(params, ggplot2::aes(x = amp_rate, y = del_rate)) +
-    ggplot2::geom_point(alpha = 0.6, ggplot2::aes(color = bfb_prob)) +
+  # Amp vs del coloured by BFB proportion
+  plots[[7]] = ggplot2::ggplot(params, ggplot2::aes(x = .data$amp_rate,
+                                                     y = .data$del_rate,
+                                                     color = .data$bfb_prob)) +
+    ggplot2::geom_point(alpha = 0.6) +
     ggplot2::scale_color_gradient(low = "blue", high = "red", name = "BFB prob") +
-    ggplot2::labs(title = "Relative Rates (Amp vs Del, colored by BFB)",
-         x = "Amp rate", y = "Del rate") +
+    ggplot2::labs(title = "Amp vs Del (coloured by BFB)", x = "amp_rate", y = "del_rate") +
     ggplot2::theme_minimal()
-  plots[[7]] = p
-
-  # Death fraction vs relative rates
-  p = ggplot2::ggplot(params, ggplot2::aes(x = death_fraction, y = amp_rate)) +
-    ggplot2::geom_point(alpha = 0.6) +
-    ggplot2::labs(title = "Death Fraction vs Amp Rate",
-         x = "Death Fraction", y = "Amp Rate") +
-    ggplot2::theme_minimal()
-  plots[[8]] = p
-
-  # Distance vs main parameters
-  p = ggplot2::ggplot(params, ggplot2::aes(x = amp_rate, y = distance)) +
-    ggplot2::geom_point(alpha = 0.6) +
-    ggplot2::geom_smooth(method = "loess", se = FALSE, color = "red") +
-    ggplot2::labs(title = "Distance vs Amp Rate", x = "Amp Rate", y = "Distance") +
-    ggplot2::theme_minimal()
-  plots[[9]] = p
 
   gridExtra::grid.arrange(grobs = plots, ncol = 3)
 }

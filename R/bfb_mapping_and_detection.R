@@ -722,10 +722,8 @@ compute_reconstructions = function(fit, chromosomes = NULL, alleles = NULL) {
   reconstructions = list()
 
   for (chr in chromosomes) {
-    print(chr)
     reconstructions[[chr]] <- list()
     for (all in alleles) {
-      print(all)
       reconstruction = reconstruct_tree(fit = fit, chr = chr, allele = all)
       reconstructions[[chr]][[all]] <- reconstruction
       whole_history = dplyr::bind_rows(whole_history, reconstruction$history)

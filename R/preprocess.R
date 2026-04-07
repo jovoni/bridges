@@ -207,7 +207,7 @@ create_diploid_data = function(data) {
     dplyr::filter(cell_id == cid) %>%
     dplyr::mutate(
       cell_id = "diploid",
-      A = ifelse(chr %in% c("X", "Y"), 1, 1),
+      A = 1,
       B = ifelse(chr %in% c("X", "Y"), 0, 1),
       CN = A + B
     )
