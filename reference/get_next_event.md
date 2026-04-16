@@ -16,4 +16,4 @@ get_next_event(state)
 
 ## Value
 
-List with time, cell ID, and event type of next event
+List with time, cell ID, index in alive arrays, and event type

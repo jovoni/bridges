@@ -8,7 +8,7 @@ parameter.
 ## Usage
 
 ``` r
-process_birth_event(state, current_cell_id, lambda, rate)
+process_birth_event(state, current_cell_id, cell_idx, lambda, rate)
 ```
 
 ## Arguments
@@ -21,6 +21,10 @@ process_birth_event(state, current_cell_id, lambda, rate)
 - current_cell_id:
 
   ID of the cell undergoing birth/division
+
+- cell_idx:
+
+  Index of the cell in the alive arrays (from get_next_event)
 
 - lambda:
 

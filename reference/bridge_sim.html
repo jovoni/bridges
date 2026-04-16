@@ -70,6 +70,7 @@ Now supports modeling both alleles (A and B) of each chromosome.</p>
 <span>  max_time <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>  max_cells <span class="op">=</span> <span class="fl">256</span>,</span>
 <span>  first_round_of_bfb <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  return_phylo <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  breakpoint_support <span class="op">=</span> <span class="st">"uniform"</span>,</span>
 <span>  hotspot <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>chr <span class="op">=</span> <span class="st">"1:A"</span>, pos <span class="op">=</span> <span class="fl">100</span><span class="op">)</span>,</span>
 <span>  alpha <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -158,6 +159,12 @@ Length of event is sample from exponential distribution with parameter 1 / rate.
 
 <dt id="arg-first-round-of-bfb">first_round_of_bfb<a class="anchor" aria-label="anchor" href="#arg-first-round-of-bfb"></a></dt>
 <dd><p>Logical. Whether to apply BFB to initial cells. Default: TRUE</p></dd>
+
+
+<dt id="arg-return-phylo">return_phylo<a class="anchor" aria-label="anchor" href="#arg-return-phylo"></a></dt>
+<dd><p>Logical. Whether to build and return the phylogenetic tree.
+Set to FALSE when only CNA data is needed (e.g. ABC or clonal comparison
+workflows) to skip the expensive tree-building step. Default: TRUE</p></dd>
 
 
 <dt id="arg-breakpoint-support">breakpoint_support<a class="anchor" aria-label="anchor" href="#arg-breakpoint-support"></a></dt>

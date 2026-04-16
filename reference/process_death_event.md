@@ -5,7 +5,7 @@ Process a death event
 ## Usage
 
 ``` r
-process_death_event(state, current_cell_id)
+process_death_event(state, current_cell_id, cell_idx)
 ```
 
 ## Arguments
@@ -17,6 +17,10 @@ process_death_event(state, current_cell_id)
 - current_cell_id:
 
   ID of the cell undergoing death
+
+- cell_idx:
+
+  Index of the cell in the alive arrays (from get_next_event)
 
 ## Value
 

@@ -44,7 +44,7 @@ based on the specified rates and lambda parameter.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">process_birth_event</span><span class="op">(</span><span class="va">state</span>, <span class="va">current_cell_id</span>, <span class="va">lambda</span>, <span class="va">rate</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">process_birth_event</span><span class="op">(</span><span class="va">state</span>, <span class="va">current_cell_id</span>, <span class="va">cell_idx</span>, <span class="va">lambda</span>, <span class="va">rate</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -58,6 +58,10 @@ sequences, and parameters</p></dd>
 
 <dt id="arg-current-cell-id">current_cell_id<a class="anchor" aria-label="anchor" href="#arg-current-cell-id"></a></dt>
 <dd><p>ID of the cell undergoing birth/division</p></dd>
+
+
+<dt id="arg-cell-idx">cell_idx<a class="anchor" aria-label="anchor" href="#arg-cell-idx"></a></dt>
+<dd><p>Index of the cell in the alive arrays (from get_next_event)</p></dd>
 
 
 <dt id="arg-lambda">lambda<a class="anchor" aria-label="anchor" href="#arg-lambda"></a></dt>

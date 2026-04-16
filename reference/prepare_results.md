@@ -5,7 +5,7 @@ Prepare final results from simulation
 ## Usage
 
 ``` r
-prepare_results(state)
+prepare_results(state, return_phylo = TRUE)
 ```
 
 ## Arguments
@@ -13,6 +13,10 @@ prepare_results(state)
 - state:
 
   The simulation state
+
+- return_phylo:
+
+  Logical. Whether to build the phylogenetic tree. Default TRUE.
 
 ## Value
 

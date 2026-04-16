@@ -31,14 +31,14 @@ sim <- bridges::bridge_sim(
 
 head(sim$cna_data)
 #> # A tibble: 6 × 8
-#>   cell_id  chr   bin_idx     A     B    CN   start     end
-#>   <chr>    <chr>   <int> <int> <int> <int>   <dbl>   <dbl>
-#> 1 cell_101 1           1     1     1     2       1 1000000
-#> 2 cell_101 1           2     1     1     2 1000001 2000000
-#> 3 cell_101 1           3     1     1     2 2000001 3000000
-#> 4 cell_101 1           4     1     1     2 3000001 4000000
-#> 5 cell_101 1           5     1     1     2 4000001 5000000
-#> 6 cell_101 1           6     1     1     2 5000001 6000000
+#>   cell_id chr   bin_idx     A     B    CN   start     end
+#>   <chr>   <chr>   <int> <int> <int> <int>   <dbl>   <dbl>
+#> 1 cell_10 1           1     1     1     2       1 1000000
+#> 2 cell_10 1           2     1     1     2 1000001 2000000
+#> 3 cell_10 1           3     1     1     2 2000001 3000000
+#> 4 cell_10 1           4     1     1     2 3000001 4000000
+#> 5 cell_10 1           5     1     1     2 4000001 5000000
+#> 6 cell_10 1           6     1     1     2 5000001 6000000
 ```
 
 ## Step 2: Fit the Phylogeny to the CNA Data
@@ -65,7 +65,7 @@ true_tree <- sim$tree
 inferred_tree <- res$tree
 
 phangorn::RF.dist(true_tree, inferred_tree, normalize = TRUE)
-#> [1] 0.136
+#> [1] 0.152
 ```
 
 ## Step 4: Visualize CN Profiles with Trees
