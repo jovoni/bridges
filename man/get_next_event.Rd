@@ -10,7 +10,7 @@ get_next_event(state)
 \item{state}{The simulation state}
 }
 \value{
-List with time, cell ID, and event type of next event
+List with time, cell ID, index in alive arrays, and event type
 }
 \description{
 Determine the next event to occur

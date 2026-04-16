@@ -4,10 +4,12 @@
 \alias{prepare_results}
 \title{Prepare final results from simulation}
 \usage{
-prepare_results(state)
+prepare_results(state, return_phylo = TRUE)
 }
 \arguments{
 \item{state}{The simulation state}
+
+\item{return_phylo}{Logical. Whether to build the phylogenetic tree. Default TRUE.}
 }
 \value{
 A list containing simulation results

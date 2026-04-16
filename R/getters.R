@@ -1,15 +1,13 @@
 
-get_seq_length = function(sequence) {
-  if (length(sequence) == 0) return(0)
-  L = sum(sapply(sequence, function(interval) {
-    return(abs(interval$end - interval$start) + 1)
-    # if (interval$direction == 0) {
-    #   return(1)  # A constant interval contributes 1 element
-    # } else {
-    #   return(abs(interval$end - interval$start) + 1)  # Increasing or decreasing interval length
-    # }
-  }))
-  L
+get_seq_length <- function(sequence) {
+  n <- length(sequence)
+  if (n == 0L) return(0L)
+  total <- 0L
+  for (j in seq_len(n)) {
+    iv    <- sequence[[j]]
+    total <- total + abs(iv$end - iv$start) + 1L
+  }
+  total
 }
 
 

@@ -29,6 +29,9 @@
 #' @param max_time Numeric. Maximum simulation time. Default: 50
 #' @param max_cells Numeric. Maximum number of cells allowed before simulation stops. Default: 100
 #' @param first_round_of_bfb Logical. Whether to apply BFB to initial cells. Default: TRUE
+#' @param return_phylo Logical. Whether to build and return the phylogenetic tree.
+#'   Set to FALSE when only CNA data is needed (e.g. ABC or clonal comparison
+#'   workflows) to skip the expensive tree-building step. Default: TRUE
 #' @param breakpoint_support Character. Distribution used for breakpoint
 #'  selection ("uniform", "beta", etc.). Default: "uniform"
 #' @param hotspot Named list. Hotspot positions for each chromosome allele
@@ -64,6 +67,7 @@ bridge_sim <- function(
   max_time = 300,
   max_cells = 256,
   first_round_of_bfb = TRUE,
+  return_phylo = TRUE,
   breakpoint_support = "uniform",
   hotspot = list(chr = "1:A", pos = 100),
   alpha = NULL,
@@ -174,27 +178,29 @@ bridge_sim <- function(
   # Main simulation loop
   while (continue_simulation(sim_state)) {
     # Find the next cell to have an event
-    next_event_info <- get_next_event(sim_state)
-    sim_state$time <- next_event_info$time
-    current_cell_id <- next_event_info$cell_id
+    next_event_info    <- get_next_event(sim_state)
+    sim_state$time     <- next_event_info$time
+    current_cell_id    <- next_event_info$cell_id
+    current_cell_idx   <- next_event_info$cell_idx   # index in alive arrays
     current_event_type <- next_event_info$event_type
 
     if (current_event_type == "birth") {
       # Handle birth event
       sim_state <- process_birth_event(
-        state = sim_state,
+        state           = sim_state,
         current_cell_id = current_cell_id,
-        lambda = lambda,
-        rate = rate
+        cell_idx        = current_cell_idx,
+        lambda          = lambda,
+        rate            = rate
       )
     } else {
       # Handle death event
-      sim_state <- process_death_event(sim_state, current_cell_id)
+      sim_state <- process_death_event(sim_state, current_cell_id, current_cell_idx)
     }
   }
 
   # Finalize and prepare results (without subsampling)
-  sim_state <- prepare_results(sim_state)
+  sim_state <- prepare_results(sim_state, return_phylo = return_phylo)
   sim_state$cna_data <- sequences_to_cndata(
     sequences = sim_state$cells,
     chr_seq_lengths = chr_seq_lengths,

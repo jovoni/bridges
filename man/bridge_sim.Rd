@@ -25,6 +25,7 @@ bridge_sim(
   max_time = 300,
   max_cells = 256,
   first_round_of_bfb = TRUE,
+  return_phylo = TRUE,
   breakpoint_support = "uniform",
   hotspot = list(chr = "1:A", pos = 100),
   alpha = NULL,
@@ -72,6 +73,10 @@ Length of event is sample from exponential distribution with parameter 1 / rate.
 \item{max_cells}{Numeric. Maximum number of cells allowed before simulation stops. Default: 100}
 
 \item{first_round_of_bfb}{Logical. Whether to apply BFB to initial cells. Default: TRUE}
+
+\item{return_phylo}{Logical. Whether to build and return the phylogenetic tree.
+Set to FALSE when only CNA data is needed (e.g. ABC or clonal comparison
+workflows) to skip the expensive tree-building step. Default: TRUE}
 
 \item{breakpoint_support}{Character. Distribution used for breakpoint
 selection ("uniform", "beta", etc.). Default: "uniform"}

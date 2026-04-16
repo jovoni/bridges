@@ -4,12 +4,14 @@
 \alias{process_death_event}
 \title{Process a death event}
 \usage{
-process_death_event(state, current_cell_id)
+process_death_event(state, current_cell_id, cell_idx)
 }
 \arguments{
 \item{state}{The simulation state}
 
 \item{current_cell_id}{ID of the cell undergoing death}
+
+\item{cell_idx}{Index of the cell in the alive arrays (from get_next_event)}
 }
 \value{
 Updated simulation state

@@ -25,68 +25,63 @@ seq2vec <- function(seq) {
 # - end: ending value
 # - direction: 1 for increasing, -1 for decreasing, 0 for constant
 # Returns a list of intervals representing the sequence
+#
+# O(n) implementation: track only the current direction instead of a
+# growing `current_seen` set, which was O(n²) due to `%in%` + `c()`.
+# A new interval is started whenever the step changes direction or is
+# non-unit (gap), which correctly handles palindromic BFB sequences.
 vec2seq <- function(vector) {
-  if (length(vector) == 0) {
-    return(list())
-  }
+  n <- length(vector)
+  if (n == 0L) return(list())
+  if (n == 1L) return(list(list(start = vector[1L], end = vector[1L], direction = 0L)))
 
-  if (length(vector) == 1) {
-    return(list(list(start = vector[1], end = vector[1], direction = 0)))
-  }
+  intervals  <- vector("list", n)
+  k          <- 0L
+  seg_start  <- vector[1L]
+  seg_end    <- vector[1L]
+  seg_dir    <- NA_integer_
 
-  # Pre-allocate to avoid O(n²) append growth; trim at the end
-  intervals <- vector("list", length(vector))
-  n_intervals <- 0L
+  for (i in 2L:n) {
+    step <- vector[i] - vector[i - 1L]
 
-  current_start <- vector[1]
-  current_value <- vector[1]
-  current_seen <- c(vector[1])
-  current_direction <- NA
-
-  for (i in 2:length(vector)) {
-    # Check if next value is contiguous
-    contiguous <- (vector[i] == vector[i-1] + 1) || (vector[i] == vector[i-1] - 1)
-    # Check if value already seen
-    already_seen <- vector[i] %in% current_seen
-
-    if (!contiguous || already_seen) {
-      # Close current interval
-      n_intervals <- n_intervals + 1L
-      intervals[[n_intervals]] <- list(
-        start = current_start,
-        end = current_value,
-        direction = if(is.na(current_direction)) 0 else current_direction
-      )
-      # Start new interval
-      current_start <- vector[i]
-      current_value <- vector[i]
-      current_seen <- c(vector[i])
-      current_direction <- NA
-      next
-    }
-
-    # Update seen values
-    current_seen <- c(current_seen, vector[i])
-
-    # Set direction if not set
-    if (is.na(current_direction)) {
-      if (vector[i] == vector[i-1] + 1) {
-        current_direction <- 1
-      } else if (vector[i] == vector[i-1] - 1) {
-        current_direction <- -1
+    if (step == 1L || step == -1L) {
+      if (is.na(seg_dir)) {
+        # First directional step in this run: establish direction
+        seg_dir <- step
+        seg_end <- vector[i]
+      } else if (step == seg_dir) {
+        # Continuing the same monotone run
+        seg_end <- vector[i]
+      } else {
+        # Direction reversal (e.g. BFB palindrome fold-back):
+        # close the current interval, start a new one at vector[i]
+        k <- k + 1L
+        intervals[[k]] <- list(start = seg_start, end = seg_end, direction = seg_dir)
+        seg_start <- vector[i]
+        seg_end   <- vector[i]
+        seg_dir   <- NA_integer_
       }
+    } else {
+      # Non-unit step (gap): close and restart
+      k <- k + 1L
+      intervals[[k]] <- list(
+        start     = seg_start,
+        end       = seg_end,
+        direction = if (is.na(seg_dir)) 0L else seg_dir
+      )
+      seg_start <- vector[i]
+      seg_end   <- vector[i]
+      seg_dir   <- NA_integer_
     }
-
-    current_value <- vector[i]
   }
 
-  # Add the last interval
-  n_intervals <- n_intervals + 1L
-  intervals[[n_intervals]] <- list(
-    start = current_start,
-    end = current_value,
-    direction = if(is.na(current_direction)) 0 else current_direction
+  # Close final interval
+  k <- k + 1L
+  intervals[[k]] <- list(
+    start     = seg_start,
+    end       = seg_end,
+    direction = if (is.na(seg_dir)) 0L else seg_dir
   )
 
-  intervals[seq_len(n_intervals)]
+  intervals[seq_len(k)]
 }

@@ -128,6 +128,7 @@ simulate_clone = function(
     max_cells               = max_cells,
     max_time                = max_time,
     first_round_of_bfb      = params$first_round_of_bfb,
+    return_phylo            = FALSE,
     hotspot                 = list(chr = chr_allele, pos = hotspot_pos),
     breakpoint_support      = "uniform"
   )

@@ -4,13 +4,15 @@
 \alias{process_birth_event}
 \title{Process a birth event (diploid version)}
 \usage{
-process_birth_event(state, current_cell_id, lambda, rate)
+process_birth_event(state, current_cell_id, cell_idx, lambda, rate)
 }
 \arguments{
 \item{state}{The simulation state containing cell information,
 sequences, and parameters}
 
 \item{current_cell_id}{ID of the cell undergoing birth/division}
+
+\item{cell_idx}{Index of the cell in the alive arrays (from get_next_event)}
 
 \item{lambda}{Rate parameter for Poisson distribution used to sample
 the number of genomic events per daughter cell}

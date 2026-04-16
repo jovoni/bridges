@@ -6,29 +6,32 @@
 #'
 #' @return A list containing the initialized simulation state
 initialize_simulation <- function(input_parameters) {
-  # Initialize state variables
+  # Pre-allocate history arrays. Upper bound: initial cells create 2 cells each,
+  # then each birth creates 2 daughters. Total entries ≤ 2*initial + 2*max_cells births.
+  max_history <- 6L * as.integer(input_parameters$max_cells) +
+                 4L * as.integer(input_parameters$initial_cells) + 20L
+
   state <- list(
     time = 0,
-    #birth_count = 0,
-    #death_count = 0,
-    cell_ids = character(0),
-    cell_sequences = list(), # Will contain chromosome sequences for each cell
-    #cell_birth_times = numeric(0),
-    #cell_death_times = numeric(0),
-    #cell_parents = character(0),
-    #cell_bfb = logical(0),
-    #cell_replication_history = character(0),
-    #cell_hotspot_gained = logical(0),
-    #cell_hotspot_copies = numeric(0),
-    cell_is_alive = logical(0),
-    cell_next_event_times = numeric(0),
-    hotspot_status = logical(0)
-    #cell_bfb_history = list()
+    # Active arrays — contain ONLY currently alive cells (no dead cells kept).
+    # This keeps which.min and length fast throughout the simulation.
+    cell_ids               = character(0),
+    cell_sequences         = list(),
+    cell_next_event_times  = numeric(0),
+    hotspot_status         = logical(0),
+    # Pre-allocated history vectors with integer counter h_n.
+    # Avoids O(n) dplyr::bind_rows growth in the hot loop.
+    h_cell_id    = character(max_history),
+    h_parent_id  = character(max_history),
+    h_bfb_event  = logical(max_history),
+    h_wgd_event  = logical(max_history),
+    h_cn_event   = character(max_history),
+    h_chr_allele = character(max_history),
+    h_n          = 0L
   )
-  state$input_parameters = input_parameters
-  state$next_cell_id = 1
+  state$input_parameters <- input_parameters
+  state$next_cell_id <- 1L
 
-  # Create initial sequences for all chromosome alleles
   initial_sequences <- create_initial_chromosome_sequences(input_parameters)
 
   if (state$input_parameters$first_round_of_bfb) {
@@ -79,29 +82,23 @@ initialize_with_bfb <- function(state, initial_sequences) {
     )
 
     # Left child
-    left_cell = initial_sequences
-    left_cell[[bfb_allele]] = daughter_seqs$l_seq
-    left_cell_id = paste0("cell_", state$next_cell_id)
-    state$next_cell_id = state$next_cell_id + 1
+    left_cell <- initial_sequences
+    left_cell[[bfb_allele]] <- daughter_seqs$l_seq
+    left_cell_id <- paste0("cell_", state$next_cell_id)
+    state$next_cell_id <- state$next_cell_id + 1L
 
     # Right child
-    right_cell = initial_sequences
-    right_cell[[bfb_allele]] = daughter_seqs$r_seq
-    right_cell_id = paste0("cell_", state$next_cell_id)
-    state$next_cell_id = state$next_cell_id + 1
+    right_cell <- initial_sequences
+    right_cell[[bfb_allele]] <- daughter_seqs$r_seq
+    right_cell_id <- paste0("cell_", state$next_cell_id)
+    state$next_cell_id <- state$next_cell_id + 1L
 
     if (!is.null(state$input_parameters$hotspot)) {
-      hotspot = state$input_parameters$hotspot
-      left_hotspot = is_hotspot_gained(
-        left_cell[[hotspot$chr]],
-        hotspot = hotspot$pos
-      )
-      right_hotspot = is_hotspot_gained(
-        right_cell[[hotspot$chr]],
-        hotspot = hotspot$pos
-      )
+      hotspot <- state$input_parameters$hotspot
+      left_hotspot <- is_hotspot_gained(left_cell[[hotspot$chr]], hotspot = hotspot$pos)
+      right_hotspot <- is_hotspot_gained(right_cell[[hotspot$chr]], hotspot = hotspot$pos)
     } else {
-      left_hotspot = right_hotspot = FALSE
+      left_hotspot <- right_hotspot <- FALSE
     }
 
     l_birth_rate <- state$input_parameters$birth_rate *
@@ -114,35 +111,38 @@ initialize_with_bfb <- function(state, initial_sequences) {
     r_death_rate <- state$input_parameters$death_rate *
       (1 + state$input_parameters$negative_selection_rate * right_hotspot)
 
-    # Calculate combined rates
     l_combined_rate <- l_birth_rate + l_death_rate
     r_combined_rate <- r_birth_rate + r_death_rate
 
-    # Update state
-    state$cell_ids <- c(left_cell_id, right_cell_id)
-    state$cell_sequences[[left_cell_id]] <- left_cell
+    # Update active arrays (only alive cells)
+    state$cell_ids               <- c(state$cell_ids, left_cell_id, right_cell_id)
+    state$cell_sequences[[left_cell_id]]  <- left_cell
     state$cell_sequences[[right_cell_id]] <- right_cell
-    state$cell_is_alive <- c(state$cell_is_alive, TRUE, TRUE)
-    state$hotspot_status = c(state$hotspot_status, left_hotspot, right_hotspot)
-
-    # Initialize next event times with future events based on combined rates
-    state$cell_next_event_times <- c(
+    state$hotspot_status         <- c(state$hotspot_status, left_hotspot, right_hotspot)
+    state$cell_next_event_times  <- c(
       state$cell_next_event_times,
       state$time + stats::rexp(1, l_combined_rate),
       state$time + stats::rexp(1, r_combined_rate)
     )
 
-    state$history = dplyr::bind_rows(
-      state$history,
-      dplyr::tibble(
-        cell_id = state$cell_ids,
-        parent_id = "root",
-        bfb_event = TRUE,
-        cn_event = "bfb",
-        chr_allele = bfb_allele,
-        is_alive = state$cell_is_alive
-      )
-    )
+    # Append to pre-allocated history
+    i_l <- state$h_n + 1L
+    i_r <- state$h_n + 2L
+    state$h_n <- i_r
+
+    state$h_cell_id[i_l]    <- left_cell_id
+    state$h_parent_id[i_l]  <- "root"
+    state$h_bfb_event[i_l]  <- TRUE
+    state$h_wgd_event[i_l]  <- FALSE
+    state$h_cn_event[i_l]   <- "bfb"
+    state$h_chr_allele[i_l] <- bfb_allele
+
+    state$h_cell_id[i_r]    <- right_cell_id
+    state$h_parent_id[i_r]  <- "root"
+    state$h_bfb_event[i_r]  <- TRUE
+    state$h_wgd_event[i_r]  <- FALSE
+    state$h_cn_event[i_r]   <- "bfb"
+    state$h_chr_allele[i_r] <- bfb_allele
   }
   return(state)
 }
@@ -157,7 +157,7 @@ initialize_with_bfb <- function(state, initial_sequences) {
 initialize_without_bfb <- function(state, initial_sequences) {
   for (i in 1:state$input_parameters$initial_cells) {
     cell_id <- paste0("cell_", state$next_cell_id)
-    state$next_cell_id <- state$next_cell_id + 1
+    state$next_cell_id <- state$next_cell_id + 1L
 
     # Hotspot logic
     if (!is.null(state$input_parameters$hotspot)) {
@@ -176,33 +176,25 @@ initialize_without_bfb <- function(state, initial_sequences) {
     death_rate <- state$input_parameters$death_rate *
       (1 + state$input_parameters$negative_selection_rate * hotspot_gained)
 
-    # Combined rate and next event
-    combined_rate <- birth_rate + death_rate
+    combined_rate  <- birth_rate + death_rate
     next_event_time <- state$time + stats::rexp(1, combined_rate)
 
-    # Update state
-    state$cell_ids <- c(state$cell_ids, cell_id)
-    state$cell_sequences[[cell_id]] <- initial_sequences
-    state$cell_is_alive <- c(state$cell_is_alive, TRUE)
-    state$cell_next_event_times <- c(
-      state$cell_next_event_times,
-      next_event_time
-    )
-    state$hotspot_status = c(state$hotspot_status, hotspot_gained)
+    # Update active arrays
+    state$cell_ids                    <- c(state$cell_ids, cell_id)
+    state$cell_sequences[[cell_id]]   <- initial_sequences
+    state$cell_next_event_times       <- c(state$cell_next_event_times, next_event_time)
+    state$hotspot_status              <- c(state$hotspot_status, hotspot_gained)
 
-    # Update history
-    chr_allele <- NA
-    state$history <- dplyr::bind_rows(
-      state$history,
-      dplyr::tibble(
-        cell_id = cell_id,
-        parent_id = "root",
-        bfb_event = FALSE,
-        cn_event = "none",
-        chr_allele = chr_allele,
-        is_alive = TRUE
-      )
-    )
+    # Append to pre-allocated history
+    idx <- state$h_n + 1L
+    state$h_n <- idx
+
+    state$h_cell_id[idx]    <- cell_id
+    state$h_parent_id[idx]  <- "root"
+    state$h_bfb_event[idx]  <- FALSE
+    state$h_wgd_event[idx]  <- FALSE
+    state$h_cn_event[idx]   <- "none"
+    state$h_chr_allele[idx] <- NA_character_
   }
 
   return(state)
@@ -217,18 +209,16 @@ initialize_without_bfb <- function(state, initial_sequences) {
 #' @param state The simulation state containing cell information,
 #'  sequences, and parameters
 #' @param current_cell_id ID of the cell undergoing birth/division
+#' @param cell_idx Index of the cell in the alive arrays (from get_next_event)
 #' @param lambda Rate parameter for Poisson distribution used to sample
 #' the number of genomic events per daughter cell
 #' @param rate Rate parameter used in amplification/deletion simulations.
 #'  Length of event is sample from exponential distribution with parameter 1 / rate.
 #'
 #' @return Updated simulation state with new daughter cells and updated history
-process_birth_event <- function(state, current_cell_id, lambda, rate) {
-  # Find index of current cell
-  cell_idx <- which(state$cell_ids == current_cell_id)
-
+process_birth_event <- function(state, current_cell_id, cell_idx, lambda, rate) {
   # Sample number of events for each daughter cell
-  n_left <- stats::rpois(1, lambda)
+  n_left  <- stats::rpois(1, lambda)
   n_right <- stats::rpois(1, lambda)
 
   # Get parent cell information
@@ -241,8 +231,8 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
   # Track if special events have occurred and which events happened
   bfb_occurred <- FALSE
   wgd_occurred <- FALSE
-  l_events <- character(0)
-  r_events <- character(0)
+  l_events      <- character(0)
+  r_events      <- character(0)
   l_chr_alleles <- character(0)
   r_chr_alleles <- character(0)
 
@@ -301,9 +291,8 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
   # Check if WGD should occur first (randomly and if available)
   wgd_will_occur <- FALSE
   if (state$input_parameters$wgd_available > 0) {
-    # Random chance for WGD to occur (you can adjust this probability)
-    wgd_probability <- state$input_parameters$wgd_probability  # 1% chance per division
-    wgd_will_occur <- stats::runif(1) < wgd_probability
+    wgd_probability <- state$input_parameters$wgd_probability
+    wgd_will_occur  <- stats::runif(1) < wgd_probability
   }
 
   # Check if we need to do special events first (BFB or WGD)
@@ -348,8 +337,8 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
       r_sequences[[bfb_result$chr_allele]] <- bfb_result$r_seq
 
       # Record BFB event for both cells
-      l_events <- c(l_events, "bfb")
-      r_events <- c(r_events, "bfb")
+      l_events      <- c(l_events, "bfb")
+      r_events      <- c(r_events, "bfb")
       l_chr_alleles <- c(l_chr_alleles, bfb_result$chr_allele)
       r_chr_alleles <- c(r_chr_alleles, bfb_result$chr_allele)
 
@@ -366,8 +355,8 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
       r_sequences <- wgd_result$sequences
 
       # Record WGD event for both cells
-      l_events <- c(l_events, "wgd")
-      r_events <- c(r_events, "wgd")
+      l_events      <- c(l_events, "wgd")
+      r_events      <- c(r_events, "wgd")
       l_chr_alleles <- c(l_chr_alleles, wgd_result$chr_allele)
       r_chr_alleles <- c(r_chr_alleles, wgd_result$chr_allele)
 
@@ -386,20 +375,20 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
       total_remaining <- length(remaining_events)
 
       # Adjust n_left and n_right to account for special event
-      n_left <- max(0, n_left - 1)
+      n_left  <- max(0, n_left  - 1)
       n_right <- max(0, n_right - 1)
 
       # Redistribute remaining events
       if (total_remaining > 0 && (n_left + n_right) > 0) {
         # Randomly assign remaining events to left and right
-        left_additional <- min(n_left, total_remaining)
+        left_additional  <- min(n_left,  total_remaining)
         right_additional <- min(n_right, total_remaining - left_additional)
 
         if (left_additional > 0) {
-          left_events_idx <- sample(total_remaining, left_additional)
+          left_events_idx        <- sample(total_remaining, left_additional)
           left_additional_events <- remaining_events[left_events_idx]
-          remaining_events <- remaining_events[-left_events_idx]
-          total_remaining <- total_remaining - left_additional
+          remaining_events       <- remaining_events[-left_events_idx]
+          total_remaining        <- total_remaining - left_additional
         } else {
           left_additional_events <- character(0)
         }
@@ -414,32 +403,32 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
 
         # Apply additional events to left cell
         for (event in left_additional_events) {
-          result <- apply_single_event(l_sequences, event)
+          result      <- apply_single_event(l_sequences, event)
           l_sequences <- result$sequences
-          l_events <- c(l_events, event)
+          l_events      <- c(l_events, event)
           l_chr_alleles <- c(l_chr_alleles, result$chr_allele)
         }
 
         # Apply additional events to right cell
         for (event in right_additional_events) {
-          result <- apply_single_event(r_sequences, event)
+          result      <- apply_single_event(r_sequences, event)
           r_sequences <- result$sequences
-          r_events <- c(r_events, event)
+          r_events      <- c(r_events, event)
           r_chr_alleles <- c(r_chr_alleles, result$chr_allele)
         }
       }
     } else {
       # No special events - distribute events normally
-      left_events_count <- min(n_left, total_events)
+      left_events_count  <- min(n_left,  total_events)
       right_events_count <- min(n_right, total_events - left_events_count)
 
       # Apply events to left cell
       if (left_events_count > 0) {
         left_event_names <- all_event_names[1:left_events_count]
         for (event in left_event_names) {
-          result <- apply_single_event(l_sequences, event)
+          result      <- apply_single_event(l_sequences, event)
           l_sequences <- result$sequences
-          l_events <- c(l_events, event)
+          l_events      <- c(l_events, event)
           l_chr_alleles <- c(l_chr_alleles, result$chr_allele)
         }
       }
@@ -450,9 +439,9 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
           (left_events_count + 1):(left_events_count + right_events_count)
         ]
         for (event in right_event_names) {
-          result <- apply_single_event(r_sequences, event)
+          result      <- apply_single_event(r_sequences, event)
           r_sequences <- result$sequences
-          r_events <- c(r_events, event)
+          r_events      <- c(r_events, event)
           r_chr_alleles <- c(r_chr_alleles, result$chr_allele)
         }
       }
@@ -467,8 +456,8 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
     r_sequences <- wgd_result$sequences
 
     # Record WGD event for both cells
-    l_events <- c(l_events, "wgd")
-    r_events <- c(r_events, "wgd")
+    l_events      <- c(l_events, "wgd")
+    r_events      <- c(r_events, "wgd")
     l_chr_alleles <- c(l_chr_alleles, wgd_result$chr_allele)
     r_chr_alleles <- c(r_chr_alleles, wgd_result$chr_allele)
 
@@ -478,28 +467,16 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
 
   # Create new cell IDs
   l_cell_id <- paste0("cell_", state$next_cell_id)
-  state$next_cell_id <- state$next_cell_id + 1
+  state$next_cell_id <- state$next_cell_id + 1L
   r_cell_id <- paste0("cell_", state$next_cell_id)
-  state$next_cell_id <- state$next_cell_id + 1
-
-  # Mark parent cell as dead
-  state$cell_is_alive[cell_idx] <- FALSE
+  state$next_cell_id <- state$next_cell_id + 1L
 
   # Hotspot status for daughters
-  hotspot <- state$input_parameters$hotspot
+  hotspot   <- state$input_parameters$hotspot
   l_hotspot <- if (!is.null(hotspot))
-    is_hotspot_gained(l_sequences[[hotspot$chr]], hotspot = hotspot$pos) else
-      FALSE
+    is_hotspot_gained(l_sequences[[hotspot$chr]], hotspot = hotspot$pos) else FALSE
   r_hotspot <- if (!is.null(hotspot))
-    is_hotspot_gained(r_sequences[[hotspot$chr]], hotspot = hotspot$pos) else
-      FALSE
-
-  # Store new cell data
-  state$cell_ids <- c(state$cell_ids, l_cell_id, r_cell_id)
-  state$cell_sequences[[l_cell_id]] <- l_sequences
-  state$cell_sequences[[r_cell_id]] <- r_sequences
-  state$cell_is_alive <- c(state$cell_is_alive, TRUE, TRUE)
-  state$hotspot_status <- c(state$hotspot_status, l_hotspot, r_hotspot)
+    is_hotspot_gained(r_sequences[[hotspot$chr]], hotspot = hotspot$pos) else FALSE
 
   # Selection-adjusted rates
   l_birth_rate <- state$input_parameters$birth_rate *
@@ -512,62 +489,50 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
   r_death_rate <- state$input_parameters$death_rate *
     (1 + state$input_parameters$negative_selection_rate * r_hotspot)
 
-  # Schedule next events
+  # ---- Update active arrays (only alive cells) ----
+  # Remove parent by swap-with-last then shrink — avoids shifting the entire vector.
+  n_alive <- length(state$cell_ids)
+  if (cell_idx < n_alive) {
+    state$cell_ids[cell_idx]              <- state$cell_ids[n_alive]
+    state$cell_next_event_times[cell_idx] <- state$cell_next_event_times[n_alive]
+    state$hotspot_status[cell_idx]        <- state$hotspot_status[n_alive]
+  }
+  state$cell_ids              <- state$cell_ids[-n_alive]
+  state$cell_next_event_times <- state$cell_next_event_times[-n_alive]
+  state$hotspot_status        <- state$hotspot_status[-n_alive]
+
+  # Free parent sequence memory
+  state$cell_sequences[[current_cell_id]] <- NULL
+
+  # Add daughters
+  state$cell_ids              <- c(state$cell_ids, l_cell_id, r_cell_id)
   state$cell_next_event_times <- c(
     state$cell_next_event_times,
     state$time + stats::rexp(1, l_birth_rate + l_death_rate),
     state$time + stats::rexp(1, r_birth_rate + r_death_rate)
   )
+  state$hotspot_status           <- c(state$hotspot_status, l_hotspot, r_hotspot)
+  state$cell_sequences[[l_cell_id]] <- l_sequences
+  state$cell_sequences[[r_cell_id]] <- r_sequences
 
-  # Update history - mark parent as dead
-  state$history <- state$history %>%
-    dplyr::mutate(
-      is_alive = ifelse(.data$cell_id == current_cell_id, F, .data$is_alive)
-    )
+  # ---- Append to pre-allocated history (O(1), no bind_rows) ----
+  i_l <- state$h_n + 1L
+  i_r <- state$h_n + 2L
+  state$h_n <- i_r
 
-  # Add left daughter cell to history
-  state$history <- dplyr::bind_rows(
-    state$history,
-    dplyr::tibble(
-      cell_id = l_cell_id,
-      parent_id = current_cell_id,
-      bfb_event = bfb_occurred,
-      wgd_event = wgd_occurred,  # Add WGD tracking
-      cn_event = ifelse(
-        length(l_events) == 0,
-        "none",
-        paste(l_events, collapse = ",")
-      ),
-      chr_allele = ifelse(
-        length(l_chr_alleles) == 0,
-        NA,
-        paste(l_chr_alleles, collapse = ",")
-      ),
-      is_alive = TRUE
-    )
-  )
+  state$h_cell_id[i_l]    <- l_cell_id
+  state$h_parent_id[i_l]  <- current_cell_id
+  state$h_bfb_event[i_l]  <- bfb_occurred
+  state$h_wgd_event[i_l]  <- wgd_occurred
+  state$h_cn_event[i_l]   <- if (length(l_events) == 0) "none" else paste(l_events, collapse = ",")
+  state$h_chr_allele[i_l] <- if (length(l_chr_alleles) == 0) NA_character_ else paste(l_chr_alleles, collapse = ",")
 
-  # Add right daughter cell to history
-  state$history <- dplyr::bind_rows(
-    state$history,
-    dplyr::tibble(
-      cell_id = r_cell_id,
-      parent_id = current_cell_id,
-      bfb_event = bfb_occurred,
-      wgd_event = wgd_occurred,  # Add WGD tracking
-      cn_event = ifelse(
-        length(r_events) == 0,
-        "none",
-        paste(r_events, collapse = ",")
-      ),
-      chr_allele = ifelse(
-        length(r_chr_alleles) == 0,
-        NA,
-        paste(r_chr_alleles, collapse = ",")
-      ),
-      is_alive = TRUE
-    )
-  )
+  state$h_cell_id[i_r]    <- r_cell_id
+  state$h_parent_id[i_r]  <- current_cell_id
+  state$h_bfb_event[i_r]  <- bfb_occurred
+  state$h_wgd_event[i_r]  <- wgd_occurred
+  state$h_cn_event[i_r]   <- if (length(r_events) == 0) "none" else paste(r_events, collapse = ",")
+  state$h_chr_allele[i_r] <- if (length(r_chr_alleles) == 0) NA_character_ else paste(r_chr_alleles, collapse = ",")
 
   state
 }
@@ -575,36 +540,57 @@ process_birth_event <- function(state, current_cell_id, lambda, rate) {
 #' Prepare final results from simulation
 #'
 #' @param state The simulation state
+#' @param return_phylo Logical. Whether to build the phylogenetic tree. Default TRUE.
 #'
 #' @return A list containing simulation results
-prepare_results <- function(state) {
-  # Get only alive cells for final_cells output (no subsampling)
-  alive_indices <- which(state$cell_is_alive)
+prepare_results <- function(state, return_phylo = TRUE) {
+  # Alive cells = whatever remains in the active arrays at simulation end
+  alive_cell_ids <- state$cell_ids
 
-  final_cells <- lapply(state$cell_ids[alive_indices], function(id) {
-    state$cell_sequences[[id]]
-  })
-  names(final_cells) <- state$cell_ids[alive_indices]
-
-  # Extract history table
-  cell_history <- state$history
+  # Build history from pre-allocated vectors (trim to used length)
+  n <- state$h_n
+  if (n > 0L) {
+    cell_history <- dplyr::tibble(
+      cell_id    = state$h_cell_id[1:n],
+      parent_id  = state$h_parent_id[1:n],
+      bfb_event  = state$h_bfb_event[1:n],
+      wgd_event  = state$h_wgd_event[1:n],
+      cn_event   = state$h_cn_event[1:n],
+      chr_allele = state$h_chr_allele[1:n],
+      # is_alive computed in O(n) once at the end — no per-step mutate needed
+      is_alive   = state$h_cell_id[1:n] %in% alive_cell_ids
+    )
+  } else {
+    cell_history <- dplyr::tibble(
+      cell_id    = character(0),
+      parent_id  = character(0),
+      bfb_event  = logical(0),
+      wgd_event  = logical(0),
+      cn_event   = character(0),
+      chr_allele = character(0),
+      is_alive   = logical(0)
+    )
+  }
 
   # Add root node
   root_row <- tibble::tibble(
-    cell_id = "root",
-    parent_id = NA,
-    bfb_event = FALSE,
-    cn_event = "none",
-    chr_allele = NA,
-    is_alive = FALSE
+    cell_id    = "root",
+    parent_id  = NA_character_,
+    bfb_event  = FALSE,
+    wgd_event  = FALSE,
+    cn_event   = "none",
+    chr_allele = NA_character_,
+    is_alive   = FALSE
   )
   cell_history <- dplyr::bind_rows(root_row, cell_history)
 
-  # Return results
+  # Final cells: only alive sequences (already cleaned during simulation)
+  final_cells <- state$cell_sequences[alive_cell_ids]
+
   result <- list(
-    cells = final_cells,
-    cell_history = cell_history,
-    tree = build_phylo_from_lineage(cell_history),
+    cells            = final_cells,
+    cell_history     = cell_history,
+    tree             = if (return_phylo) build_phylo_from_lineage(cell_history) else NULL,
     input_parameters = state$input_parameters
   )
 
@@ -615,18 +601,28 @@ prepare_results <- function(state) {
 #'
 #' @param state The simulation state
 #' @param current_cell_id ID of the cell undergoing death
+#' @param cell_idx Index of the cell in the alive arrays (from get_next_event)
 #'
 #' @return Updated simulation state
-process_death_event <- function(state, current_cell_id) {
-  # Find index of current cell
-  cell_idx <- which(state$cell_ids == current_cell_id)
+process_death_event <- function(state, current_cell_id, cell_idx) {
+  # Remove dead cell from active arrays by swap-with-last then shrink.
+  # This avoids shifting the entire vector and keeps arrays compact.
+  n_alive <- length(state$cell_ids)
+  if (cell_idx < n_alive) {
+    state$cell_ids[cell_idx]              <- state$cell_ids[n_alive]
+    state$cell_next_event_times[cell_idx] <- state$cell_next_event_times[n_alive]
+    state$hotspot_status[cell_idx]        <- state$hotspot_status[n_alive]
+  }
+  state$cell_ids              <- state$cell_ids[-n_alive]
+  state$cell_next_event_times <- state$cell_next_event_times[-n_alive]
+  state$hotspot_status        <- state$hotspot_status[-n_alive]
 
-  # Mark the cell as dead
-  state$cell_is_alive[cell_idx] <- FALSE
+  # Free sequence memory
+  state$cell_sequences[[current_cell_id]] <- NULL
 
-  # Mark cell as dead in history (preserves lineage information)
-  state$history <- state$history %>%
-    dplyr::mutate(is_alive = ifelse(.data$cell_id == current_cell_id, FALSE, .data$is_alive))
+  # No history entry needed for explicit deaths:
+  # is_alive is computed at the end as cell_id %in% alive_cell_ids.
+  # Cells removed here will simply not appear in alive_cell_ids.
 
   state
 }
@@ -638,34 +634,27 @@ process_death_event <- function(state, current_cell_id) {
 #'
 #' @return Logical indicating whether simulation should continue
 continue_simulation <- function(state) {
-  alive_count <- sum(state$cell_is_alive)
-  c1 <- state$time < state$input_parameters$max_time
-  c2 <- alive_count > 0
-  c3 <- alive_count < state$input_parameters$max_cells
-  c1 && c2 && c3
+  # Active arrays contain only alive cells, so length() is O(1).
+  alive_count <- length(state$cell_ids)
+  state$time < state$input_parameters$max_time &&
+    alive_count > 0 &&
+    alive_count < state$input_parameters$max_cells
 }
 
 #' Determine the next event to occur
 #'
 #' @param state The simulation state
 #'
-#' @return List with time, cell ID, and event type of next event
+#' @return List with time, cell ID, index in alive arrays, and event type
 get_next_event <- function(state) {
-  # Find the next cell to have an event
-  alive_indices <- which(state$cell_is_alive)
+  # All entries in cell_ids are alive — no alive filtering needed.
+  n_alive <- length(state$cell_ids)
+  if (n_alive == 0L) return(NULL)
 
-  # If no more events possible, return NULL
-  if (length(alive_indices) == 0) {
-    return(NULL)
-  }
-
-  # Determine next event cell and time
-  next_event_times <- state$cell_next_event_times[alive_indices]
-  min_event_idx <- which.min(next_event_times)
-  next_event_idx <- alive_indices[min_event_idx]
-  next_event_time <- next_event_times[min_event_idx]
-  current_cell_id <- state$cell_ids[next_event_idx]
-  hotspot_status = state$hotspot_status[next_event_idx]
+  # which.min over the compact alive vector only
+  min_idx        <- which.min(state$cell_next_event_times)
+  current_cell_id <- state$cell_ids[min_idx]
+  hotspot_status  <- state$hotspot_status[min_idx]
 
   # Calculate modified birth and death rates for this specific cell
   cell_birth_rate <- state$input_parameters$birth_rate *
@@ -673,15 +662,14 @@ get_next_event <- function(state) {
   cell_death_rate <- state$input_parameters$death_rate *
     (1 + state$input_parameters$negative_selection_rate * hotspot_status)
 
-  # Determine event type (birth or death) based on relative rates
   event_probability <- cell_birth_rate / (cell_birth_rate + cell_death_rate)
   event_type <- if (stats::runif(1) < event_probability) "birth" else "death"
 
   list(
-    time = next_event_time,
-    cell_id = current_cell_id,
-    event_type = event_type,
-    cell_idx = next_event_idx
+    time      = state$cell_next_event_times[min_idx],
+    cell_id   = current_cell_id,
+    cell_idx  = min_idx,   # index in alive arrays — passed to event handlers
+    event_type = event_type
   )
 }
 
@@ -726,83 +714,80 @@ get_next_event <- function(state) {
 
 
 sim_amp_del <- function(sequence, operation = "dup", rate = 1e7) {
-  # Get sequence properties
-  L <- get_seq_length(sequence)
-  # Ensure there's a sequence to modify
-  if (L == 0) {
-    return(sequence)
+  # Work directly on the interval representation — avoids the expensive
+  # seq2vec (expand) + find_consecutive_subvectors + vec2seq (recompress) cycle.
+  # Each stored interval is already a consecutive monotone run, which is
+  # exactly the kind of sub-sequence the original code searched for.
+
+  n_iv <- length(sequence)
+  if (n_iv == 0L) return(sequence)
+
+  # Compute interval lengths in O(n_intervals)
+  iv_lengths <- integer(n_iv)
+  for (j in seq_len(n_iv)) {
+    iv <- sequence[[j]]
+    iv_lengths[j] <- abs(iv$end - iv$start) + 1L
   }
-  vec <- seq2vec(sequence)
+  total_len <- sum(iv_lengths)
+  if (total_len == 0L) return(sequence)
 
-  find_consecutive_subvectors <- function(vec) {
-    diffs <- diff(vec)
-    runs <- rle(abs(diffs) == 1)
-    lengths <- runs$lengths
-    values <- runs$values
-    start_indices <- cumsum(c(1, lengths[-length(lengths)]))
-    good_starts <- start_indices[values]
-    good_lengths <- lengths[values] + 1 # +1 because diff loses one element
-    # Build a list of consecutive subvectors
-    subvecs <- lapply(seq_along(good_starts), function(i) {
-      idx_start <- good_starts[i]
-      idx_end <- idx_start + good_lengths[i] - 1
-      vec[idx_start:idx_end]
-    })
-    return(list(subvecs = subvecs, good_starts = good_starts))
-  }
+  # Only operate on directional intervals (length >= 2); fall back to all
+  # intervals (including single-element ones) if none qualify.
+  eligible <- which(iv_lengths >= 2L)
+  if (length(eligible) == 0L) eligible <- seq_len(n_iv)
 
-  subvectors <- find_consecutive_subvectors(vec)
-  subvecs <- subvectors$subvecs
-  good_starts <- subvectors$good_starts
+  # Sample one interval uniformly (mirrors the original's uniform-over-runs)
+  idx    <- eligible[sample.int(length(eligible), 1L)]
+  iv     <- sequence[[idx]]
+  iv_len <- iv_lengths[idx]
 
-  if (length(subvecs) == 0) {
-    subvecs = lapply(vec, function(x) {
-      x
-    })
-    good_starts = 1:length(vec)
-    #stop("No consecutive subsequence found!")
-  }
+  # Sample event length
+  event_length  <- max(1L, round(stats::rexp(1, rate = 1 / rate)))
+  actual_length <- min(event_length, iv_len)
 
-  idx <- sample(seq_along(subvecs), 1)
-  subvec <- subvecs[[idx]]
-  start <- good_starts[idx]
+  # Sample starting offset within the chosen interval
+  max_offset <- iv_len - actual_length
+  offset     <- if (max_offset <= 0L) 0L else sample.int(max_offset + 1L, 1L) - 1L
 
-  # Sample event length from exponential distribution
-  event_length <- max(1, round(stats::rexp(1, rate = 1 / rate)))
-
-  # Sample a section inside the selected subvector with the sampled length
-  if (length(subvec) == 1) {
-    event_lims <- c(1, 1)
+  # Derive the sub-segment and the before/after fragments of the interval
+  dir <- iv$direction
+  if (dir == 1L) {
+    seg_s    <- iv$start + offset
+    seg_e    <- seg_s + actual_length - 1L
+    before_iv <- if (offset > 0L)
+      list(start = iv$start, end = seg_s - 1L, direction = 1L) else NULL
+    after_iv  <- if (seg_e < iv$end)
+      list(start = seg_e + 1L, end = iv$end,   direction = 1L) else NULL
+  } else if (dir == -1L) {
+    seg_s    <- iv$start - offset
+    seg_e    <- seg_s - actual_length + 1L
+    before_iv <- if (offset > 0L)
+      list(start = iv$start, end = seg_s + 1L, direction = -1L) else NULL
+    after_iv  <- if (seg_e > iv$end)
+      list(start = seg_e - 1L, end = iv$end,   direction = -1L) else NULL
   } else {
-    # Ensure event_length doesn't exceed subvector length
-    actual_length <- min(event_length, length(subvec))
-
-    # Sample starting position such that we can fit the desired length
-    max_start <- length(subvec) - actual_length + 1
-    if (max_start <= 1) {
-      start_pos <- 1
-    } else {
-      start_pos <- sample(1:max_start, 1)
-    }
-
-    event_lims <- c(start_pos, start_pos + actual_length - 1)
+    # direction == 0: single-element interval
+    seg_s <- iv$start; seg_e <- iv$start
+    before_iv <- NULL;  after_iv  <- NULL
   }
+  seg <- list(start = seg_s, end = seg_e, direction = dir)
 
-  s <- subvec[event_lims[1]:event_lims[2]]
-  absolute_start <- start + event_lims[1] - 1
-  absolute_end <- start + event_lims[2] - 1
+  # Prefix and suffix of the interval list surrounding the chosen interval
+  head_ivs <- if (idx > 1L)    sequence[seq_len(idx - 1L)]      else list()
+  tail_ivs <- if (idx < n_iv)  sequence[(idx + 1L):n_iv]        else list()
 
-  # Safe slicing
-  before <- if (absolute_start > 1) vec[1:(absolute_start - 1)] else integer(0)
-  after <- if (absolute_end < length(vec))
-    vec[(absolute_end + 1):length(vec)] else integer(0)
-
-  # Apply operation
   if (operation == "dup") {
-    new_vec <- c(before, s, s, after)
+    mid <- c(
+      if (!is.null(before_iv)) list(before_iv),
+      list(seg, seg),
+      if (!is.null(after_iv)) list(after_iv)
+    )
   } else if (operation == "del") {
-    new_vec <- c(before, after)
-    if (length(new_vec) == 0) {
+    mid <- c(
+      if (!is.null(before_iv)) list(before_iv),
+      if (!is.null(after_iv)) list(after_iv)
+    )
+    if (length(head_ivs) == 0L && length(mid) == 0L && length(tail_ivs) == 0L) {
       message("skipping deletion because of length zero")
       return(sequence)
     }
@@ -810,7 +795,7 @@ sim_amp_del <- function(sequence, operation = "dup", rate = 1e7) {
     stop("operation not recognized!")
   }
 
-  return(vec2seq(new_vec))
+  c(head_ivs, mid, tail_ivs)
 }
 
 sim_wgd = function(sequence) {
@@ -838,10 +823,23 @@ sim_bfb_left_and_right_sequences <- function(
     beta = NULL,
     custom_breakpoints = NULL
 ) {
-  # Calculate the total number of elements in the sequence, similar to the vectorized version
-  L = get_seq_length(sequence)
-  vec = seq2vec(sequence)
-  bps = vec[diff(vec) == 0]
+  # Calculate the total number of elements in the sequence
+  L <- get_seq_length(sequence)
+
+  # Find "fusion values": bin values that appear at the junction between two
+  # consecutive intervals (i.e. interval[k]$end == interval[k+1]$start).
+  # These correspond to existing BFB fold-back points (where diff(vec)==0 in
+  # the expanded representation).  Computing directly from the interval list
+  # is O(n_intervals) and avoids the expensive seq2vec expansion.
+  n_iv <- length(sequence)
+  bps  <- integer(0L)
+  if (n_iv >= 2L) {
+    for (k in seq_len(n_iv - 1L)) {
+      if (sequence[[k]]$end == sequence[[k + 1L]]$start) {
+        bps <- c(bps, sequence[[k]]$end)
+      }
+    }
+  }
 
   # Select random breakpoint based on specified distribution
   # Ensure that bp_idx is different from L to obtain a proper bfb cycle
@@ -1000,24 +998,24 @@ cut_sequence <- function(sequence, cut_index) {
   return(list(left_seq = left_seq, right_seq = right_seq))
 }
 
-is_hotspot_gained = function(cell, hotspot) {
-  hc = get_hotspot_copies(cell, hotspot)
+is_hotspot_gained <- function(cell, hotspot) {
+  hc <- get_hotspot_copies(cell, hotspot)
   if (is.nan(hc)) return(NA)
   hc > 1
 }
 
 
-get_hotspot_copies = function(cell, hotspot) {
+# Count how many intervals in `cell` contain `hotspot` (a bin index).
+# O(n_intervals) — avoids the seq2vec + table expansion used previously.
+get_hotspot_copies <- function(cell, hotspot) {
   if (is.null(hotspot)) return(NaN)
-
-  table_vec = table(seq2vec(cell))
-  hotspot = c(hotspot)
-  flag = names(table_vec) %in% hotspot
-  if (any(flag)) {
-    table_vec[names(table_vec) %in% hotspot] %>% mean()
-  } else {
-    0
+  count <- 0L
+  for (iv in cell) {
+    lo <- if (iv$start <= iv$end) iv$start else iv$end
+    hi <- if (iv$start <= iv$end) iv$end   else iv$start
+    if (hotspot >= lo && hotspot <= hi) count <- count + 1L
   }
+  count
 }
 
 # cell_history_to_newick <- function(cell_history) {
@@ -1438,11 +1436,15 @@ subsample_sim <- function(sim_result, f_subsample = 1) {
   subsampled_cell_history <- sim_result$cell_history %>%
     dplyr::filter(!.data$cell_id %in% alive_cells_not_sampled)
 
-  # Rebuild tree from filtered history, then prune to exactly the sampled alive
-  # cells. Dead cells with no children remain in cell_history (is_alive = FALSE)
-  # and would otherwise appear as spurious tips not present in cna_data.
-  subsampled_tree = build_phylo_from_lineage(subsampled_cell_history)
-  subsampled_tree = ape::keep.tip(subsampled_tree, sampled_cell_ids)
+  # Rebuild tree from filtered history only when the original had one.
+  # When return_phylo = FALSE was passed to bridge_sim, sim_result$tree is NULL
+  # and we skip this expensive step entirely.
+  if (!is.null(sim_result$tree)) {
+    subsampled_tree <- build_phylo_from_lineage(subsampled_cell_history)
+    subsampled_tree <- ape::keep.tip(subsampled_tree, sampled_cell_ids)
+  } else {
+    subsampled_tree <- NULL
+  }
 
   # Create new CNA data for subsampled cells
   chr_seq_lengths <- sim_result$input_parameters$chr_seq_lengths
