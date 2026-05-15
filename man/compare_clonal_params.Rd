@@ -52,7 +52,7 @@ colour by condition in downstream plots.
 }
 \examples{
 \dontrun{
-results = compare_clonal_params(
+results <- compare_clonal_params(
   param_list = list(
     neutral    = clonal_params(positive_selection_rate = 0),
     selection  = clonal_params(positive_selection_rate = 2),
@@ -62,8 +62,8 @@ results = compare_clonal_params(
   chromosome   = "7",
   allele       = "A",
   hotspot_pos  = 60,
-  N_replicates = 100,
-  max_time     = 20,
+  N_replicates = 20,
+  max_cells    = 200,
   sample_cells = 50
 )
 plot_clonal_comparison(results)

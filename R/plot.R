@@ -346,6 +346,24 @@ create_tree_annotation <- function(tree_ggplot, tree_width, n_cells) {
 #' When reconstruction data is provided, the tree branches are colored according
 #' to the specified parameters.
 #'
+#' @examples
+#' \dontrun{
+#' sim <- bridge_sim(chromosomes = "8", bfb_allele = "8:A",
+#'                   max_cells = 128, lambda = 2)
+#'
+#' # Basic heatmap with true tree
+#' plot_heatmap(sim$cna_data, tree = sim$tree,
+#'              to_plot = c("CN", "A", "B"), ladderize = TRUE)
+#'
+#' # Inferred tree with branch coloring from BFB reconstructions
+#' res <- fit(data = sim$cna_data, alleles = c("A", "B"))
+#' plot_heatmap(sim$cna_data, tree = res$tree,
+#'              to_plot       = c("A", "B"),
+#'              reconstruction         = res$reconstructions,
+#'              chr_for_coloring       = "8",
+#'              allele_for_coloring    = "A")
+#' }
+#'
 #' @export
 plot_heatmap <- function(data,
                          tree = NULL,
@@ -381,10 +399,15 @@ plot_heatmap <- function(data,
   if (!is.null(tree)) {
     # Check if we should use colored tree or regular tree
     if (!is.null(reconstruction)) {
+      # Extract the per-chr/allele reconstruction before passing to coloring function
+      recon_for_coloring <- if (!is.null(chr_for_coloring) && !is.null(allele_for_coloring))
+        reconstruction[[chr_for_coloring]][[allele_for_coloring]]
+      else
+        reconstruction
       # Use colored tree based on reconstruction
       tree_processed <- process_tree_with_coloring(
         tree = tree,
-        reconstruction = reconstruction,
+        reconstruction = recon_for_coloring,
         branch_length = branch_length,
         ladderize = ladderize,
         reorder_tree = reorder_tree,
@@ -501,10 +524,29 @@ process_tree_with_coloring <- function(tree,
     tree <- optimize_tree_ordering(tree, distance_matrix)
   }
 
-  # Get reconstruction results
-  if (is.list(reconstruction) && "deltas" %in% names(reconstruction)) {
-    recon_result <- reconstruction
+  # Resolve reconstruction: accept either a pre-extracted chr/allele result (has
+  # $deltas directly) or a nested [[chr]][[allele]] list — walk in until we find
+  # a level with $deltas.
+  recon_result <- reconstruction
+  if (is.list(recon_result) && !("deltas" %in% names(recon_result))) {
+    # One level deep: [[chr]][[allele]]
+    for (chr_val in names(recon_result)) {
+      inner <- recon_result[[chr_val]]
+      if (is.list(inner) && "deltas" %in% names(inner)) {
+        recon_result <- inner; break
+      }
+      for (allele_val in names(inner)) {
+        candidate <- inner[[allele_val]]
+        if (is.list(candidate) && "deltas" %in% names(candidate)) {
+          recon_result <- candidate; break
+        }
+      }
+      if ("deltas" %in% names(recon_result)) break
+    }
   }
+  if (!("deltas" %in% names(recon_result)))
+    stop("reconstruction must be a per-chr/allele list with a $deltas field; ",
+         "pass res$reconstructions[[chr]][[allele]] or supply chr_for_coloring/allele_for_coloring.")
 
   # Create node-level dataframe
   internal_nodes <- as.integer(names(recon_result$deltas))

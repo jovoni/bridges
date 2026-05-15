@@ -1,8 +1,8 @@
 ---
-title: "Using bridges"
+title: "Getting Started with bridges"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Using bridges}
+  %\VignetteIndexEntry{Getting Started with bridges}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -10,109 +10,173 @@ vignette: >
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>",
+  comment  = "#>",
   fig.align = "center",
-  fig.width = 12,
+  fig.width  = 12,
   fig.height = 8,
-  out.width = "100%",
-  dpi = 300,
-  warning = FALSE,
-  message = FALSE
+  out.width  = "100%",
+  dpi        = 150,
+  warning    = FALSE,
+  message    = FALSE
 )
 ```
 
-This tutorial demonstrates how to simulate copy number evolution with BFB (Breakage-Fusion-Bridge) events, infer phylogenies from allele-specific CNAs, and visualize the output using the `bridges` R package.
+## Overview
 
-## Load Required Libraries
+`bridges` is an R package for inferring phylogenetic trees from single-cell copy number alteration (CNA) data, with explicit support for Breakage-Fusion-Bridge (BFB) mutational processes common in cancer.
 
-```{r libraries}
+**BFB in brief.** BFB cycles begin when a chromosome loses its telomere protection.  During replication the two sister chromatids fuse at their broken ends, forming a dicentric chromosome that is pulled to both poles during mitosis, causing a new break.  Repeated cycles amplify the genomic region near the original break, producing a characteristic "fold-back" copy number signature at one allele.
+
+`bridges` provides:
+
+- A **Gillespie simulator** (`bridge_sim`) for generating synthetic CNA data with configurable BFB, amplification, deletion, and whole-genome duplication events.
+- An **inference pipeline** (`fit`) that computes allele-specific distance matrices and builds a neighbor-joining phylogenetic tree, penalizing BFB-like non-contiguous CN changes.
+- **Downstream tools** for BFB detection (`detect_bfb`), visualization (`plot_heatmap`, `plot_bfb_signature`, `plot_chr_all_heatmap`), and ABC parameter inference (`abc_inference`).
+
+---
+
+## Input data format
+
+All main functions expect a data frame with one row per cell-chromosome-bin combination:
+
+| Column    | Type      | Description                              |
+|-----------|-----------|------------------------------------------|
+| `cell_id` | character | Unique cell identifier                   |
+| `chr`     | character | Chromosome name (e.g. `"8"`, `"X"`)      |
+| `start`   | integer   | Bin start position (bp)                  |
+| `end`     | integer   | Bin end position (bp)                    |
+| `CN`      | integer   | Total copy number (`A + B`)              |
+| `A`       | integer   | Copy number of allele A (haploid)        |
+| `B`       | integer   | Copy number of allele B (haploid)        |
+
+---
+
+## Step 1 — Simulate copy number evolution
+
+`bridge_sim` runs a continuous-time Gillespie simulation.  Key parameters:
+
+- `chromosomes` — which chromosomes to model.
+- `bfb_allele` — which chromosome:allele undergoes BFB (e.g. `"8:A"`).
+- `max_cells` — stop when this many cells are alive (evolutionary depth).
+- `lambda` — mean number of genomic events per cell division.
+- `bfb_prob`, `amp_rate`, `del_rate` — relative probabilities of each event type.
+
+```{r simulate}
 library(bridges)
 library(ggplot2)
 library(dplyr)
-library(phangorn)
-```
 
-## Step 1: Simulate Copy Number Evolution
-
-We simulate a single BFB event on chromosome 8, allele A, across 128 cells.
-
-```{r simulate}
-alleles_to_use <- c("A", "B")
-
-sim <- bridges::bridge_sim(
-  max_cells = 128,
-  bfb_allele = c("8:A"),
-  normal_dup_rate = 0,
-  lambda = 2
+set.seed(42)
+sim <- bridge_sim(
+  chromosomes = c(1:8),
+  bfb_allele  = "8:A",
+  max_cells   = 5000,
+  lambda      = 2, 
+  subsample = 500,
+  bfb_prob    = 0.85,
+  amp_rate    = 0.2, 
+  del_rate    = 0.1, 
+  first_round_of_bfb = TRUE,
+  hotspot = list(chr = "8:A", pos = 100)
 )
 
+# sim$cna_data is a long-format tibble ready for fit() and plotting
 head(sim$cna_data)
 ```
 
-## Step 2: Fit the Phylogeny to the CNA Data
+The return value also includes `sim$tree` (ground-truth phylogeny), `sim$elapsed_time` (simulation clock), and `sim$n_alive`.
 
-We run inference on the simulated data, disabling jitter smoothing.
+---
+
+## Step 2 — Fit the phylogeny
+
+`fit` preprocesses the CNA data, computes per-chromosome Greedy (G) and BFB/contiguity (B) distance matrices, merges them, and builds a neighbor-joining tree.
 
 ```{r fit}
-k_jitter_fix <- 0
-
-res <- bridges::fit(
-  data = sim$cna_data,
-  alleles = alleles_to_use,
-  k_jitter_fix = k_jitter_fix
+res <- fit(
+  data    = sim$cna_data,
+  alleles = c("A", "B")
 )
 ```
 
-## Step 3: Compare Inferred and True Trees
+The result contains `res$tree`, `res$D` (final distance matrix), and `res$reconstructions` (ancestral CN states used for BFB detection).
 
-We compare the inferred tree to the true simulated one using Robinson-Foulds distance.
+---
+
+## Step 3 — Compare inferred vs true tree
+
+Robinson-Foulds distance measures topological dissimilarity between two trees. A value of 0 means identical topology; 1 means maximally different.
 
 ```{r compare-trees}
-true_tree <- sim$tree
-inferred_tree <- res$tree
+library(phangorn)
 
-phangorn::RF.dist(true_tree, inferred_tree, normalize = TRUE)
+rf <- phangorn::RF.dist(sim$tree, res$tree, normalize = TRUE)
+cat("Normalized RF distance:", round(rf, 3), "\n")
 ```
 
-## Step 4: Visualize CN Profiles with Trees
+---
 
-We can visualize both the true and inferred trees alongside allele-specific CN profiles.
+## Step 4 — Visualize CN profiles with the phylogeny
 
-```{r plot-true-tree, fig.align="center", fig.dim = c(12, 8)}
-bridges::plot_heatmap(
+`plot_heatmap` combines a ComplexHeatmap of allele-specific CN profiles with the phylogenetic tree.
+
+```{r plot-true-tree, fig.height=7}
+# Ground-truth tree
+plot_heatmap(
   sim$cna_data,
-  tree = sim$tree,
-  use_raster = FALSE,
-  ladderize = TRUE,
-  to_plot = c("CN", "A", "B"),
-  branch_length = 1
+  tree         = sim$tree,
+  to_plot      = c("CN", "A", "B"),
+  ladderize    = TRUE,
+  branch_length = 1,
+  use_raster   = FALSE
 )
 ```
 
-```{r plot-inferred-tree, fig.align="center", fig.dim = c(12, 8)}
-bridges::plot_heatmap(
+```{r plot-inferred-tree, fig.height=7}
+# Inferred tree with BFB-aware branch coloring
+plot_heatmap(
   sim$cna_data,
-  tree = res$tree,
-  use_raster = FALSE,
-  ladderize = TRUE,
-  to_plot = c("CN", "A", "B"),
-  branch_length = 1
+  tree                 = res$tree,
+  to_plot              = c("CN", "A", "B"),
+  ladderize            = TRUE,
+  branch_length        = 1,
+  use_raster           = FALSE
 )
 ```
 
-## Step 5: Detect BFB Signatures
+---
 
-We use the built-in BFB detection function to quantify "BFB-ness" per chromosome and allele.
+## Step 5 — Detect BFB signatures
 
-```{r detect-bfb, fig.align="center", fig.dim = c(8, 6)}
-bfb_detection_df <- bridges::detect_bfb(res)
-head(bfb_detection_df)
+`detect_bfb` applies a pseudo-cell binomial test across all chromosomes and alleles to quantify the fraction of phylogenetic branches with BFB-like non-contiguous CN changes.  P-values are Benjamini-Hochberg corrected.
 
-bfb_detection_df %>%
-  dplyr::mutate(chr = factor(chr, levels = c(1:22, "X", "Y"))) %>%
+```{r detect-bfb}
+bfb_df <- bridges:::detect_bfb(res, threshold = 0.005)
+head(bfb_df)
+```
+
+```{r plot-bfb-bar, fig.height=4}
+bfb_df %>%
+  mutate(chr = factor(chr, levels = c(1:22, "X", "Y"))) %>%
   ggplot(aes(x = chr, y = mean, fill = allele)) +
   geom_col(position = "dodge") +
+  geom_hline(yintercept = 0.1, linetype = "dashed", colour = "grey40") +
+  scale_fill_manual(values = c(A = "#E64B35", B = "#4DBBD5")) +
   theme_bw() +
   lims(y = c(0, 1)) +
-  labs(x = "Chromosome", y = "BFB-ness", fill = "Allele")
+  labs(x = "Chromosome", y = "BFB-positive branch fraction", fill = "Allele",
+       title = "BFB signal per chromosome")
 ```
+
+Chromosome 8, allele A should show the strongest signal because that is where BFB events were seeded.  Use `plot_bfb_signature` for a segment-level view:
+
+```{r plot-bfb-sig, fig.height=4}
+plot_bfb_signature(res, chr_of_interest = "8", allele_of_interest = "A")
+```
+
+---
+
+## Next steps
+
+- **Simulator deep-dive** — BFB mechanics, selection, whole-genome duplication, clonal study tools, passage-series self-consistency, and ABC parameter inference: see `vignette("simulator")`.
+- **Inference deep-dive** — distance metrics, jitter correction, BFB detection internals, advanced visualization: see `vignette("inference")`.

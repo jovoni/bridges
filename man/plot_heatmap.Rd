@@ -109,3 +109,22 @@ visualizing ancestral state reconstructions or other phylogenetic analyses.
 When reconstruction data is provided, the tree branches are colored according
 to the specified parameters.
 }
+\examples{
+\dontrun{
+sim <- bridge_sim(chromosomes = "8", bfb_allele = "8:A",
+                  max_cells = 128, lambda = 2)
+
+# Basic heatmap with true tree
+plot_heatmap(sim$cna_data, tree = sim$tree,
+             to_plot = c("CN", "A", "B"), ladderize = TRUE)
+
+# Inferred tree with branch coloring from BFB reconstructions
+res <- fit(data = sim$cna_data, alleles = c("A", "B"))
+plot_heatmap(sim$cna_data, tree = res$tree,
+             to_plot       = c("A", "B"),
+             reconstruction         = res$reconstructions,
+             chr_for_coloring       = "8",
+             allele_for_coloring    = "A")
+}
+
+}

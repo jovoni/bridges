@@ -2,7 +2,7 @@
 % Please edit documentation in R/clonal_sim.R
 \name{summarise_clone}
 \alias{summarise_clone}
-\title{Compute summary statistics for a single clonal CN matrix}
+\title{Compute Summary Statistics for a Single Clonal CN Matrix}
 \usage{
 summarise_clone(cna_matrix, hotspot_col, base_value = 1, n_alive = NA)
 }
@@ -17,8 +17,29 @@ summarise_clone(cna_matrix, hotspot_col, base_value = 1, n_alive = NA)
 \code{simulate_clone()$n_alive}).  Stored as-is for downstream analysis.}
 }
 \value{
-Named numeric vector of summary statistics.
+Named numeric vector with eight elements:
+\describe{
+\item{hotspot_mean_cn}{Mean copy number at the hotspot column.}
+\item{hotspot_max_cn}{Maximum copy number at the hotspot column.}
+\item{hotspot_fraction_amp}{Fraction of cells with hotspot CN > \code{base_value}.}
+\item{hotspot_cn_var}{Variance of copy number at the hotspot column.}
+\item{max_cn_global}{Maximum copy number across the entire matrix.}
+\item{mean_breakpoints}{Mean number of CN breakpoints per cell (positions where
+adjacent bins differ).}
+\item{n_alive}{Passed through unchanged; records pre-subsampling cell count.}
+\item{n_cells}{Number of rows in \code{cna_matrix} (post-subsampling count).}
+}
+Returns an all-NA vector (with the same names) if the matrix is empty.
 }
 \description{
-Compute summary statistics for a single clonal CN matrix
+Compute Summary Statistics for a Single Clonal CN Matrix
+}
+\examples{
+\dontrun{
+p   <- clonal_params()
+res <- simulate_clone("7", "A", hotspot_pos = 60, params = p,
+                       max_cells = 100, sample_cells = 50)
+summarise_clone(res$cna_matrix, hotspot_col = 60, n_alive = res$n_alive)
+}
+
 }

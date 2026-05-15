@@ -20,6 +20,14 @@
 #' the number of times each segment is involved in a BFB-like event. The output is a genomic bar plot
 #' showing the number of BFB-like events per segment.
 #'
+#' @examples
+#' \dontrun{
+#' sim <- bridge_sim(chromosomes = "8", bfb_allele = "8:A",
+#'                   max_cells = 128, lambda = 2)
+#' res <- fit(data = sim$cna_data, alleles = c("A", "B"))
+#' plot_bfb_signature(res, chr_of_interest = "8", allele_of_interest = "A")
+#' }
+#'
 #' @export
 plot_bfb_signature = function(res, chr_of_interest, allele_of_interest) {
   rec = res$reconstructions[[chr_of_interest]][[allele_of_interest]]

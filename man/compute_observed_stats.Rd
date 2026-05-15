@@ -27,3 +27,14 @@ data frame so the result can be overlaid on simulation comparison plots.
 \details{
 Accepts both \code{start}/\code{end} and \code{from}/\code{to} column names.
 }
+\examples{
+\dontrun{
+# Treat a simulation as "observed" data
+sim <- bridge_sim(chromosomes = "7", bfb_allele = "7:A",
+                  max_cells = 100, lambda = 2)
+obs_stats <- compute_observed_stats(sim$cna_data, chromosome = "7",
+                                    allele = "A", hotspot_pos = 60)
+obs_stats
+}
+
+}

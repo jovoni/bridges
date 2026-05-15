@@ -43,6 +43,74 @@ initialize_simulation <- function(input_parameters) {
   return(state)
 }
 
+#' Initialize simulation state from pre-evolved cell sequences
+#'
+#' Used by \code{bridge_sim()} when \code{initial_sequences} is provided (e.g.
+#' for serial passage simulations).  Builds the same \code{sim_state} structure
+#' as \code{initialize_simulation()} but seeds the population from an existing
+#' set of heterogeneous cell sequences rather than a fresh diploid cell.
+#'
+#' @param sequences Named list of cell sequences in the format returned by
+#'   \code{bridge_sim()$cells}: \code{list(cell_id = list("chr:allele" = seq))}.
+#' @param input_parameters Full parameter list as built inside \code{bridge_sim()}.
+#'
+#' @return A simulation state list ready to be passed to \code{bridge_sim_loop_cpp()}.
+initialize_from_sequences <- function(sequences, input_parameters) {
+  n <- length(sequences)
+  if (n == 0L) stop("initialize_from_sequences: sequences list is empty")
+
+  # Rename cells to cell_1 … cell_n for clean per-passage IDs.
+  new_ids <- paste0("cell_", seq_len(n))
+  sequences <- stats::setNames(sequences, new_ids)
+
+  max_history <- 6L * as.integer(input_parameters$max_cells) + 4L * n + 20L
+
+  state <- list(
+    time                   = 0,
+    cell_ids               = character(0),
+    cell_sequences         = list(),
+    cell_next_event_times  = numeric(0),
+    hotspot_status         = logical(0),
+    h_cell_id    = character(max_history),
+    h_parent_id  = character(max_history),
+    h_bfb_event  = logical(max_history),
+    h_wgd_event  = logical(max_history),
+    h_cn_event   = character(max_history),
+    h_chr_allele = character(max_history),
+    h_n          = 0L
+  )
+  state$input_parameters <- input_parameters
+  state$next_cell_id <- n + 1L
+
+  p       <- input_parameters
+  hotspot <- p$hotspot
+
+  for (i in seq_len(n)) {
+    cid  <- new_ids[i]
+    seqs <- sequences[[cid]]
+
+    # Determine hotspot status from actual copy number in the BFB allele.
+    if (!is.null(hotspot)) {
+      hs <- is_hotspot_gained(seqs[[hotspot$chr]], hotspot = hotspot$pos)
+      if (is.na(hs)) hs <- FALSE
+    } else {
+      hs <- FALSE
+    }
+
+    birth_rate    <- p$birth_rate * (1 + p$positive_selection_rate * hs)
+    death_rate    <- p$death_rate * (1 + p$negative_selection_rate * hs)
+    combined_rate <- birth_rate + death_rate
+
+    state$cell_ids                   <- c(state$cell_ids, cid)
+    state$cell_sequences[[cid]]      <- seqs
+    state$cell_next_event_times      <- c(state$cell_next_event_times,
+                                          stats::rexp(1, combined_rate))
+    state$hotspot_status             <- c(state$hotspot_status, hs)
+  }
+
+  state
+}
+
 #' Create initial chromosome sequences for all alleles
 #'
 #' @param input_parameters List of input parameters
@@ -591,6 +659,8 @@ prepare_results <- function(state, return_phylo = TRUE) {
     cells            = final_cells,
     cell_history     = cell_history,
     tree             = if (return_phylo) build_phylo_from_lineage(cell_history) else NULL,
+    elapsed_time     = state$time,
+    n_alive          = if (!is.null(state$n_alive_total)) state$n_alive_total else length(final_cells),
     input_parameters = state$input_parameters
   )
 
@@ -714,94 +784,11 @@ get_next_event <- function(state) {
 
 
 sim_amp_del <- function(sequence, operation = "dup", rate = 1e7) {
-  # Work directly on the interval representation — avoids the expensive
-  # seq2vec (expand) + find_consecutive_subvectors + vec2seq (recompress) cycle.
-  # Each stored interval is already a consecutive monotone run, which is
-  # exactly the kind of sub-sequence the original code searched for.
-
-  n_iv <- length(sequence)
-  if (n_iv == 0L) return(sequence)
-
-  # Compute interval lengths in O(n_intervals)
-  iv_lengths <- integer(n_iv)
-  for (j in seq_len(n_iv)) {
-    iv <- sequence[[j]]
-    iv_lengths[j] <- abs(iv$end - iv$start) + 1L
-  }
-  total_len <- sum(iv_lengths)
-  if (total_len == 0L) return(sequence)
-
-  # Only operate on directional intervals (length >= 2); fall back to all
-  # intervals (including single-element ones) if none qualify.
-  eligible <- which(iv_lengths >= 2L)
-  if (length(eligible) == 0L) eligible <- seq_len(n_iv)
-
-  # Sample one interval uniformly (mirrors the original's uniform-over-runs)
-  idx    <- eligible[sample.int(length(eligible), 1L)]
-  iv     <- sequence[[idx]]
-  iv_len <- iv_lengths[idx]
-
-  # Sample event length
-  event_length  <- max(1L, round(stats::rexp(1, rate = 1 / rate)))
-  actual_length <- min(event_length, iv_len)
-
-  # Sample starting offset within the chosen interval
-  max_offset <- iv_len - actual_length
-  offset     <- if (max_offset <= 0L) 0L else sample.int(max_offset + 1L, 1L) - 1L
-
-  # Derive the sub-segment and the before/after fragments of the interval
-  dir <- iv$direction
-  if (dir == 1L) {
-    seg_s    <- iv$start + offset
-    seg_e    <- seg_s + actual_length - 1L
-    before_iv <- if (offset > 0L)
-      list(start = iv$start, end = seg_s - 1L, direction = 1L) else NULL
-    after_iv  <- if (seg_e < iv$end)
-      list(start = seg_e + 1L, end = iv$end,   direction = 1L) else NULL
-  } else if (dir == -1L) {
-    seg_s    <- iv$start - offset
-    seg_e    <- seg_s - actual_length + 1L
-    before_iv <- if (offset > 0L)
-      list(start = iv$start, end = seg_s + 1L, direction = -1L) else NULL
-    after_iv  <- if (seg_e > iv$end)
-      list(start = seg_e - 1L, end = iv$end,   direction = -1L) else NULL
-  } else {
-    # direction == 0: single-element interval
-    seg_s <- iv$start; seg_e <- iv$start
-    before_iv <- NULL;  after_iv  <- NULL
-  }
-  seg <- list(start = seg_s, end = seg_e, direction = dir)
-
-  # Prefix and suffix of the interval list surrounding the chosen interval
-  head_ivs <- if (idx > 1L)    sequence[seq_len(idx - 1L)]      else list()
-  tail_ivs <- if (idx < n_iv)  sequence[(idx + 1L):n_iv]        else list()
-
-  if (operation == "dup") {
-    mid <- c(
-      if (!is.null(before_iv)) list(before_iv),
-      list(seg, seg),
-      if (!is.null(after_iv)) list(after_iv)
-    )
-  } else if (operation == "del") {
-    mid <- c(
-      if (!is.null(before_iv)) list(before_iv),
-      if (!is.null(after_iv)) list(after_iv)
-    )
-    if (length(head_ivs) == 0L && length(mid) == 0L && length(tail_ivs) == 0L) {
-      message("skipping deletion because of length zero")
-      return(sequence)
-    }
-  } else {
-    stop("operation not recognized!")
-  }
-
-  c(head_ivs, mid, tail_ivs)
+  sim_amp_del_cpp(sequence, operation, rate)
 }
 
 sim_wgd = function(sequence) {
-  vec = seq2vec(sequence)
-  wgd_vec = c(vec, vec)
-  vec2seq(wgd_vec)
+  sim_wgd_cpp(sequence)
 }
 
 #' Simulate Breakage-Fusion-Bridge (BFB) Cycle for both daughters
@@ -823,179 +810,54 @@ sim_bfb_left_and_right_sequences <- function(
     beta = NULL,
     custom_breakpoints = NULL
 ) {
-  # Calculate the total number of elements in the sequence
-  L <- get_seq_length(sequence)
-
-  # Find "fusion values": bin values that appear at the junction between two
-  # consecutive intervals (i.e. interval[k]$end == interval[k+1]$start).
-  # These correspond to existing BFB fold-back points (where diff(vec)==0 in
-  # the expanded representation).  Computing directly from the interval list
-  # is O(n_intervals) and avoids the expensive seq2vec expansion.
-  n_iv <- length(sequence)
-  bps  <- integer(0L)
-  if (n_iv >= 2L) {
-    for (k in seq_len(n_iv - 1L)) {
-      if (sequence[[k]]$end == sequence[[k + 1L]]$start) {
-        bps <- c(bps, sequence[[k]]$end)
-      }
-    }
-  }
-
-  # Select random breakpoint based on specified distribution
-  # Ensure that bp_idx is different from L to obtain a proper bfb cycle
-  bp_idx = L
-  attempts = 0
-  max_attempts = 10
-
-  while (bp_idx %in% c(L, bps) && attempts < max_attempts) {
-    attempts = attempts + 1
-
-    if (support == "uniform") {
-      bp_idx = sample(1:(2 * L), 1)
-    } else if (support == "beta") {
-      if (is.null(alpha) || is.null(beta)) {
-        stop(
-          "For beta distribution, both alpha and beta parameters must be provided"
-        )
-      }
-      tau = stats::rbeta(1, alpha, beta)
-      bp_idx = max(1, round(tau * 2 * L)) # Ensure bp_idx is at least 1
-    } else if (support == "custom") {
-      if (is.null(custom_breakpoints) || length(custom_breakpoints) == 0) {
-        stop(
-          "For custom distribution, custom_breakpoints vector must be provided and non-empty"
-        )
-      }
-      # Find all indices in vec that match the custom breakpoints
-      # This creates a vector of potential bp_idx values
+  if (support == "custom") {
+    # C++ path doesn't support custom breakpoints — keep pure-R fallback.
+    if (is.null(custom_breakpoints) || length(custom_breakpoints) == 0)
+      stop("For custom distribution, custom_breakpoints must be provided and non-empty")
+    L   <- get_seq_length(sequence)
+    bps <- integer(0L)
+    n_iv <- length(sequence)
+    if (n_iv >= 2L)
+      for (k in seq_len(n_iv - 1L))
+        if (sequence[[k]]$end == sequence[[k + 1L]]$start)
+          bps <- c(bps, sequence[[k]]$end)
+    vec <- seq2vec(sequence)
+    bp_idx <- L; attempts <- 0L
+    while (bp_idx %in% c(L, bps) && attempts < 10L) {
+      attempts <- attempts + 1L
       valid_indices <- which(vec %in% custom_breakpoints)
-      if (length(valid_indices) == 0) {
-        stop(
-          "None of the custom breakpoints are present in the sequence"
-        )
-      }
-      valid_idx = sample(valid_indices, size = 1)
-      breakpoint_positions <- vec[valid_idx]
-      bp_idx = sample(breakpoint_positions, size = 1)
-    } else {
-      stop("Unsupported distribution type. Use 'uniform', 'beta', or 'custom'.")
+      if (length(valid_indices) == 0) stop("None of the custom breakpoints are present in the sequence")
+      bp_idx <- sample(vec[sample(valid_indices, 1L)], 1L)
     }
-  }
-
-  # Check if we exceeded maximum attempts
-  if (attempts >= max_attempts && bp_idx %in% c(L, bps)) {
-    warning("BFB breakpoint selection failed after ", max_attempts, " attempts (sequence may be too fragmented). Returning unchanged sequence as fallback.")
-    return(list(l_seq = sequence, r_seq = sequence))
-  }
-
-  # Initialize left and right sequences
-  cut_seqs = cut_sequence(fuse_sequence(sequence), bp_idx)
-  l_seq = cut_seqs$left_seq
-  r_seq = reverse_sequence(cut_seqs$right_seq)
-
-  # Return the left and right sequences
-  if (stats::runif(1, 0, 1) > .5) {
-    return(list(l_seq = l_seq, r_seq = r_seq))
+    if (attempts >= 10L && bp_idx %in% c(L, bps)) {
+      warning("BFB breakpoint selection failed after 10 attempts. Returning unchanged sequence.")
+      return(list(l_seq = sequence, r_seq = sequence))
+    }
+    cut_seqs <- cut_sequence_cpp(fuse_sequence_cpp(sequence), bp_idx)
+    l_seq <- cut_seqs$left_seq
+    r_seq <- reverse_sequence_cpp(cut_seqs$right_seq)
+    if (stats::runif(1) > .5) list(l_seq = l_seq, r_seq = r_seq)
+    else                       list(l_seq = r_seq, r_seq = l_seq)
   } else {
-    return(list(l_seq = r_seq, r_seq = l_seq))
+    sim_bfb_cpp(
+      seq_list   = sequence,
+      support    = support,
+      alpha      = if (is.null(alpha)) NA_real_ else alpha,
+      beta_param = if (is.null(beta))  NA_real_ else beta
+    )
   }
 }
 
 reverse_sequence <- function(sequence) {
-  # Reverse the order of the intervals and swap start and end, flip direction
-  reversed_seq = lapply(seq_along(sequence), function(i) {
-    interval = sequence[[length(sequence) - i + 1]]
-    list(
-      start = interval$end,
-      end = interval$start,
-      direction = -interval$direction
-    )
-  })
-
-  return(reversed_seq)
+  reverse_sequence_cpp(sequence)
 }
 
 fuse_sequence <- function(sequence) {
-  reversed_seq = reverse_sequence(sequence)
-  fused_seq = c(sequence, reversed_seq)
-  return(fused_seq)
+  fuse_sequence_cpp(sequence)
 }
 
 cut_sequence <- function(sequence, cut_index) {
-  # Initialize output sequences
-
-  left_seq <- list()
-  right_seq <- list()
-
-  # Track the current position across the entire sequence
-  current_length <- 0
-
-  for (interval in sequence) {
-    # Calculate the length of the current interval
-    interval_length <- abs(interval$end - interval$start) + 1
-
-    # If the cut point is before this interval, everything goes to the right
-    if (current_length >= cut_index) {
-      right_seq <- c(right_seq, list(interval))
-
-      # If the cut point is after this interval, everything goes to the left
-    } else if (current_length + interval_length <= cut_index) {
-      left_seq <- c(left_seq, list(interval))
-
-      # Otherwise, we split the interval
-    } else {
-      # How far into the current interval is the cut?
-      cut_within <- cut_index - current_length
-
-      # Handle different directions
-      if (interval$direction == 1) {
-        # Increasing interval
-        left_seq <- c(
-          left_seq,
-          list(list(
-            start = interval$start,
-            end = interval$start + cut_within - 1,
-            direction = 1
-          ))
-        )
-        right_seq <- c(
-          right_seq,
-          list(list(
-            start = interval$start + cut_within,
-            end = interval$end,
-            direction = 1
-          ))
-        )
-      } else if (interval$direction == -1) {
-        # Decreasing interval
-        left_seq <- c(
-          left_seq,
-          list(list(
-            start = interval$start,
-            end = interval$start - cut_within + 1,
-            direction = -1
-          ))
-        )
-        right_seq <- c(
-          right_seq,
-          list(list(
-            start = interval$start - cut_within,
-            end = interval$end,
-            direction = -1
-          ))
-        )
-      } else {
-        # Constant interval
-        left_seq <- c(left_seq, list(interval))
-        right_seq <- c(right_seq, list(interval))
-      }
-    }
-
-    # Update the position tracker
-    current_length <- current_length + interval_length
-  }
-
-  return(list(left_seq = left_seq, right_seq = right_seq))
+  cut_sequence_cpp(sequence, cut_index)
 }
 
 is_hotspot_gained <- function(cell, hotspot) {
@@ -1006,16 +868,9 @@ is_hotspot_gained <- function(cell, hotspot) {
 
 
 # Count how many intervals in `cell` contain `hotspot` (a bin index).
-# O(n_intervals) — avoids the seq2vec + table expansion used previously.
 get_hotspot_copies <- function(cell, hotspot) {
   if (is.null(hotspot)) return(NaN)
-  count <- 0L
-  for (iv in cell) {
-    lo <- if (iv$start <= iv$end) iv$start else iv$end
-    hi <- if (iv$start <= iv$end) iv$end   else iv$start
-    if (hotspot >= lo && hotspot <= hi) count <- count + 1L
-  }
-  count
+  hotspot_copies_cpp(cell, hotspot)
 }
 
 # cell_history_to_newick <- function(cell_history) {
@@ -1457,10 +1312,11 @@ subsample_sim <- function(sim_result, f_subsample = 1) {
 
   # Return subsampled result
   subsampled_result <- list(
-    cells = subsampled_cells,
-    cell_history = subsampled_cell_history,
-    tree = subsampled_tree,
-    cna_data = subsampled_cna_data,
+    cells            = subsampled_cells,
+    cell_history     = subsampled_cell_history,
+    tree             = subsampled_tree,
+    cna_data         = subsampled_cna_data,
+    elapsed_time     = sim_result$elapsed_time,
     input_parameters = sim_result$input_parameters
   )
 

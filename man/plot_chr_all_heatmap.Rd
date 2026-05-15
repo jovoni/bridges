@@ -42,3 +42,24 @@ This function plots a heatmap of copy number alterations (CNA) for a specified c
 across multiple cells. It supports optional ordering of cells, as well as annotations showing average
 copy number or gain/loss profiles.
 }
+\details{
+When \code{order_heatmap = TRUE}, cells are sorted by the number of bins that
+match the baseline diploid value (2 for total CN, 1 for allele-specific).
+Cells with the fewest altered bins appear at the top.  The optional annotation
+bars (\code{add_avg_CN_profile}, \code{add_gain_loss_profile}) are displayed
+above the heatmap: the average CN profile across cells (bar height = mean CN)
+and a stacked gain/loss bar (proportion of cells with value above/below
+baseline at each bin).
+}
+\examples{
+\dontrun{
+sim <- bridge_sim(chromosomes = "8", bfb_allele = "8:A",
+                  max_cells = 128, lambda = 2)
+# Total CN view, chromosome 8
+plot_chr_all_heatmap(sim$cna_data, chr = "8", allele = "CN")
+# Allele A only, no ordering
+plot_chr_all_heatmap(sim$cna_data, chr = "8", allele = "A",
+                     order_heatmap = FALSE)
+}
+
+}

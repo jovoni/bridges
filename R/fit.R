@@ -41,6 +41,10 @@
 #'     \strong{if \code{b_dist_func = NULL}, then \code{avg_Ds} equals \code{greedy_Ds}}
 #'   \item \code{g_dist_func} — Name of the G distance function used
 #'   \item \code{b_dist_func} — Name of the B distance function used (or \code{NULL})
+#'   \item \code{reconstructions} — Nested list \code{[[chr]][[allele]]} of ancestral CN
+#'     state reconstructions per tree branch, as returned by
+#'     \code{compute_reconstructions()}.  Each element contains \code{profiles},
+#'     \code{merged_profiles}, and \code{deltas} (the per-branch BFB signal).
 #' }
 #'
 #' @details
@@ -60,6 +64,23 @@
 #' Available functions can be inspected with \code{names(G_DISTS)} and \code{names(B_DISTS)}.
 #' Using \code{b_dist_func = NULL} is useful for ablation studies, speed-ups, or when
 #' BFB modelling is not desired; results reduce to the greedy metric.
+#'
+#' @examples
+#' \dontrun{
+#' sim <- bridge_sim(chromosomes = "8", bfb_allele = "8:A",
+#'                   max_cells = 128, lambda = 2)
+#'
+#' res <- fit(
+#'   data    = sim$cna_data,
+#'   alleles = c("A", "B")
+#' )
+#'
+#' # Compare inferred vs true tree (Robinson-Foulds distance)
+#' phangorn::RF.dist(sim$tree, res$tree, normalize = TRUE)
+#'
+#' # Greedy-only run (no BFB modelling, faster)
+#' res_g <- fit(data = sim$cna_data, b_dist_func = NULL)
+#' }
 #'
 #' @export
 fit = function(data,

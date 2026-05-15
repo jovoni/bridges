@@ -51,3 +51,11 @@ Returns a complete parameter list with sensible defaults. Any argument can
 be overridden.  Pass the result to \code{run_clonal_replicates()} or
 \code{compare_clonal_params()}.
 }
+\examples{
+# Default parameters (BFB-driven, neutral selection)
+p <- clonal_params()
+
+# High BFB probability with positive selection
+p_sel <- clonal_params(bfb_prob = 0.8, positive_selection_rate = 2)
+
+}

@@ -2,13 +2,32 @@
 % Please edit documentation in R/ABC.R
 \name{plot_abc_results}
 \alias{plot_abc_results}
-\title{Plot ABC posterior distributions}
+\title{Plot ABC Posterior Distributions}
 \usage{
 plot_abc_results(abc_results)
 }
 \arguments{
 \item{abc_results}{Output of \code{abc_inference()}.}
 }
+\value{
+A \code{grid.arrange} object (from \pkg{gridExtra}) containing six
+histogram panels (one per parameter: \code{amp_rate}, \code{del_rate},
+\code{bfb_prob}, \code{death_fraction}, \code{lambda}, accepted
+\code{distance}) plus a scatter plot of \code{amp_rate} vs \code{del_rate}
+coloured by \code{bfb_prob}.  The red dashed line in each histogram marks
+the posterior median.
+}
 \description{
-Plot ABC posterior distributions
+Displays the approximate posterior distribution for each parameter accepted
+by \code{abc_inference()}.
+}
+\examples{
+\dontrun{
+obs <- bridge_sim(chromosomes = "7", bfb_allele = "7:A",
+                  max_cells = 100, lambda = 2)
+abc_res <- abc_inference(obs$cna_data, allele = "A", chromosome = "7",
+                         n_simulations = 500, tolerance_quantile = 0.05)
+plot_abc_results(abc_res)
+}
+
 }

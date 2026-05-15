@@ -50,3 +50,18 @@ reached, then \code{sample_cells} cells are drawn using
 \code{subsample_sim()}.  Failed simulations (e.g. all cells die) are
 recorded with NA summary statistics and flagged with \code{failed = TRUE}.
 }
+\examples{
+\dontrun{
+results <- run_clonal_replicates(
+  chromosome   = "7",
+  allele       = "A",
+  hotspot_pos  = 60,
+  params       = clonal_params(bfb_prob = 0.6),
+  N_replicates = 20,
+  max_cells    = 100,
+  sample_cells = 50
+)
+summary(results$hotspot_max_cn)
+}
+
+}

@@ -36,10 +36,151 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// seq_length_cpp
+int seq_length_cpp(List seq_list);
+RcppExport SEXP _bridges_seq_length_cpp(SEXP seq_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type seq_list(seq_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(seq_length_cpp(seq_list));
+    return rcpp_result_gen;
+END_RCPP
+}
+// reverse_sequence_cpp
+List reverse_sequence_cpp(List seq_list);
+RcppExport SEXP _bridges_reverse_sequence_cpp(SEXP seq_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type seq_list(seq_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(reverse_sequence_cpp(seq_list));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fuse_sequence_cpp
+List fuse_sequence_cpp(List seq_list);
+RcppExport SEXP _bridges_fuse_sequence_cpp(SEXP seq_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type seq_list(seq_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(fuse_sequence_cpp(seq_list));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cut_sequence_cpp
+List cut_sequence_cpp(List seq_list, int cut_index);
+RcppExport SEXP _bridges_cut_sequence_cpp(SEXP seq_listSEXP, SEXP cut_indexSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type seq_list(seq_listSEXP);
+    Rcpp::traits::input_parameter< int >::type cut_index(cut_indexSEXP);
+    rcpp_result_gen = Rcpp::wrap(cut_sequence_cpp(seq_list, cut_index));
+    return rcpp_result_gen;
+END_RCPP
+}
+// hotspot_copies_cpp
+int hotspot_copies_cpp(List seq_list, int bin);
+RcppExport SEXP _bridges_hotspot_copies_cpp(SEXP seq_listSEXP, SEXP binSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type seq_list(seq_listSEXP);
+    Rcpp::traits::input_parameter< int >::type bin(binSEXP);
+    rcpp_result_gen = Rcpp::wrap(hotspot_copies_cpp(seq_list, bin));
+    return rcpp_result_gen;
+END_RCPP
+}
+// seq2vec_cpp
+IntegerVector seq2vec_cpp(List seq_list);
+RcppExport SEXP _bridges_seq2vec_cpp(SEXP seq_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type seq_list(seq_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(seq2vec_cpp(seq_list));
+    return rcpp_result_gen;
+END_RCPP
+}
+// vec2seq_cpp
+List vec2seq_cpp(IntegerVector vec);
+RcppExport SEXP _bridges_vec2seq_cpp(SEXP vecSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerVector >::type vec(vecSEXP);
+    rcpp_result_gen = Rcpp::wrap(vec2seq_cpp(vec));
+    return rcpp_result_gen;
+END_RCPP
+}
+// sim_amp_del_cpp
+List sim_amp_del_cpp(List seq_list, std::string operation, double rate);
+RcppExport SEXP _bridges_sim_amp_del_cpp(SEXP seq_listSEXP, SEXP operationSEXP, SEXP rateSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type seq_list(seq_listSEXP);
+    Rcpp::traits::input_parameter< std::string >::type operation(operationSEXP);
+    Rcpp::traits::input_parameter< double >::type rate(rateSEXP);
+    rcpp_result_gen = Rcpp::wrap(sim_amp_del_cpp(seq_list, operation, rate));
+    return rcpp_result_gen;
+END_RCPP
+}
+// sim_wgd_cpp
+List sim_wgd_cpp(List seq_list);
+RcppExport SEXP _bridges_sim_wgd_cpp(SEXP seq_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type seq_list(seq_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(sim_wgd_cpp(seq_list));
+    return rcpp_result_gen;
+END_RCPP
+}
+// sim_bfb_cpp
+List sim_bfb_cpp(List seq_list, std::string support, double alpha, double beta_param);
+RcppExport SEXP _bridges_sim_bfb_cpp(SEXP seq_listSEXP, SEXP supportSEXP, SEXP alphaSEXP, SEXP beta_paramSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type seq_list(seq_listSEXP);
+    Rcpp::traits::input_parameter< std::string >::type support(supportSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< double >::type beta_param(beta_paramSEXP);
+    rcpp_result_gen = Rcpp::wrap(sim_bfb_cpp(seq_list, support, alpha, beta_param));
+    return rcpp_result_gen;
+END_RCPP
+}
+// bridge_sim_loop_cpp
+List bridge_sim_loop_cpp(List sim_state_r, double lambda, double rate);
+RcppExport SEXP _bridges_bridge_sim_loop_cpp(SEXP sim_state_rSEXP, SEXP lambdaSEXP, SEXP rateSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type sim_state_r(sim_state_rSEXP);
+    Rcpp::traits::input_parameter< double >::type lambda(lambdaSEXP);
+    Rcpp::traits::input_parameter< double >::type rate(rateSEXP);
+    rcpp_result_gen = Rcpp::wrap(bridge_sim_loop_cpp(sim_state_r, lambda, rate));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_bridges_greedy_distance_cpp", (DL_FUNC) &_bridges_greedy_distance_cpp, 3},
     {"_bridges_greedy_bfb_distance_cpp", (DL_FUNC) &_bridges_greedy_bfb_distance_cpp, 3},
+    {"_bridges_seq_length_cpp", (DL_FUNC) &_bridges_seq_length_cpp, 1},
+    {"_bridges_reverse_sequence_cpp", (DL_FUNC) &_bridges_reverse_sequence_cpp, 1},
+    {"_bridges_fuse_sequence_cpp", (DL_FUNC) &_bridges_fuse_sequence_cpp, 1},
+    {"_bridges_cut_sequence_cpp", (DL_FUNC) &_bridges_cut_sequence_cpp, 2},
+    {"_bridges_hotspot_copies_cpp", (DL_FUNC) &_bridges_hotspot_copies_cpp, 2},
+    {"_bridges_seq2vec_cpp", (DL_FUNC) &_bridges_seq2vec_cpp, 1},
+    {"_bridges_vec2seq_cpp", (DL_FUNC) &_bridges_vec2seq_cpp, 1},
+    {"_bridges_sim_amp_del_cpp", (DL_FUNC) &_bridges_sim_amp_del_cpp, 3},
+    {"_bridges_sim_wgd_cpp", (DL_FUNC) &_bridges_sim_wgd_cpp, 1},
+    {"_bridges_sim_bfb_cpp", (DL_FUNC) &_bridges_sim_bfb_cpp, 4},
+    {"_bridges_bridge_sim_loop_cpp", (DL_FUNC) &_bridges_bridge_sim_loop_cpp, 3},
     {NULL, NULL, 0}
 };
 

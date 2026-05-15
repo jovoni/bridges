@@ -2,7 +2,7 @@
 % Please edit documentation in R/clonal_sim.R
 \name{simulate_clone}
 \alias{simulate_clone}
-\title{Simulate one clonal evolution and return the CN matrix}
+\title{Simulate One Clonal Evolution and Return the CN Matrix}
 \usage{
 simulate_clone(
   chromosome,
@@ -46,7 +46,16 @@ after subsampling.}
 }
 \description{
 Runs \code{bridge_sim()} until \code{max_cells} are alive OR \code{max_time}
-is reached (whichever fires first).  If \code{sample_cells} is set, a random
-subsample of that many cells is drawn from the alive population using
-\code{subsample_sim()}.
+is reached (whichever fires first).  If \code{sample_cells} is set, the alive
+cells are subsampled \emph{before} post-processing so the CNA tibble is only
+built once on the kept cells (no double work).
+}
+\examples{
+\dontrun{
+p   <- clonal_params(bfb_prob = 0.6)
+res <- simulate_clone("7", allele = "A", hotspot_pos = 60,
+                       params = p, max_cells = 200, sample_cells = 50)
+dim(res$cna_matrix)   # 50 x n_bins
+cat("Alive:", res$n_alive, "  Sampled:", res$n_cells, "\n")
+}
 }

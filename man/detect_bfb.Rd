@@ -18,15 +18,19 @@ detect_bfb(fit, threshold = 0.005)
 \item{threshold}{Numeric threshold for binomial test probability (default: 0.005)}
 }
 \value{
-A data frame containing binomial test results for each chromosome-allele combination:
-\itemize{
-\item mean: Estimated proportion of successes
-\item N_trials: Total number of trials
-\item N_successes: Number of successes
-\item chr: Chromosome identifier
-\item allele: Allele type
-\item p.value: P-value from binomial test
-\item threshold: Threshold used for testing
+A data frame with one row per chromosome-allele combination and
+columns:
+\describe{
+\item{mean}{Fraction of phylogenetic branches where BFB-like events are
+detected (binomial proportion estimate).}
+\item{N_trials}{Total number of internal branches tested.}
+\item{N_successes}{Number of branches flagged as BFB-like.}
+\item{chr}{Chromosome identifier.}
+\item{allele}{Allele (\code{"A"} or \code{"B"}).}
+\item{p.value}{Raw p-value from the one-sided binomial test.}
+\item{adj.pval}{Benjamini-Hochberg adjusted p-value across all
+chromosome-allele combinations.}
+\item{threshold}{The \code{threshold} value used.}
 }
 }
 \description{
@@ -34,9 +38,28 @@ This function performs binomial tests across all chromosomes and alleles to dete
 breakpoint-free branches in a phylogenetic tree reconstruction. It uses pseudo-cell
 analysis to identify branches where copy number changes occur without breakpoints.
 }
+\details{
+The function implements a \emph{pseudo-cell test} for BFB signatures.  For
+each internal branch in the phylogenetic tree, a pseudo-cell is constructed
+from the ancestral CN profiles flanking that branch (computed via
+\code{compute_reconstructions()}).  A delta value is derived as the difference
+between the greedy cost (G) and the BFB/contiguity cost (B) for that branch:
+high delta indicates that BFB-like non-contiguous amplification explains the
+CN change better than simple edit steps.
+
+Branches with \code{delta > threshold} are counted as successes.  A one-sided
+binomial test is applied per chromosome-allele combination to assess whether
+the fraction of BFB-positive branches is significantly above chance.
+P-values are corrected for multiple testing using the Benjamini-Hochberg
+procedure (\code{stats::p.adjust(method = "BH")}), yielding \code{adj.pval}.
+}
 \examples{
 \dontrun{
-# Assuming 'fitted_model' is a properly fitted model object
-bfb_results <- detect_bfb(fitted_model, threshold = 0.01)
+sim <- bridge_sim(chromosomes = "8", bfb_allele = "8:A",
+                  max_cells = 128, lambda = 2)
+res <- fit(data = sim$cna_data, alleles = c("A", "B"))
+bfb_df <- detect_bfb(res, threshold = 0.005)
+head(bfb_df)
+# Chromosome 8 allele A should show high mean and low adj.pval
 }
 }

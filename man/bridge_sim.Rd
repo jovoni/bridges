@@ -7,6 +7,7 @@ Modified to support diploid chromosomes (alleles A and B)}
 \usage{
 bridge_sim(
   initial_cells = 1,
+  initial_sequences = NULL,
   chromosomes = c(1:22, "X", "Y"),
   bin_length = 1e+06,
   birth_rate = 0.1,
@@ -24,8 +25,10 @@ bridge_sim(
   negative_selection_rate = 0,
   max_time = 300,
   max_cells = 256,
+  subsample = NULL,
   first_round_of_bfb = TRUE,
   return_phylo = TRUE,
+  return_cna_data = TRUE,
   breakpoint_support = "uniform",
   hotspot = list(chr = "1:A", pos = 100),
   alpha = NULL,
@@ -72,6 +75,12 @@ Length of event is sample from exponential distribution with parameter 1 / rate.
 
 \item{max_cells}{Numeric. Maximum number of cells allowed before simulation stops. Default: 100}
 
+\item{subsample}{Integer or NULL.  If set, this many alive cells are randomly
+sampled \emph{before} \code{prepare_results()} and \code{sequences_to_cndata()}
+are called, so the phylogeny and CNA tibble are built only once on the
+subsampled cells.  The \code{n_alive} field in the return value still records
+the pre-subsample count.  Default: NULL (keep all alive cells).}
+
 \item{first_round_of_bfb}{Logical. Whether to apply BFB to initial cells. Default: TRUE}
 
 \item{return_phylo}{Logical. Whether to build and return the phylogenetic tree.
@@ -89,12 +98,32 @@ breakpoint selection. Default: NULL}
 
 \item{beta}{Numeric. Second parameter for beta distribution if used for
 breakpoint selection. Default: NULL}
+
+\item{custom_breakpoints}{Integer vector of bin indices to use as the breakpoint
+position distribution when \code{breakpoint_support = "custom"}.  Each draw
+during the simulation is sampled uniformly from this vector.  Ignored for
+other breakpoint support modes.  Default: NULL}
 }
 \value{
-A list containing:
-\item{cells}{List of cell chromosome sequences at the end of simulation}
-\item{cell_history}{Data frame with cell birth/death times and lineage information}
-\item{input_parameters}{List of input parameters used in the simulation}
+A named list containing:
+\describe{
+\item{cells}{Named list of alive cell chromosome sequences (internal interval
+representation).  Length equals \code{subsample} when set, otherwise the
+number of cells alive at simulation end.}
+\item{cell_history}{Tibble recording every birth/death event: \code{cell_id},
+\code{parent_id}, \code{bfb_event}, \code{wgd_event}, \code{cn_event},
+\code{chr_allele}, \code{is_alive}.}
+\item{tree}{A \code{phylo} object (from \pkg{ape}) pruned to alive cells.
+\code{NULL} when \code{return_phylo = FALSE}.}
+\item{cna_data}{Long-format tibble of copy number profiles with columns
+\code{cell_id}, \code{chr}, \code{start}, \code{end}, \code{CN}, \code{A},
+\code{B}.}
+\item{elapsed_time}{Numeric.  Simulation clock value at stop — proportional
+to evolutionary depth.}
+\item{n_alive}{Integer.  Number of alive cells before any subsampling.
+Equals \code{length(cells)} unless \code{subsample} was set.}
+\item{input_parameters}{List of all input parameters used.}
+}
 }
 \description{
 Simulates the evolution of cells undergoing Break-Fusion-Bridge cycles using
@@ -102,4 +131,27 @@ a continuous-time Gillespie algorithm. This function models cell birth and death
 processes with the possibility of BFB events occurring during replication.
 Cells with amplified hotspots have an increased birth rate.
 Now supports modeling both alleles (A and B) of each chromosome.
+}
+\examples{
+\dontrun{
+# Minimal simulation: chromosome 8, BFB on allele A, 128 cells
+sim <- bridge_sim(
+  chromosomes = "8",
+  bfb_allele  = "8:A",
+  max_cells   = 128,
+  lambda      = 2
+)
+head(sim$cna_data)
+cat("Elapsed time:", sim$elapsed_time, "\n")
+
+# Simulate 1000 cells but only post-process 100 (faster)
+sim2 <- bridge_sim(
+  chromosomes = "1",
+  max_cells   = 1000,
+  subsample   = 100,
+  return_phylo = FALSE
+)
+cat("Alive:", sim2$n_alive, "  Sequenced:", length(sim2$cells), "\n")
+}
+
 }

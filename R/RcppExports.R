@@ -12,3 +12,124 @@ greedy_bfb_distance_cpp <- function(a, b, penalty = 0.0) {
     .Call(`_bridges_greedy_bfb_distance_cpp`, a, b, penalty)
 }
 
+#' Compute length of an interval-encoded sequence
+#'
+#' @param seq_list R list of intervals (each a named list with start, end, direction)
+#' @return Integer total length
+#' @export
+seq_length_cpp <- function(seq_list) {
+    .Call(`_bridges_seq_length_cpp`, seq_list)
+}
+
+#' Reverse an interval-encoded sequence
+#'
+#' @param seq_list R list of intervals
+#' @return R list of reversed intervals
+#' @export
+reverse_sequence_cpp <- function(seq_list) {
+    .Call(`_bridges_reverse_sequence_cpp`, seq_list)
+}
+
+#' Fuse a sequence with its reverse (BFB palindrome creation)
+#'
+#' @param seq_list R list of intervals
+#' @return R list of fused intervals
+#' @export
+fuse_sequence_cpp <- function(seq_list) {
+    .Call(`_bridges_fuse_sequence_cpp`, seq_list)
+}
+
+#' Cut an interval-encoded sequence at a given index
+#'
+#' Elements 1..cut_index go to left; elements cut_index+1..end go to right.
+#'
+#' @param seq_list R list of intervals
+#' @param cut_index Integer cut position (1-based)
+#' @return Named list with \code{left_seq} and \code{right_seq}
+#' @export
+cut_sequence_cpp <- function(seq_list, cut_index) {
+    .Call(`_bridges_cut_sequence_cpp`, seq_list, cut_index)
+}
+
+#' Count copies of a hotspot bin in an interval-encoded sequence
+#'
+#' @param seq_list R list of intervals
+#' @param bin Integer bin position to query
+#' @return Integer copy count
+#' @export
+hotspot_copies_cpp <- function(seq_list, bin) {
+    .Call(`_bridges_hotspot_copies_cpp`, seq_list, bin)
+}
+
+#' Expand interval-encoded sequence to an integer vector
+#'
+#' @param seq_list R list of intervals
+#' @return IntegerVector of genomic bin values
+#' @export
+seq2vec_cpp <- function(seq_list) {
+    .Call(`_bridges_seq2vec_cpp`, seq_list)
+}
+
+#' Compress an integer vector to an interval-encoded sequence
+#'
+#' @param vec IntegerVector of genomic bin values
+#' @return R list of intervals
+#' @export
+vec2seq_cpp <- function(vec) {
+    .Call(`_bridges_vec2seq_cpp`, vec)
+}
+
+#' Simulate amplification or deletion on an interval-encoded sequence
+#'
+#' @param seq_list R list of intervals
+#' @param operation \code{"dup"} for duplication or \code{"del"} for deletion
+#' @param rate Mean of the exponential event-length distribution
+#' @return R list of intervals
+#' @export
+sim_amp_del_cpp <- function(seq_list, operation, rate) {
+    .Call(`_bridges_sim_amp_del_cpp`, seq_list, operation, rate)
+}
+
+#' Simulate whole-genome duplication on an interval-encoded sequence
+#'
+#' Concatenates the interval list with itself — O(n_intervals), no expand/compress.
+#'
+#' @param seq_list R list of intervals
+#' @return R list of intervals representing the doubled genome
+#' @export
+sim_wgd_cpp <- function(seq_list) {
+    .Call(`_bridges_sim_wgd_cpp`, seq_list)
+}
+
+#' Simulate BFB left and right daughter sequences
+#'
+#' Implements the fuse-cut-reverse BFB cycle with configurable breakpoint
+#' selection (uniform or beta distribution).
+#'
+#' @param seq_list R list of intervals
+#' @param support Breakpoint distribution: \code{"uniform"} or \code{"beta"}
+#'   (\code{"custom"} falls back to the R implementation)
+#' @param alpha Beta distribution shape parameter (ignored unless support="beta")
+#' @param beta_param Beta distribution shape parameter (ignored unless support="beta")
+#' @return Named list with \code{l_seq} and \code{r_seq} (each an R interval list)
+#' @export
+sim_bfb_cpp <- function(seq_list, support = "uniform", alpha = NA_real_, beta_param = NA_real_) {
+    .Call(`_bridges_sim_bfb_cpp`, seq_list, support, alpha, beta_param)
+}
+
+#' Run the Gillespie simulation loop in C++
+#'
+#' Takes an already-initialised \code{sim_state} from R's
+#' \code{initialize_simulation()} and runs the main loop, returning
+#' the final state in the same list format expected by
+#' \code{prepare_results()}.
+#'
+#' @param sim_state_r Named list returned by \code{initialize_simulation()}
+#' @param lambda Poisson rate for genomic events per daughter
+#' @param rate Mean of exponential event-length distribution for amp/del
+#' @return Named list with same structure as \code{sim_state_r}
+#' @export
+bridge_sim_loop_cpp <- function(sim_state_r, lambda, rate) {
+    .Call(`_bridges_bridge_sim_loop_cpp`, sim_state_r, lambda, rate)
+}
+

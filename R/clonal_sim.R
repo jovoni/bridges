@@ -42,6 +42,14 @@
 #'   event, mimicking a clone that initiated from a single BFB.
 #'
 #' @return Named list of simulation parameters.
+#'
+#' @examples
+#' # Default parameters (BFB-driven, neutral selection)
+#' p <- clonal_params()
+#'
+#' # High BFB probability with positive selection
+#' p_sel <- clonal_params(bfb_prob = 0.8, positive_selection_rate = 2)
+#'
 #' @export
 clonal_params = function(
   bfb_prob                 = 0.5,
@@ -72,12 +80,13 @@ clonal_params = function(
 
 # ── Single replicate ──────────────────────────────────────────────────────────
 
-#' Simulate one clonal evolution and return the CN matrix
+#' Simulate One Clonal Evolution and Return the CN Matrix
 #'
+#' @description
 #' Runs \code{bridge_sim()} until \code{max_cells} are alive OR \code{max_time}
-#' is reached (whichever fires first).  If \code{sample_cells} is set, a random
-#' subsample of that many cells is drawn from the alive population using
-#' \code{subsample_sim()}.
+#' is reached (whichever fires first).  If \code{sample_cells} is set, the alive
+#' cells are subsampled \emph{before} post-processing so the CNA tibble is only
+#' built once on the kept cells (no double work).
 #'
 #' @param chromosome   Chromosome to simulate (character, e.g. \code{"7"}).
 #' @param allele       Allele to track (\code{"A"}, \code{"B"}, or \code{"CN"}).
@@ -97,6 +106,15 @@ clonal_params = function(
 #'   \item{n_alive}{Number of cells alive at end of simulation, before sampling.}
 #'   \item{n_cells}{Number of cells in \code{cna_matrix} (after sampling).}
 #'   \item{sim}{Full \code{bridge_sim()} output (for downstream use).}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' p   <- clonal_params(bfb_prob = 0.6)
+#' res <- simulate_clone("7", allele = "A", hotspot_pos = 60,
+#'                        params = p, max_cells = 200, sample_cells = 50)
+#' dim(res$cna_matrix)   # 50 x n_bins
+#' cat("Alive:", res$n_alive, "  Sampled:", res$n_cells, "\n")
 #' }
 simulate_clone = function(
   chromosome,
@@ -127,19 +145,16 @@ simulate_clone = function(
     negative_selection_rate = params$negative_selection_rate,
     max_cells               = max_cells,
     max_time                = max_time,
+    subsample               = sample_cells,
     first_round_of_bfb      = params$first_round_of_bfb,
     return_phylo            = FALSE,
     hotspot                 = list(chr = chr_allele, pos = hotspot_pos),
     breakpoint_support      = "uniform"
   )
 
-  n_alive = length(sim$cells)
+  n_alive = sim$n_alive
 
-  # Subsample using the existing subsample_sim() if requested
-  if (!is.null(sample_cells) && n_alive > sample_cells) {
-    f = sample_cells / n_alive
-    sim = subsample_sim(sim, f_subsample = f)
-  } else if (!is.null(sample_cells) && n_alive < sample_cells) {
+  if (!is.null(sample_cells) && n_alive < sample_cells) {
     warning(sprintf(
       "Requested sample_cells=%d but only %d cells are alive. Keeping all.",
       sample_cells, n_alive
@@ -158,7 +173,7 @@ simulate_clone = function(
 
 # ── Summary statistics for one replicate ──────────────────────────────────────
 
-#' Compute summary statistics for a single clonal CN matrix
+#' Compute Summary Statistics for a Single Clonal CN Matrix
 #'
 #' @param cna_matrix  Integer matrix (cells x bins) from \code{simulate_clone()}.
 #' @param hotspot_col Column index of the hotspot bin in \code{cna_matrix}.
@@ -166,7 +181,29 @@ simulate_clone = function(
 #' @param n_alive     Number of alive cells before subsampling (from
 #'   \code{simulate_clone()$n_alive}).  Stored as-is for downstream analysis.
 #'
-#' @return Named numeric vector of summary statistics.
+#' @return Named numeric vector with eight elements:
+#' \describe{
+#'   \item{hotspot_mean_cn}{Mean copy number at the hotspot column.}
+#'   \item{hotspot_max_cn}{Maximum copy number at the hotspot column.}
+#'   \item{hotspot_fraction_amp}{Fraction of cells with hotspot CN > \code{base_value}.}
+#'   \item{hotspot_cn_var}{Variance of copy number at the hotspot column.}
+#'   \item{max_cn_global}{Maximum copy number across the entire matrix.}
+#'   \item{mean_breakpoints}{Mean number of CN breakpoints per cell (positions where
+#'     adjacent bins differ).}
+#'   \item{n_alive}{Passed through unchanged; records pre-subsampling cell count.}
+#'   \item{n_cells}{Number of rows in \code{cna_matrix} (post-subsampling count).}
+#' }
+#' Returns an all-NA vector (with the same names) if the matrix is empty.
+#'
+#' @examples
+#' \dontrun{
+#' p   <- clonal_params()
+#' res <- simulate_clone("7", "A", hotspot_pos = 60, params = p,
+#'                        max_cells = 100, sample_cells = 50)
+#' summarise_clone(res$cna_matrix, hotspot_col = 60, n_alive = res$n_alive)
+#' }
+#'
+#' @export
 summarise_clone = function(cna_matrix, hotspot_col, base_value = 1, n_alive = NA) {
   if (nrow(cna_matrix) == 0 || ncol(cna_matrix) == 0) {
     return(c(
@@ -223,6 +260,21 @@ summarise_clone = function(cna_matrix, hotspot_col, base_value = 1, n_alive = NA
 #'
 #' @return A \code{tibble} with one row per replicate and columns for each
 #'   summary statistic plus \code{replicate}, \code{n_alive}, and \code{failed}.
+#'
+#' @examples
+#' \dontrun{
+#' results <- run_clonal_replicates(
+#'   chromosome   = "7",
+#'   allele       = "A",
+#'   hotspot_pos  = 60,
+#'   params       = clonal_params(bfb_prob = 0.6),
+#'   N_replicates = 20,
+#'   max_cells    = 100,
+#'   sample_cells = 50
+#' )
+#' summary(results$hotspot_max_cn)
+#' }
+#'
 #' @export
 run_clonal_replicates = function(
   chromosome,
@@ -295,7 +347,7 @@ run_clonal_replicates = function(
 #'
 #' @examples
 #' \dontrun{
-#' results = compare_clonal_params(
+#' results <- compare_clonal_params(
 #'   param_list = list(
 #'     neutral    = clonal_params(positive_selection_rate = 0),
 #'     selection  = clonal_params(positive_selection_rate = 2),
@@ -305,8 +357,8 @@ run_clonal_replicates = function(
 #'   chromosome   = "7",
 #'   allele       = "A",
 #'   hotspot_pos  = 60,
-#'   N_replicates = 100,
-#'   max_time     = 20,
+#'   N_replicates = 20,
+#'   max_cells    = 200,
 #'   sample_cells = 50
 #' )
 #' plot_clonal_comparison(results)
@@ -368,6 +420,17 @@ compare_clonal_params = function(
 #'
 #' @return Named numeric vector of summary statistics, compatible with
 #'   \code{plot_clonal_comparison(observed_stats = ...)}.
+#'
+#' @examples
+#' \dontrun{
+#' # Treat a simulation as "observed" data
+#' sim <- bridge_sim(chromosomes = "7", bfb_allele = "7:A",
+#'                   max_cells = 100, lambda = 2)
+#' obs_stats <- compute_observed_stats(sim$cna_data, chromosome = "7",
+#'                                     allele = "A", hotspot_pos = 60)
+#' obs_stats
+#' }
+#'
 #' @export
 compute_observed_stats = function(data, chromosome, allele, hotspot_pos) {
   # Normalise column names: accept from/to as aliases for start/end
@@ -410,6 +473,18 @@ compute_observed_stats = function(data, chromosome, allele, hotspot_pos) {
 #'   \code{"condition"}.
 #'
 #' @return A \code{ggplot} object.
+#'
+#' @examples
+#' \dontrun{
+#' results <- compare_clonal_params(
+#'   param_list  = list(neutral = clonal_params(),
+#'                      bfb     = clonal_params(bfb_prob = 0.8)),
+#'   chromosome  = "7", allele = "A", hotspot_pos = 60,
+#'   N_replicates = 20, max_cells = 200, sample_cells = 50
+#' )
+#' plot_clonal_comparison(results)
+#' }
+#'
 #' @export
 plot_clonal_comparison = function(
   results,

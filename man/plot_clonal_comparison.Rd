@@ -34,3 +34,15 @@ per condition.  If \code{observed_stats} is supplied (output of
 \code{compute_observed_stats()}), a horizontal dashed line is added to each
 panel showing the observed value.
 }
+\examples{
+\dontrun{
+results <- compare_clonal_params(
+  param_list  = list(neutral = clonal_params(),
+                     bfb     = clonal_params(bfb_prob = 0.8)),
+  chromosome  = "7", allele = "A", hotspot_pos = 60,
+  N_replicates = 20, max_cells = 200, sample_cells = 50
+)
+plot_clonal_comparison(results)
+}
+
+}

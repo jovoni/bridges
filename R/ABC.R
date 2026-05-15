@@ -243,14 +243,50 @@ sample_priors = function() {
 #'   variance if NULL (default).
 #' @param bin_length Optional bin size in bp. Inferred from observed data if NULL.
 #'
-#' @return A list containing:
-#' \describe{
-#'   \item{accepted_params}{Data frame of accepted parameter draws.}
-#'   \item{param_summary}{Per-parameter mean / median / SD / 95\% CI.}
-#'   \item{n_simulations}{Total simulations attempted.}
-#'   \item{n_accepted}{Number of accepted simulations.}
-#'   \item{acceptance_rate}{Fraction accepted out of valid (non-error) simulations.}
-#'   \item{tolerance_threshold}{Distance cutoff used for acceptance.}
+#' @details
+#' Rejection ABC works as follows:
+#' \enumerate{
+#'   \item Draw \code{n_simulations} parameter sets from the prior
+#'     (\code{sample_priors()}: relative rates from a symmetric Dirichlet,
+#'     \code{death_fraction} uniform on (0, 0.8), \code{lambda} uniform on
+#'     (0.5, 5)).
+#'   \item For each parameter set, run \code{bridge_sim()} and compute six
+#'     summary-statistic distances to the observed data (gain/loss profiles,
+#'     mean CN profile, CN variance profile, max CN, mean breakpoints per cell).
+#'   \item Accept the \code{tolerance_quantile} fraction of simulations with the
+#'     smallest total distance as the approximate posterior.
+#' }
+#'
+#' \strong{Guidance on \code{tolerance_quantile}:} the default of \code{0.01}
+#' keeps the closest 1\% of simulations.  With \code{n_simulations = 1000} this
+#' yields 10 accepted samples — sufficient for a coarse posterior but ideally
+#' \code{n_simulations >= 5000}.  Use \code{0.05} for faster exploratory runs.
+#'
+#' \strong{Computational cost:} each simulation calls \code{bridge_sim()} once.
+#' Parallelise with \code{n_cores > 1} for large \code{n_simulations}.
+#'
+#' @return A list with elements: `accepted_params` (data frame of accepted
+#'   parameter draws), `param_summary` (per-parameter mean/median/SD/95% CI),
+#'   `n_simulations` (total runs), `n_accepted` (accepted count),
+#'   `acceptance_rate` (fraction accepted), `tolerance_threshold` (distance
+#'   cutoff used).
+#'
+#' @examples
+#' \dontrun{
+#' # Simulate some "observed" data
+#' obs <- bridge_sim(chromosomes = "7", bfb_allele = "7:A",
+#'                   max_cells = 100, lambda = 2)
+#'
+#' abc_res <- abc_inference(
+#'   cna_data           = obs$cna_data,
+#'   allele             = "A",
+#'   chromosome         = "7",
+#'   n_simulations      = 500,   # use >= 5000 in practice
+#'   tolerance_quantile = 0.05,
+#'   n_cores            = 1
+#' )
+#' abc_res$param_summary
+#' plot_abc_results(abc_res)
 #' }
 #'
 #' @export
@@ -340,9 +376,29 @@ abc_inference = function(cna_data,
 
 # ── Diagnostics ───────────────────────────────────────────────────────────────
 
-#' Plot ABC posterior distributions
+#' Plot ABC Posterior Distributions
+#'
+#' Displays the approximate posterior distribution for each parameter accepted
+#' by \code{abc_inference()}.
 #'
 #' @param abc_results Output of \code{abc_inference()}.
+#'
+#' @return A \code{grid.arrange} object (from \pkg{gridExtra}) containing six
+#'   histogram panels (one per parameter: \code{amp_rate}, \code{del_rate},
+#'   \code{bfb_prob}, \code{death_fraction}, \code{lambda}, accepted
+#'   \code{distance}) plus a scatter plot of \code{amp_rate} vs \code{del_rate}
+#'   coloured by \code{bfb_prob}.  The red dashed line in each histogram marks
+#'   the posterior median.
+#'
+#' @examples
+#' \dontrun{
+#' obs <- bridge_sim(chromosomes = "7", bfb_allele = "7:A",
+#'                   max_cells = 100, lambda = 2)
+#' abc_res <- abc_inference(obs$cna_data, allele = "A", chromosome = "7",
+#'                          n_simulations = 500, tolerance_quantile = 0.05)
+#' plot_abc_results(abc_res)
+#' }
+#'
 #' @export
 plot_abc_results = function(abc_results) {
   params = abc_results$accepted_params
