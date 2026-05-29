@@ -121,7 +121,9 @@ bridge_sim <- function(
   hotspot = list(chr = "1:A", pos = 100),
   alpha = NULL,
   beta = NULL,
-  custom_breakpoints = NULL
+  custom_breakpoints = NULL,
+  selection_type = "constant",
+  saturation_K = 10
 ) {
   # When seeding from pre-evolved sequences, derive initial_cells from them.
   if (!is.null(initial_sequences)) {
@@ -147,7 +149,9 @@ bridge_sim <- function(
     breakpoint_support,
     hotspot,
     alpha,
-    beta
+    beta,
+    selection_type,
+    saturation_K
   )
 
   # Default human chromosome lengths (approximate, in base pairs)
@@ -223,7 +227,9 @@ bridge_sim <- function(
     hotspot = hotspot,
     alpha = alpha,
     beta = beta,
-    custom_breakpoints = custom_breakpoints
+    custom_breakpoints = custom_breakpoints,
+    selection_type = selection_type,
+    saturation_K = saturation_K
   )
 
   # Initialize simulation state

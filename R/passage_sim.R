@@ -323,7 +323,8 @@ simulate_serial_passages <- function(
           first_round_of_bfb      = is.null(current_seqs) && params$first_round_of_bfb,
           return_phylo            = FALSE,
           return_cna_data         = need_cna,
-          hotspot                 = list(chr = chr_allele, pos = hotspot_pos)
+          hotspot                 = list(chr = chr_allele, pos = hotspot_pos),
+          selection_type          = params$selection_type
         ),
         error = function(e) NULL
       )

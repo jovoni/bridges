@@ -61,7 +61,8 @@ clonal_params = function(
   death_rate               = 0.1,
   lambda                   = 2,
   rate                     = 20,
-  first_round_of_bfb       = TRUE
+  first_round_of_bfb       = TRUE,
+  selection_type           = "constant"
 ) {
   list(
     bfb_prob                = bfb_prob,
@@ -73,7 +74,8 @@ clonal_params = function(
     death_rate              = death_rate,
     lambda                  = lambda,
     rate                    = rate,
-    first_round_of_bfb      = first_round_of_bfb
+    first_round_of_bfb      = first_round_of_bfb,
+    selection_type          = selection_type
   )
 }
 
@@ -149,7 +151,8 @@ simulate_clone = function(
     first_round_of_bfb      = params$first_round_of_bfb,
     return_phylo            = FALSE,
     hotspot                 = list(chr = chr_allele, pos = hotspot_pos),
-    breakpoint_support      = "uniform"
+    breakpoint_support      = "uniform",
+    selection_type          = params$selection_type
   )
 
   n_alive = sim$n_alive

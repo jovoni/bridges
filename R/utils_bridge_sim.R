@@ -18,7 +18,7 @@ initialize_simulation <- function(input_parameters) {
     cell_ids               = character(0),
     cell_sequences         = list(),
     cell_next_event_times  = numeric(0),
-    hotspot_status         = logical(0),
+    hotspot_counts         = integer(0),
     # Pre-allocated history vectors with integer counter h_n.
     # Avoids O(n) dplyr::bind_rows growth in the hot loop.
     h_cell_id    = character(max_history),
@@ -70,7 +70,7 @@ initialize_from_sequences <- function(sequences, input_parameters) {
     cell_ids               = character(0),
     cell_sequences         = list(),
     cell_next_event_times  = numeric(0),
-    hotspot_status         = logical(0),
+    hotspot_counts         = integer(0),
     h_cell_id    = character(max_history),
     h_parent_id  = character(max_history),
     h_bfb_event  = logical(max_history),
@@ -89,23 +89,24 @@ initialize_from_sequences <- function(sequences, input_parameters) {
     cid  <- new_ids[i]
     seqs <- sequences[[cid]]
 
-    # Determine hotspot status from actual copy number in the BFB allele.
+    # Determine hotspot copy count from actual copy number in the BFB allele.
     if (!is.null(hotspot)) {
-      hs <- is_hotspot_gained(seqs[[hotspot$chr]], hotspot = hotspot$pos)
-      if (is.na(hs)) hs <- FALSE
+      hc <- get_hotspot_copies(seqs[[hotspot$chr]], hotspot = hotspot$pos)
+      if (is.nan(hc)) hc <- 0L
     } else {
-      hs <- FALSE
+      hc <- 0L
     }
 
-    birth_rate    <- p$birth_rate * (1 + p$positive_selection_rate * hs)
-    death_rate    <- p$death_rate * (1 + p$negative_selection_rate * hs)
+    sel_mult      <- compute_selection_multiplier(hc, p$selection_type, p$saturation_K)
+    birth_rate    <- p$birth_rate * (1 + p$positive_selection_rate * sel_mult)
+    death_rate    <- p$death_rate * (1 + p$negative_selection_rate * sel_mult)
     combined_rate <- birth_rate + death_rate
 
     state$cell_ids                   <- c(state$cell_ids, cid)
     state$cell_sequences[[cid]]      <- seqs
     state$cell_next_event_times      <- c(state$cell_next_event_times,
                                           stats::rexp(1, combined_rate))
-    state$hotspot_status             <- c(state$hotspot_status, hs)
+    state$hotspot_counts             <- c(state$hotspot_counts, as.integer(hc))
   }
 
   state
@@ -163,21 +164,27 @@ initialize_with_bfb <- function(state, initial_sequences) {
 
     if (!is.null(state$input_parameters$hotspot)) {
       hotspot <- state$input_parameters$hotspot
-      left_hotspot <- is_hotspot_gained(left_cell[[hotspot$chr]], hotspot = hotspot$pos)
-      right_hotspot <- is_hotspot_gained(right_cell[[hotspot$chr]], hotspot = hotspot$pos)
+      left_hc  <- get_hotspot_copies(left_cell[[hotspot$chr]],  hotspot = hotspot$pos)
+      right_hc <- get_hotspot_copies(right_cell[[hotspot$chr]], hotspot = hotspot$pos)
+      if (is.nan(left_hc))  left_hc  <- 0L
+      if (is.nan(right_hc)) right_hc <- 0L
     } else {
-      left_hotspot <- right_hotspot <- FALSE
+      left_hc <- right_hc <- 0L
     }
 
+    sel_type <- state$input_parameters$selection_type
+    l_mult   <- compute_selection_multiplier(left_hc,  sel_type, state$input_parameters$saturation_K)
+    r_mult   <- compute_selection_multiplier(right_hc, sel_type, state$input_parameters$saturation_K)
+
     l_birth_rate <- state$input_parameters$birth_rate *
-      (1 + state$input_parameters$positive_selection_rate * left_hotspot)
+      (1 + state$input_parameters$positive_selection_rate * l_mult)
     l_death_rate <- state$input_parameters$death_rate *
-      (1 + state$input_parameters$negative_selection_rate * left_hotspot)
+      (1 + state$input_parameters$negative_selection_rate * l_mult)
 
     r_birth_rate <- state$input_parameters$birth_rate *
-      (1 + state$input_parameters$positive_selection_rate * right_hotspot)
+      (1 + state$input_parameters$positive_selection_rate * r_mult)
     r_death_rate <- state$input_parameters$death_rate *
-      (1 + state$input_parameters$negative_selection_rate * right_hotspot)
+      (1 + state$input_parameters$negative_selection_rate * r_mult)
 
     l_combined_rate <- l_birth_rate + l_death_rate
     r_combined_rate <- r_birth_rate + r_death_rate
@@ -186,7 +193,7 @@ initialize_with_bfb <- function(state, initial_sequences) {
     state$cell_ids               <- c(state$cell_ids, left_cell_id, right_cell_id)
     state$cell_sequences[[left_cell_id]]  <- left_cell
     state$cell_sequences[[right_cell_id]] <- right_cell
-    state$hotspot_status         <- c(state$hotspot_status, left_hotspot, right_hotspot)
+    state$hotspot_counts         <- c(state$hotspot_counts, as.integer(left_hc), as.integer(right_hc))
     state$cell_next_event_times  <- c(
       state$cell_next_event_times,
       state$time + stats::rexp(1, l_combined_rate),
@@ -230,19 +237,21 @@ initialize_without_bfb <- function(state, initial_sequences) {
     # Hotspot logic
     if (!is.null(state$input_parameters$hotspot)) {
       hotspot <- state$input_parameters$hotspot
-      hotspot_gained <- is_hotspot_gained(
+      hc <- get_hotspot_copies(
         initial_sequences[[hotspot$chr]],
         hotspot = hotspot$pos
       )
+      if (is.nan(hc)) hc <- 0L
     } else {
-      hotspot_gained <- FALSE
+      hc <- 0L
     }
 
     # Birth and death rate with selection
+    sel_mult   <- compute_selection_multiplier(hc, state$input_parameters$selection_type, state$input_parameters$saturation_K)
     birth_rate <- state$input_parameters$birth_rate *
-      (1 + state$input_parameters$positive_selection_rate * hotspot_gained)
+      (1 + state$input_parameters$positive_selection_rate * sel_mult)
     death_rate <- state$input_parameters$death_rate *
-      (1 + state$input_parameters$negative_selection_rate * hotspot_gained)
+      (1 + state$input_parameters$negative_selection_rate * sel_mult)
 
     combined_rate  <- birth_rate + death_rate
     next_event_time <- state$time + stats::rexp(1, combined_rate)
@@ -251,7 +260,7 @@ initialize_without_bfb <- function(state, initial_sequences) {
     state$cell_ids                    <- c(state$cell_ids, cell_id)
     state$cell_sequences[[cell_id]]   <- initial_sequences
     state$cell_next_event_times       <- c(state$cell_next_event_times, next_event_time)
-    state$hotspot_status              <- c(state$hotspot_status, hotspot_gained)
+    state$hotspot_counts              <- c(state$hotspot_counts, as.integer(hc))
 
     # Append to pre-allocated history
     idx <- state$h_n + 1L
@@ -539,23 +548,31 @@ process_birth_event <- function(state, current_cell_id, cell_idx, lambda, rate) 
   r_cell_id <- paste0("cell_", state$next_cell_id)
   state$next_cell_id <- state$next_cell_id + 1L
 
-  # Hotspot status for daughters
-  hotspot   <- state$input_parameters$hotspot
-  l_hotspot <- if (!is.null(hotspot))
-    is_hotspot_gained(l_sequences[[hotspot$chr]], hotspot = hotspot$pos) else FALSE
-  r_hotspot <- if (!is.null(hotspot))
-    is_hotspot_gained(r_sequences[[hotspot$chr]], hotspot = hotspot$pos) else FALSE
+  # Hotspot copy counts for daughters
+  hotspot <- state$input_parameters$hotspot
+  l_hc <- if (!is.null(hotspot)) {
+    hc <- get_hotspot_copies(l_sequences[[hotspot$chr]], hotspot = hotspot$pos)
+    if (is.nan(hc)) 0L else as.integer(hc)
+  } else 0L
+  r_hc <- if (!is.null(hotspot)) {
+    hc <- get_hotspot_copies(r_sequences[[hotspot$chr]], hotspot = hotspot$pos)
+    if (is.nan(hc)) 0L else as.integer(hc)
+  } else 0L
 
   # Selection-adjusted rates
+  sel_type <- state$input_parameters$selection_type
+  l_mult   <- compute_selection_multiplier(l_hc, sel_type, state$input_parameters$saturation_K)
+  r_mult   <- compute_selection_multiplier(r_hc, sel_type, state$input_parameters$saturation_K)
+
   l_birth_rate <- state$input_parameters$birth_rate *
-    (1 + state$input_parameters$positive_selection_rate * l_hotspot)
+    (1 + state$input_parameters$positive_selection_rate * l_mult)
   l_death_rate <- state$input_parameters$death_rate *
-    (1 + state$input_parameters$negative_selection_rate * l_hotspot)
+    (1 + state$input_parameters$negative_selection_rate * l_mult)
 
   r_birth_rate <- state$input_parameters$birth_rate *
-    (1 + state$input_parameters$positive_selection_rate * r_hotspot)
+    (1 + state$input_parameters$positive_selection_rate * r_mult)
   r_death_rate <- state$input_parameters$death_rate *
-    (1 + state$input_parameters$negative_selection_rate * r_hotspot)
+    (1 + state$input_parameters$negative_selection_rate * r_mult)
 
   # ---- Update active arrays (only alive cells) ----
   # Remove parent by swap-with-last then shrink — avoids shifting the entire vector.
@@ -563,11 +580,11 @@ process_birth_event <- function(state, current_cell_id, cell_idx, lambda, rate) 
   if (cell_idx < n_alive) {
     state$cell_ids[cell_idx]              <- state$cell_ids[n_alive]
     state$cell_next_event_times[cell_idx] <- state$cell_next_event_times[n_alive]
-    state$hotspot_status[cell_idx]        <- state$hotspot_status[n_alive]
+    state$hotspot_counts[cell_idx]        <- state$hotspot_counts[n_alive]
   }
   state$cell_ids              <- state$cell_ids[-n_alive]
   state$cell_next_event_times <- state$cell_next_event_times[-n_alive]
-  state$hotspot_status        <- state$hotspot_status[-n_alive]
+  state$hotspot_counts        <- state$hotspot_counts[-n_alive]
 
   # Free parent sequence memory
   state$cell_sequences[[current_cell_id]] <- NULL
@@ -579,7 +596,7 @@ process_birth_event <- function(state, current_cell_id, cell_idx, lambda, rate) 
     state$time + stats::rexp(1, l_birth_rate + l_death_rate),
     state$time + stats::rexp(1, r_birth_rate + r_death_rate)
   )
-  state$hotspot_status           <- c(state$hotspot_status, l_hotspot, r_hotspot)
+  state$hotspot_counts           <- c(state$hotspot_counts, l_hc, r_hc)
   state$cell_sequences[[l_cell_id]] <- l_sequences
   state$cell_sequences[[r_cell_id]] <- r_sequences
 
@@ -681,11 +698,11 @@ process_death_event <- function(state, current_cell_id, cell_idx) {
   if (cell_idx < n_alive) {
     state$cell_ids[cell_idx]              <- state$cell_ids[n_alive]
     state$cell_next_event_times[cell_idx] <- state$cell_next_event_times[n_alive]
-    state$hotspot_status[cell_idx]        <- state$hotspot_status[n_alive]
+    state$hotspot_counts[cell_idx]        <- state$hotspot_counts[n_alive]
   }
   state$cell_ids              <- state$cell_ids[-n_alive]
   state$cell_next_event_times <- state$cell_next_event_times[-n_alive]
-  state$hotspot_status        <- state$hotspot_status[-n_alive]
+  state$hotspot_counts        <- state$hotspot_counts[-n_alive]
 
   # Free sequence memory
   state$cell_sequences[[current_cell_id]] <- NULL
@@ -722,15 +739,19 @@ get_next_event <- function(state) {
   if (n_alive == 0L) return(NULL)
 
   # which.min over the compact alive vector only
-  min_idx        <- which.min(state$cell_next_event_times)
+  min_idx         <- which.min(state$cell_next_event_times)
   current_cell_id <- state$cell_ids[min_idx]
-  hotspot_status  <- state$hotspot_status[min_idx]
+  hotspot_count   <- state$hotspot_counts[min_idx]
+  sel_mult        <- compute_selection_multiplier(
+    hotspot_count, state$input_parameters$selection_type,
+    state$input_parameters$saturation_K
+  )
 
   # Calculate modified birth and death rates for this specific cell
   cell_birth_rate <- state$input_parameters$birth_rate *
-    (1 + state$input_parameters$positive_selection_rate * hotspot_status)
+    (1 + state$input_parameters$positive_selection_rate * sel_mult)
   cell_death_rate <- state$input_parameters$death_rate *
-    (1 + state$input_parameters$negative_selection_rate * hotspot_status)
+    (1 + state$input_parameters$negative_selection_rate * sel_mult)
 
   event_probability <- cell_birth_rate / (cell_birth_rate + cell_death_rate)
   event_type <- if (stats::runif(1) < event_probability) "birth" else "death"
@@ -871,6 +892,21 @@ is_hotspot_gained <- function(cell, hotspot) {
 get_hotspot_copies <- function(cell, hotspot) {
   if (is.null(hotspot)) return(NaN)
   hotspot_copies_cpp(cell, hotspot)
+}
+
+# Translate raw hotspot copy count to a selection multiplier.
+# "constant": 1 if copies > 1, else 0 (backward-compatible).
+# "linear":   the raw copy count.
+compute_selection_multiplier <- function(hotspot_count, selection_type, saturation_K = 10) {
+  if (selection_type == "linear") {
+    return(as.numeric(max(0L, as.integer(hotspot_count) - 1L)))
+  }
+  if (selection_type == "saturation") {
+    n <- as.numeric(hotspot_count)
+    if (n <= 1) return(0.0)
+    return((n - 1) / ((n - 1) + saturation_K))
+  }
+  as.numeric(hotspot_count > 1)
 }
 
 # cell_history_to_newick <- function(cell_history) {
@@ -1028,7 +1064,9 @@ validate_bridge_sim_params <- function(
   breakpoint_support,
   hotspot,
   alpha,
-  beta
+  beta,
+  selection_type,
+  saturation_K
 ) {
   # Valid chromosome names
   valid_chromosomes <- c(as.character(1:22), "X", "Y")
@@ -1201,6 +1239,18 @@ validate_bridge_sim_params <- function(
   # Validate hotspot position
   if (!is.numeric(hotspot$pos) || hotspot$pos <= 0) {
     stop("hotspot$pos must be a positive number")
+  }
+
+  # selection_type: must be "constant", "linear", or "saturation"
+  if (!is.character(selection_type) || length(selection_type) != 1 ||
+      !selection_type %in% c("constant", "linear", "saturation")) {
+    stop('selection_type must be "constant", "linear", or "saturation"')
+  }
+
+  if (selection_type == "saturation") {
+    if (!is.numeric(saturation_K) || length(saturation_K) != 1 || saturation_K <= 0) {
+      stop("saturation_K must be a single positive number when selection_type = 'saturation'")
+    }
   }
 
   # --- Beta Distribution Parameter Validation ---

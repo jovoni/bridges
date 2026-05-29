@@ -527,6 +527,9 @@ struct SimP {
     std::vector<double>      event_probs;  // normal, bfb, amp, del (sum to 1)
     std::vector<std::string> event_names;  // parallel labels
     double lambda, rate;
+    bool   linear_selection;
+    bool   saturation_selection;
+    double saturation_K;
 };
 
 struct CellD {
@@ -534,7 +537,7 @@ struct CellD {
     std::string parent_id;
     std::vector<Sequence> alleles;
     double next_event_time;
-    bool   hotspot_gained;
+    int    hotspot_count;
     bool   alive;
     int    generation;   // incremented on death — invalidates stale PQ entries
 };
@@ -755,15 +758,27 @@ static void process_birth4(
     std::string r_id = "cell_" + std::to_string(next_id++);
 
     // Hotspot and rates
-    bool l_hs = (p.hotspot_allele_idx >= 0)
-        && hotspot_copies_impl(l_al[p.hotspot_allele_idx], p.hotspot_bin) > 1;
-    bool r_hs = (p.hotspot_allele_idx >= 0)
-        && hotspot_copies_impl(r_al[p.hotspot_allele_idx], p.hotspot_bin) > 1;
+    int l_hc = (p.hotspot_allele_idx >= 0)
+        ? hotspot_copies_impl(l_al[p.hotspot_allele_idx], p.hotspot_bin) : 0;
+    int r_hc = (p.hotspot_allele_idx >= 0)
+        ? hotspot_copies_impl(r_al[p.hotspot_allele_idx], p.hotspot_bin) : 0;
 
-    double l_cr = p.birth_rate * (1.0 + p.pos_sel_rate * l_hs)
-                + p.death_rate * (1.0 + p.neg_sel_rate * l_hs);
-    double r_cr = p.birth_rate * (1.0 + p.pos_sel_rate * r_hs)
-                + p.death_rate * (1.0 + p.neg_sel_rate * r_hs);
+    auto sel_mult = [&](int hc) -> double {
+        if (p.linear_selection) return (double)std::max(0, hc - 1);
+        if (p.saturation_selection) {
+            if (hc <= 1) return 0.0;
+            double nm1 = (double)(hc - 1);
+            return nm1 / (nm1 + p.saturation_K);
+        }
+        return (double)(hc > 1);
+    };
+    double l_sel = sel_mult(l_hc);
+    double r_sel = sel_mult(r_hc);
+
+    double l_cr = p.birth_rate * (1.0 + p.pos_sel_rate * l_sel)
+                + p.death_rate * (1.0 + p.neg_sel_rate * l_sel);
+    double r_cr = p.birth_rate * (1.0 + p.pos_sel_rate * r_sel)
+                + p.death_rate * (1.0 + p.neg_sel_rate * r_sel);
 
     double l_t = current_time + R::rexp(1.0 / l_cr);
     double r_t = current_time + R::rexp(1.0 / r_cr);
@@ -780,7 +795,7 @@ static void process_birth4(
         CellD c;
         c.id = l_id; c.parent_id = par_id;
         c.alleles = std::move(l_al);
-        c.next_event_time = l_t; c.hotspot_gained = l_hs;
+        c.next_event_time = l_t; c.hotspot_count = l_hc;
         c.alive = true; c.generation = 0;
         pool.push_back(std::move(c));
     }
@@ -791,7 +806,7 @@ static void process_birth4(
         CellD c;
         c.id = r_id; c.parent_id = par_id;
         c.alleles = std::move(r_al);
-        c.next_event_time = r_t; c.hotspot_gained = r_hs;
+        c.next_event_time = r_t; c.hotspot_count = r_hc;
         c.alive = true; c.generation = 0;
         pool.push_back(std::move(c));
     }
@@ -867,6 +882,17 @@ static SimP extract_simp(const Rcpp::List& sim_state, double lambda, double rate
         as<double>(rates["del"])
     };
 
+    // Selection type
+    std::string sel_type = "constant";
+    SEXP stype_sexp = ip["selection_type"];
+    if (!Rf_isNull(stype_sexp)) sel_type = as<std::string>(stype_sexp);
+    p.linear_selection     = (sel_type == "linear");
+    p.saturation_selection = (sel_type == "saturation");
+
+    p.saturation_K = 10.0;
+    SEXP sk_sexp = ip["saturation_K"];
+    if (!Rf_isNull(sk_sexp)) p.saturation_K = as<double>(sk_sexp);
+
     return p;
 }
 
@@ -902,7 +928,7 @@ List bridge_sim_loop_cpp(List sim_state_r, double lambda, double rate) {
     CharacterVector cell_ids_r    = sim_state_r["cell_ids"];
     List            cell_seqs_r   = sim_state_r["cell_sequences"];
     NumericVector   event_times_r = sim_state_r["cell_next_event_times"];
-    LogicalVector   hs_status_r   = sim_state_r["hotspot_status"];
+    IntegerVector   hs_status_r   = sim_state_r["hotspot_counts"];
 
     pool.reserve(as<int>(ip["max_cells"]) * 4);
     for (int i = 0; i < (int)cell_ids_r.size(); ++i) {
@@ -911,7 +937,7 @@ List bridge_sim_loop_cpp(List sim_state_r, double lambda, double rate) {
 
         CellD c;
         c.id = cid; c.parent_id = "root";
-        c.hotspot_gained = (bool)hs_status_r[i];
+        c.hotspot_count = (int)hs_status_r[i];
         c.next_event_time = event_times_r[i];
         c.alive = true; c.generation = 0;
         c.alleles.resize(p.n_alleles);
@@ -964,8 +990,18 @@ List bridge_sim_loop_cpp(List sim_state_r, double lambda, double rate) {
             found = true;
 
             // Birth vs death decision
-            double br = p.birth_rate * (1.0 + p.pos_sel_rate * cell.hotspot_gained);
-            double dr = p.death_rate * (1.0 + p.neg_sel_rate * cell.hotspot_gained);
+            double sel;
+            if (p.linear_selection) {
+                sel = (double)std::max(0, cell.hotspot_count - 1);
+            } else if (p.saturation_selection) {
+                int hc = cell.hotspot_count;
+                if (hc <= 1) { sel = 0.0; }
+                else { double nm1 = (double)(hc - 1); sel = nm1 / (nm1 + p.saturation_K); }
+            } else {
+                sel = (double)(cell.hotspot_count > 1);
+            }
+            double br = p.birth_rate * (1.0 + p.pos_sel_rate * sel);
+            double dr = p.death_rate * (1.0 + p.neg_sel_rate * sel);
             bool is_birth = (R::unif_rand() < br / (br + dr));
 
             if (is_birth) {
@@ -1031,7 +1067,7 @@ List bridge_sim_loop_cpp(List sim_state_r, double lambda, double rate) {
         Named("cell_ids")              = out_cell_ids,
         Named("cell_sequences")        = out_cell_seqs,
         Named("cell_next_event_times") = NumericVector(0),
-        Named("hotspot_status")        = LogicalVector(0),
+        Named("hotspot_counts")        = IntegerVector(0),
         Named("h_cell_id")             = h_cid,
         Named("h_parent_id")           = h_pid,
         Named("h_bfb_event")           = h_bfb,
