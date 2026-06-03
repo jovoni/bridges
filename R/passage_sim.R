@@ -273,17 +273,17 @@ summarise_passage_series <- function(series, base_value = 1) {
 #'
 #' @export
 simulate_serial_passages <- function(
-  params,
-  chromosome,
-  allele,
-  hotspot_pos,
-  N,
-  N_sub,
-  K,
-  passages_to_keep = seq_len(K),
-  n_replicates     = 1L,
-  n_cores          = 1L,
-  bin_length       = 1e6
+    params,
+    chromosome,
+    allele,
+    hotspot_pos,
+    N,
+    N_sub,
+    K,
+    passages_to_keep = seq_len(K),
+    n_replicates     = 1L,
+    n_cores          = 1L,
+    bin_length       = 1e6
 ) {
   stopifnot(N_sub <= N, K >= 1L)
   chr_allele <- paste0(chromosome, ":", allele)
@@ -295,11 +295,33 @@ simulate_serial_passages <- function(
     n_alive = NA_real_, n_cells = 0L
   )
 
+  # ── progress setup ──────────────────────────────────────────────────────────
+  total_steps <- n_replicates * K
+  pb <- cli::cli_progress_bar(
+    name   = "Serial passages",
+    total  = total_steps,
+    format = paste0(
+      "{cli::pb_spin} Rep {rep_counter}/{n_replicates} | ",
+      "Passage {pass_counter}/{K} | ",
+      "{cli::pb_bar} {cli::pb_percent} | ",
+      "ETA {cli::pb_eta}"
+    ),
+    .envir = environment()
+  )
+  rep_counter  <- 0L
+  pass_counter <- 0L
+  pb_lock <- if (n_cores > 1L) parallel::makeCluster(0L) else NULL  # unused; note below
+  # ────────────────────────────────────────────────────────────────────────────
+
   run_one_replicate <- function(rep_idx) {
     current_seqs <- NULL
     rows         <- list()
 
     for (p in seq_len(K)) {
+      # update counters visible to the format string
+      pass_counter <<- p
+      rep_counter  <<- rep_idx
+
       need_cna <- p %in% passages_to_keep
       sim <- tryCatch(
         bridge_sim(
@@ -329,15 +351,27 @@ simulate_serial_passages <- function(
         error = function(e) NULL
       )
 
+      # tick after each passage attempt, whether it succeeded or failed
+      cli::cli_progress_update(id = pb, .envir = parent.env(environment()))
+
       if (is.null(sim)) {
         if (p %in% passages_to_keep) {
           rows[[length(rows) + 1L]] <- c(passage = p, replicate = rep_idx,
                                          na_stats, failed = TRUE)
         }
+        # fill remaining ticks for this replicate so the bar stays accurate
+        remaining <- K - p
+        if (remaining > 0L)
+          cli::cli_progress_update(id = pb, inc = remaining,
+                                   .envir = parent.env(environment()))
         break
       }
 
-      current_seqs <- sim$cells
+      # current_seqs <- compress_cell_sequences_to_cn(
+      #   sim$cells,
+      #   sim$input_parameters$chr_seq_lengths
+      # )
+      current_seqs = sim$cells
 
       if (need_cna) {
         cna_matrix <- tibble_to_matrix(sim$cna_data, value_column = allele)
@@ -347,17 +381,18 @@ simulate_serial_passages <- function(
                                        stats, failed = FALSE)
       }
     }
-
     rows
   }
 
   all_rows <- do.call(c,
-    if (n_cores > 1L) {
-      parallel::mclapply(seq_len(n_replicates), run_one_replicate, mc.cores = n_cores)
-    } else {
-      lapply(seq_len(n_replicates), run_one_replicate)
-    }
+                      if (n_cores > 1L) {
+                        parallel::mclapply(seq_len(n_replicates), run_one_replicate, mc.cores = n_cores)
+                      } else {
+                        lapply(seq_len(n_replicates), run_one_replicate)
+                      }
   )
+
+  cli::cli_progress_done(id = pb)
 
   result           <- do.call(rbind, lapply(all_rows, function(r) as.data.frame(t(r))))
   result           <- tibble::as_tibble(result)
