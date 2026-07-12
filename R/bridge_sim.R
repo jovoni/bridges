@@ -33,13 +33,13 @@
 #'   Set to FALSE when only CNA data is needed (e.g. ABC or clonal comparison
 #'   workflows) to skip the expensive tree-building step. Default: TRUE
 #' @param breakpoint_support Character. Distribution used for breakpoint
-#'  selection ("uniform", "beta", etc.). Default: "uniform"
+#'  selection ("uniform", "beta", etc.). Default: "beta"
 #' @param hotspot Named list. Hotspot positions for each chromosome allele
 #'  (e.g., list(chr = "1:A", pos = 100), which is default)
 #' @param alpha Numeric. First parameter for beta distribution if used for
-#'  breakpoint selection. Default: NULL
+#'  breakpoint selection. Default: 50
 #' @param beta Numeric. Second parameter for beta distribution if used for
-#'  breakpoint selection. Default: NULL
+#'  breakpoint selection. Default: 50
 #' @param custom_breakpoints Integer vector of bin indices to use as the breakpoint
 #'  position distribution when \code{breakpoint_support = "custom"}.  Each draw
 #'  during the simulation is sampled uniformly from this vector.  Ignored for
@@ -117,10 +117,10 @@ bridge_sim <- function(
   first_round_of_bfb = TRUE,
   return_phylo = TRUE,
   return_cna_data = TRUE,
-  breakpoint_support = "uniform",
+  breakpoint_support = "beta",
   hotspot = list(chr = "1:A", pos = 100),
-  alpha = NULL,
-  beta = NULL,
+  alpha = 50,
+  beta = 50,
   custom_breakpoints = NULL,
   selection_type = "constant",
   saturation_K = 10

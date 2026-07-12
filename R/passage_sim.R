@@ -527,3 +527,87 @@ plot_passage_series <- function(
     ) +
     ggplot2::theme_bw()
 }
+
+
+get_serial_passages_example_data <- function(
+    params,
+    chromosome,
+    allele,
+    hotspot_pos,
+    N,
+    N_sub,
+    K,
+    passages_to_keep = seq_len(K),
+    bin_length        = 1e6,
+    return_phylo      = FALSE
+) {
+  stopifnot(N_sub <= N, K >= 1L)
+  chr_allele <- paste0(chromosome, ":", allele)
+
+  current_seqs <- NULL
+  sims <- list()
+
+  pb <- cli::cli_progress_bar(
+    name   = "Serial passages (example data)",
+    total  = K,
+    format = paste0(
+      "{cli::pb_spin} Passage {pass_counter}/{K} | ",
+      "{cli::pb_bar} {cli::pb_percent} | ETA {cli::pb_eta}"
+    ),
+    .envir = environment()
+  )
+  pass_counter <- 0L
+
+  for (p in seq_len(K)) {
+    pass_counter <- p
+    need_cna <- p %in% passages_to_keep
+
+    sim <- tryCatch(
+      bridge_sim(
+        initial_sequences       = current_seqs,
+        chromosomes             = chromosome,
+        bin_length              = bin_length,
+        birth_rate              = params$birth_rate,
+        death_rate              = params$death_rate,
+        bfb_allele              = chr_allele,
+        normal_dup_rate         = 0,
+        bfb_prob                = params$bfb_prob,
+        amp_rate                = params$amp_rate,
+        del_rate                = params$del_rate,
+        lambda                  = params$lambda,
+        rate                    = params$rate,
+        positive_selection_rate = params$positive_selection_rate,
+        negative_selection_rate = params$negative_selection_rate,
+        max_cells               = N,
+        max_time                = 1e15,
+        subsample               = N_sub,
+        first_round_of_bfb      = is.null(current_seqs) && params$first_round_of_bfb,
+        return_phylo            = return_phylo,
+        return_cna_data         = need_cna,
+        hotspot                 = list(chr = chr_allele, pos = hotspot_pos),
+        selection_type          = params$selection_type,
+        breakpoint_support = "beta",
+        alpha = 50,
+        beta = 50
+      ),
+      error = function(e) NULL
+    )
+
+    cli::cli_progress_update(id = pb, .envir = environment())
+
+    if (is.null(sim)) {
+      warning(sprintf("Simulation failed at passage %d; stopping early.", p))
+      break
+    }
+
+    current_seqs <- sim$cells
+
+    if (need_cna) {
+      sims[[paste0("passage_", p)]] <- sim
+    }
+  }
+
+  cli::cli_progress_done(id = pb)
+
+  sims
+}

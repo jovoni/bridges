@@ -29,11 +29,13 @@ bridge_sim(
   first_round_of_bfb = TRUE,
   return_phylo = TRUE,
   return_cna_data = TRUE,
-  breakpoint_support = "uniform",
+  breakpoint_support = "beta",
   hotspot = list(chr = "1:A", pos = 100),
-  alpha = NULL,
-  beta = NULL,
-  custom_breakpoints = NULL
+  alpha = 50,
+  beta = 50,
+  custom_breakpoints = NULL,
+  selection_type = "constant",
+  saturation_K = 10
 )
 }
 \arguments{
@@ -88,16 +90,16 @@ Set to FALSE when only CNA data is needed (e.g. ABC or clonal comparison
 workflows) to skip the expensive tree-building step. Default: TRUE}
 
 \item{breakpoint_support}{Character. Distribution used for breakpoint
-selection ("uniform", "beta", etc.). Default: "uniform"}
+selection ("uniform", "beta", etc.). Default: "beta"}
 
 \item{hotspot}{Named list. Hotspot positions for each chromosome allele
 (e.g., list(chr = "1:A", pos = 100), which is default)}
 
 \item{alpha}{Numeric. First parameter for beta distribution if used for
-breakpoint selection. Default: NULL}
+breakpoint selection. Default: 50}
 
 \item{beta}{Numeric. Second parameter for beta distribution if used for
-breakpoint selection. Default: NULL}
+breakpoint selection. Default: 50}
 
 \item{custom_breakpoints}{Integer vector of bin indices to use as the breakpoint
 position distribution when \code{breakpoint_support = "custom"}.  Each draw

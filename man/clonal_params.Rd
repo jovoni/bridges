@@ -14,7 +14,8 @@ clonal_params(
   death_rate = 0.1,
   lambda = 2,
   rate = 20,
-  first_round_of_bfb = TRUE
+  first_round_of_bfb = TRUE,
+  selection_type = "constant"
 )
 }
 \arguments{
