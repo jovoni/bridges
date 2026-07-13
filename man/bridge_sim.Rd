@@ -31,8 +31,8 @@ bridge_sim(
   return_cna_data = TRUE,
   breakpoint_support = "beta",
   hotspot = list(chr = "1:A", pos = 100),
-  alpha = 50,
-  beta = 50,
+  alpha = 10,
+  beta = 10,
   custom_breakpoints = NULL,
   selection_type = "constant",
   saturation_K = 10
@@ -96,10 +96,10 @@ selection ("uniform", "beta", etc.). Default: "beta"}
 (e.g., list(chr = "1:A", pos = 100), which is default)}
 
 \item{alpha}{Numeric. First parameter for beta distribution if used for
-breakpoint selection. Default: 50}
+breakpoint selection. Default: 10}
 
 \item{beta}{Numeric. Second parameter for beta distribution if used for
-breakpoint selection. Default: 50}
+breakpoint selection. Default: 10}
 
 \item{custom_breakpoints}{Integer vector of bin indices to use as the breakpoint
 position distribution when \code{breakpoint_support = "custom"}.  Each draw

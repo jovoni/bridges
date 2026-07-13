@@ -585,10 +585,7 @@ get_serial_passages_example_data <- function(
         return_phylo            = return_phylo,
         return_cna_data         = need_cna,
         hotspot                 = list(chr = chr_allele, pos = hotspot_pos),
-        selection_type          = params$selection_type,
-        breakpoint_support = "beta",
-        alpha = 50,
-        beta = 50
+        selection_type          = params$selection_type
       ),
       error = function(e) NULL
     )

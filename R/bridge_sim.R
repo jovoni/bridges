@@ -37,9 +37,9 @@
 #' @param hotspot Named list. Hotspot positions for each chromosome allele
 #'  (e.g., list(chr = "1:A", pos = 100), which is default)
 #' @param alpha Numeric. First parameter for beta distribution if used for
-#'  breakpoint selection. Default: 50
+#'  breakpoint selection. Default: 10
 #' @param beta Numeric. Second parameter for beta distribution if used for
-#'  breakpoint selection. Default: 50
+#'  breakpoint selection. Default: 10
 #' @param custom_breakpoints Integer vector of bin indices to use as the breakpoint
 #'  position distribution when \code{breakpoint_support = "custom"}.  Each draw
 #'  during the simulation is sampled uniformly from this vector.  Ignored for
@@ -119,8 +119,8 @@ bridge_sim <- function(
   return_cna_data = TRUE,
   breakpoint_support = "beta",
   hotspot = list(chr = "1:A", pos = 100),
-  alpha = 50,
-  beta = 50,
+  alpha = 10,
+  beta = 10,
   custom_breakpoints = NULL,
   selection_type = "constant",
   saturation_K = 10
