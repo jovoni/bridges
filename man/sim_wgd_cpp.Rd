@@ -15,3 +15,4 @@ R list of intervals representing the doubled genome
 \description{
 Concatenates the interval list with itself — O(n_intervals), no expand/compress.
 }
+\keyword{internal}

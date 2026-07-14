@@ -1,15 +1,9 @@
-
-get_seq_length <- function(sequence) {
-  n <- length(sequence)
-  if (n == 0L) return(0L)
-  total <- 0L
-  for (j in seq_len(n)) {
-    iv    <- sequence[[j]]
-    total <- total + abs(iv$end - iv$start) + 1L
-  }
-  total
-}
-
+# NOTE: this file originally also contained a duplicate definition of
+# get_seq_length() (a slow pure-R loop, shadowed by whichever file
+# happened to load second -- see get_seq_length.R, which has the live,
+# C++-backed version). That duplicate has been removed here as a bug
+# fix; get_seq_length() (used by sim_bfb_left_and_right_sequences's
+# custom-breakpoint path) lives only in get_seq_length.R now.
 
 get_colors = function(set) {
   if (set == "CN") {

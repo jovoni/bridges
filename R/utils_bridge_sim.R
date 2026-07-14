@@ -1,3 +1,4 @@
+
 #' Helper functions modified for diploid chromosome modeling
 
 #' Initialize simulation state for diploid chromosomes
@@ -5,6 +6,7 @@
 #' @param input_parameters List of parameters given as input to bridge_sim function.
 #'
 #' @return A list containing the initialized simulation state
+#' @keywords internal
 initialize_simulation <- function(input_parameters) {
   # Pre-allocate history arrays. Upper bound: initial cells create 2 cells each,
   # then each birth creates 2 daughters. Total entries ≤ 2*initial + 2*max_cells births.
@@ -55,6 +57,7 @@ initialize_simulation <- function(input_parameters) {
 #' @param input_parameters Full parameter list as built inside \code{bridge_sim()}.
 #'
 #' @return A simulation state list ready to be passed to \code{bridge_sim_loop_cpp()}.
+#' @keywords internal
 initialize_from_sequences <- function(sequences, input_parameters) {
   n <- length(sequences)
   if (n == 0L) stop("initialize_from_sequences: sequences list is empty")
@@ -117,6 +120,7 @@ initialize_from_sequences <- function(sequences, input_parameters) {
 #' @param input_parameters List of input parameters
 #'
 #' @return Named list of initial sequences for each chromosome allele
+#' @keywords internal
 create_initial_chromosome_sequences <- function(input_parameters) {
   initial_sequences <- list()
 
@@ -138,6 +142,7 @@ create_initial_chromosome_sequences <- function(input_parameters) {
 #' @param initial_sequences List of initial chromosome sequences
 #'
 #' @return Updated simulation state
+#' @keywords internal
 initialize_with_bfb <- function(state, initial_sequences) {
   for (i in 1:state$input_parameters$initial_cells) {
     # Get the BFB allele and generate daughter sequences
@@ -229,6 +234,7 @@ initialize_with_bfb <- function(state, initial_sequences) {
 #' @param initial_sequences List of initial chromosome sequences
 #'
 #' @return Updated simulation state
+#' @keywords internal
 initialize_without_bfb <- function(state, initial_sequences) {
   for (i in 1:state$input_parameters$initial_cells) {
     cell_id <- paste0("cell_", state$next_cell_id)
@@ -277,357 +283,21 @@ initialize_without_bfb <- function(state, initial_sequences) {
   return(state)
 }
 
-#' Process a birth event (diploid version)
-#'
-#' This function handles cell division by creating two daughter cells from a parent cell.
-#' During division, various genomic events (amplifications, deletions, BFB) can occur
-#' based on the specified rates and lambda parameter.
-#'
-#' @param state The simulation state containing cell information,
-#'  sequences, and parameters
-#' @param current_cell_id ID of the cell undergoing birth/division
-#' @param cell_idx Index of the cell in the alive arrays (from get_next_event)
-#' @param lambda Rate parameter for Poisson distribution used to sample
-#' the number of genomic events per daughter cell
-#' @param rate Rate parameter used in amplification/deletion simulations.
-#'  Length of event is sample from exponential distribution with parameter 1 / rate.
-#'
-#' @return Updated simulation state with new daughter cells and updated history
-process_birth_event <- function(state, current_cell_id, cell_idx, lambda, rate) {
-  # Sample number of events for each daughter cell
-  n_left  <- stats::rpois(1, lambda)
-  n_right <- stats::rpois(1, lambda)
-
-  # Get parent cell information
-  parent_sequences <- state$cell_sequences[[current_cell_id]]
-
-  # Initialize daughter sequences with parent sequences
-  l_sequences <- parent_sequences
-  r_sequences <- parent_sequences
-
-  # Track if special events have occurred and which events happened
-  bfb_occurred <- FALSE
-  wgd_occurred <- FALSE
-  l_events      <- character(0)
-  r_events      <- character(0)
-  l_chr_alleles <- character(0)
-  r_chr_alleles <- character(0)
-
-  # Helper function to apply a single event to sequences
-  apply_single_event <- function(
-    sequences,
-    event_name,
-    selected_chr_allele = NULL
-  ) {
-    if (event_name == "normal") {
-      return(list(sequences = sequences, chr_allele = selected_chr_allele))
-    } else if (event_name == "amp") {
-      if (is.null(selected_chr_allele)) {
-        selected_chr_allele <- sample(names(sequences), 1)
-      }
-      sequences[[selected_chr_allele]] <- sim_amp_del(
-        sequences[[selected_chr_allele]],
-        operation = "dup",
-        rate = rate
-      )
-    } else if (event_name == "del") {
-      if (is.null(selected_chr_allele)) {
-        selected_chr_allele <- sample(names(sequences), 1)
-      }
-      sequences[[selected_chr_allele]] <- sim_amp_del(
-        sequences[[selected_chr_allele]],
-        operation = "del",
-        rate = rate
-      )
-    } else if (event_name == "wgd") {
-      # WGD affects all chromosomes
-      for (chr_name in names(sequences)) {
-        sequences[[chr_name]] <- sim_wgd(sequences[[chr_name]])
-      }
-      return(list(sequences = sequences, chr_allele = "all"))
-    } else if (event_name == "bfb") {
-      selected_chr_allele <- state$input_parameters$bfb_allele
-      bfb_result <- sim_bfb_left_and_right_sequences(
-        sequences[[selected_chr_allele]],
-        state$input_parameters$breakpoint_support,
-        state$input_parameters$alpha,
-        state$input_parameters$beta,
-        state$input_parameters$custom_breakpoints
-      )
-      # For BFB, we return both left and right sequences
-      return(list(
-        l_seq = bfb_result$l_seq,
-        r_seq = bfb_result$r_seq,
-        chr_allele = selected_chr_allele
-      ))
-    }
-
-    return(list(sequences = sequences, chr_allele = selected_chr_allele))
-  }
-
-  # Check if WGD should occur first (randomly and if available)
-  wgd_will_occur <- FALSE
-  if (state$input_parameters$wgd_available > 0) {
-    wgd_probability <- state$input_parameters$wgd_probability
-    wgd_will_occur  <- stats::runif(1) < wgd_probability
-  }
-
-  # Check if we need to do special events first (BFB or WGD)
-  total_events <- n_left + n_right
-  if (total_events > 0) {
-    # Sample all events that will occur (excluding WGD from rates)
-    event_rates <- state$input_parameters$rates
-    if ("wgd" %in% names(event_rates)) {
-      event_rates <- event_rates[names(event_rates) != "wgd"]
-    }
-
-    all_event_names <- sample(
-      names(event_rates),
-      size = total_events,
-      prob = unlist(event_rates),
-      replace = TRUE
-    )
-
-    # Check for BFB events only (WGD is handled separately)
-    bfb_indices <- which(all_event_names == "bfb")
-
-    # Handle special events (only one can occur per division)
-    special_event_occurred <- FALSE
-
-    if (wgd_will_occur && length(bfb_indices) > 0) {
-      # If both BFB and WGD are scheduled, randomly choose one
-      chosen_event <- sample(c("bfb", "wgd"), 1)
-      if (chosen_event == "wgd") {
-        bfb_indices <- integer(0)  # Cancel BFB
-      } else {
-        wgd_will_occur <- FALSE  # Cancel WGD
-      }
-    }
-
-    if (length(bfb_indices) > 0) {
-      # Apply BFB (affects both daughter cells differently)
-      bfb_occurred <- TRUE
-      special_event_occurred <- TRUE
-
-      bfb_result <- apply_single_event(parent_sequences, "bfb")
-      l_sequences[[bfb_result$chr_allele]] <- bfb_result$l_seq
-      r_sequences[[bfb_result$chr_allele]] <- bfb_result$r_seq
-
-      # Record BFB event for both cells
-      l_events      <- c(l_events, "bfb")
-      r_events      <- c(r_events, "bfb")
-      l_chr_alleles <- c(l_chr_alleles, bfb_result$chr_allele)
-      r_chr_alleles <- c(r_chr_alleles, bfb_result$chr_allele)
-
-      # Remove BFB events from the list
-      remaining_events <- all_event_names[-bfb_indices]
-
-    } else if (wgd_will_occur) {
-      # Apply WGD (affects both daughter cells identically)
-      wgd_occurred <- TRUE
-      special_event_occurred <- TRUE
-
-      wgd_result <- apply_single_event(parent_sequences, "wgd")
-      l_sequences <- wgd_result$sequences
-      r_sequences <- wgd_result$sequences
-
-      # Record WGD event for both cells
-      l_events      <- c(l_events, "wgd")
-      r_events      <- c(r_events, "wgd")
-      l_chr_alleles <- c(l_chr_alleles, wgd_result$chr_allele)
-      r_chr_alleles <- c(r_chr_alleles, wgd_result$chr_allele)
-
-      # Decrement available WGD count
-      state$input_parameters$wgd_available <- state$input_parameters$wgd_available - 1
-
-      # All originally sampled events remain
-      remaining_events <- all_event_names
-
-    } else {
-      remaining_events <- all_event_names
-    }
-
-    # Handle remaining events after special events
-    if (special_event_occurred) {
-      total_remaining <- length(remaining_events)
-
-      # Adjust n_left and n_right to account for special event
-      n_left  <- max(0, n_left  - 1)
-      n_right <- max(0, n_right - 1)
-
-      # Redistribute remaining events
-      if (total_remaining > 0 && (n_left + n_right) > 0) {
-        # Randomly assign remaining events to left and right
-        left_additional  <- min(n_left,  total_remaining)
-        right_additional <- min(n_right, total_remaining - left_additional)
-
-        if (left_additional > 0) {
-          left_events_idx        <- sample(total_remaining, left_additional)
-          left_additional_events <- remaining_events[left_events_idx]
-          remaining_events       <- remaining_events[-left_events_idx]
-          total_remaining        <- total_remaining - left_additional
-        } else {
-          left_additional_events <- character(0)
-        }
-
-        if (right_additional > 0 && total_remaining > 0) {
-          right_additional_events <- remaining_events[
-            1:min(right_additional, total_remaining)
-          ]
-        } else {
-          right_additional_events <- character(0)
-        }
-
-        # Apply additional events to left cell
-        for (event in left_additional_events) {
-          result      <- apply_single_event(l_sequences, event)
-          l_sequences <- result$sequences
-          l_events      <- c(l_events, event)
-          l_chr_alleles <- c(l_chr_alleles, result$chr_allele)
-        }
-
-        # Apply additional events to right cell
-        for (event in right_additional_events) {
-          result      <- apply_single_event(r_sequences, event)
-          r_sequences <- result$sequences
-          r_events      <- c(r_events, event)
-          r_chr_alleles <- c(r_chr_alleles, result$chr_allele)
-        }
-      }
-    } else {
-      # No special events - distribute events normally
-      left_events_count  <- min(n_left,  total_events)
-      right_events_count <- min(n_right, total_events - left_events_count)
-
-      # Apply events to left cell
-      if (left_events_count > 0) {
-        left_event_names <- all_event_names[1:left_events_count]
-        for (event in left_event_names) {
-          result      <- apply_single_event(l_sequences, event)
-          l_sequences <- result$sequences
-          l_events      <- c(l_events, event)
-          l_chr_alleles <- c(l_chr_alleles, result$chr_allele)
-        }
-      }
-
-      # Apply events to right cell
-      if (right_events_count > 0) {
-        right_event_names <- all_event_names[
-          (left_events_count + 1):(left_events_count + right_events_count)
-        ]
-        for (event in right_event_names) {
-          result      <- apply_single_event(r_sequences, event)
-          r_sequences <- result$sequences
-          r_events      <- c(r_events, event)
-          r_chr_alleles <- c(r_chr_alleles, result$chr_allele)
-        }
-      }
-    }
-    # Handle WGD separately if no other events are sampled but WGD should occur
-  } else if (wgd_will_occur) {
-    # Apply WGD even when no other events are sampled
-    wgd_occurred <- TRUE
-
-    wgd_result <- apply_single_event(parent_sequences, "wgd")
-    l_sequences <- wgd_result$sequences
-    r_sequences <- wgd_result$sequences
-
-    # Record WGD event for both cells
-    l_events      <- c(l_events, "wgd")
-    r_events      <- c(r_events, "wgd")
-    l_chr_alleles <- c(l_chr_alleles, wgd_result$chr_allele)
-    r_chr_alleles <- c(r_chr_alleles, wgd_result$chr_allele)
-
-    # Decrement available WGD count
-    state$input_parameters$wgd_available <- state$input_parameters$wgd_available - 1
-  }
-
-  # Create new cell IDs
-  l_cell_id <- paste0("cell_", state$next_cell_id)
-  state$next_cell_id <- state$next_cell_id + 1L
-  r_cell_id <- paste0("cell_", state$next_cell_id)
-  state$next_cell_id <- state$next_cell_id + 1L
-
-  # Hotspot copy counts for daughters
-  hotspot <- state$input_parameters$hotspot
-  l_hc <- if (!is.null(hotspot)) {
-    hc <- get_hotspot_copies(l_sequences[[hotspot$chr]], hotspot = hotspot$pos)
-    if (is.nan(hc)) 0L else as.integer(hc)
-  } else 0L
-  r_hc <- if (!is.null(hotspot)) {
-    hc <- get_hotspot_copies(r_sequences[[hotspot$chr]], hotspot = hotspot$pos)
-    if (is.nan(hc)) 0L else as.integer(hc)
-  } else 0L
-
-  # Selection-adjusted rates
-  sel_type <- state$input_parameters$selection_type
-  l_mult   <- compute_selection_multiplier(l_hc, sel_type, state$input_parameters$saturation_K)
-  r_mult   <- compute_selection_multiplier(r_hc, sel_type, state$input_parameters$saturation_K)
-
-  l_birth_rate <- state$input_parameters$birth_rate *
-    (1 + state$input_parameters$positive_selection_rate * l_mult)
-  l_death_rate <- state$input_parameters$death_rate *
-    (1 + state$input_parameters$negative_selection_rate * l_mult)
-
-  r_birth_rate <- state$input_parameters$birth_rate *
-    (1 + state$input_parameters$positive_selection_rate * r_mult)
-  r_death_rate <- state$input_parameters$death_rate *
-    (1 + state$input_parameters$negative_selection_rate * r_mult)
-
-  # ---- Update active arrays (only alive cells) ----
-  # Remove parent by swap-with-last then shrink — avoids shifting the entire vector.
-  n_alive <- length(state$cell_ids)
-  if (cell_idx < n_alive) {
-    state$cell_ids[cell_idx]              <- state$cell_ids[n_alive]
-    state$cell_next_event_times[cell_idx] <- state$cell_next_event_times[n_alive]
-    state$hotspot_counts[cell_idx]        <- state$hotspot_counts[n_alive]
-  }
-  state$cell_ids              <- state$cell_ids[-n_alive]
-  state$cell_next_event_times <- state$cell_next_event_times[-n_alive]
-  state$hotspot_counts        <- state$hotspot_counts[-n_alive]
-
-  # Free parent sequence memory
-  state$cell_sequences[[current_cell_id]] <- NULL
-
-  # Add daughters
-  state$cell_ids              <- c(state$cell_ids, l_cell_id, r_cell_id)
-  state$cell_next_event_times <- c(
-    state$cell_next_event_times,
-    state$time + stats::rexp(1, l_birth_rate + l_death_rate),
-    state$time + stats::rexp(1, r_birth_rate + r_death_rate)
-  )
-  state$hotspot_counts           <- c(state$hotspot_counts, l_hc, r_hc)
-  state$cell_sequences[[l_cell_id]] <- l_sequences
-  state$cell_sequences[[r_cell_id]] <- r_sequences
-
-  # ---- Append to pre-allocated history (O(1), no bind_rows) ----
-  i_l <- state$h_n + 1L
-  i_r <- state$h_n + 2L
-  state$h_n <- i_r
-
-  state$h_cell_id[i_l]    <- l_cell_id
-  state$h_parent_id[i_l]  <- current_cell_id
-  state$h_bfb_event[i_l]  <- bfb_occurred
-  state$h_wgd_event[i_l]  <- wgd_occurred
-  state$h_cn_event[i_l]   <- if (length(l_events) == 0) "none" else paste(l_events, collapse = ",")
-  state$h_chr_allele[i_l] <- if (length(l_chr_alleles) == 0) NA_character_ else paste(l_chr_alleles, collapse = ",")
-
-  state$h_cell_id[i_r]    <- r_cell_id
-  state$h_parent_id[i_r]  <- current_cell_id
-  state$h_bfb_event[i_r]  <- bfb_occurred
-  state$h_wgd_event[i_r]  <- wgd_occurred
-  state$h_cn_event[i_r]   <- if (length(r_events) == 0) "none" else paste(r_events, collapse = ",")
-  state$h_chr_allele[i_r] <- if (length(r_chr_alleles) == 0) NA_character_ else paste(r_chr_alleles, collapse = ",")
-
-  state
-}
-
 #' Prepare final results from simulation
 #'
-#' @param state The simulation state
-#' @param return_phylo Logical. Whether to build the phylogenetic tree. Default TRUE.
+#' Assembles the final return list from a completed (or in-progress)
+#' simulation state: cell sequences, cell history, optionally the
+#' reconstructed phylogeny, and summary fields.
 #'
-#' @return A list containing simulation results
+#' @param state The simulation state to finalize
+#' @param return_phylo Logical; whether to reconstruct and include the
+#'   phylogenetic tree (via \code{build_phylo_from_lineage}). Default
+#'   TRUE.
+#'
+#' @return A named list with the final simulation state and derived
+#'   outputs (see \code{bridge_sim()}'s return value for the full
+#'   structure).
+#' @keywords internal
 prepare_results <- function(state, return_phylo = TRUE) {
   # Alive cells = whatever remains in the active arrays at simulation end
   alive_cell_ids <- state$cell_ids
@@ -684,146 +354,27 @@ prepare_results <- function(state, return_phylo = TRUE) {
   return(result)
 }
 
-#' Process a death event
+#' Simulate Breakage-Fusion-Bridge (BFB) cycle for both daughters
 #'
-#' @param state The simulation state
-#' @param current_cell_id ID of the cell undergoing death
-#' @param cell_idx Index of the cell in the alive arrays (from get_next_event)
+#' Generates the left and right daughter sequences resulting from one
+#' BFB cycle applied to \code{sequence}. For \code{support = "uniform"}
+#' or \code{"beta"}, delegates to the C++ engine (\code{sim_bfb_cpp});
+#' for \code{support = "custom"} (a fixed set of candidate breakpoint
+#' positions), uses a pure-R fallback, since the C++ main-loop engine
+#' does not support custom breakpoints.
 #'
-#' @return Updated simulation state
-process_death_event <- function(state, current_cell_id, cell_idx) {
-  # Remove dead cell from active arrays by swap-with-last then shrink.
-  # This avoids shifting the entire vector and keeps arrays compact.
-  n_alive <- length(state$cell_ids)
-  if (cell_idx < n_alive) {
-    state$cell_ids[cell_idx]              <- state$cell_ids[n_alive]
-    state$cell_next_event_times[cell_idx] <- state$cell_next_event_times[n_alive]
-    state$hotspot_counts[cell_idx]        <- state$hotspot_counts[n_alive]
-  }
-  state$cell_ids              <- state$cell_ids[-n_alive]
-  state$cell_next_event_times <- state$cell_next_event_times[-n_alive]
-  state$hotspot_counts        <- state$hotspot_counts[-n_alive]
-
-  # Free sequence memory
-  state$cell_sequences[[current_cell_id]] <- NULL
-
-  # No history entry needed for explicit deaths:
-  # is_alive is computed at the end as cell_id %in% alive_cell_ids.
-  # Cells removed here will simply not appear in alive_cell_ids.
-
-  state
-}
-
-
-#' Check if simulation should continue
+#' @param sequence Interval-encoded chromosome sequence to break.
+#' @param support Breakpoint distribution: \code{"uniform"},
+#'   \code{"beta"}, or \code{"custom"}.
+#' @param alpha,beta Beta-distribution shape parameters, used when
+#'   \code{support = "beta"}.
+#' @param custom_breakpoints Integer vector of candidate breakpoint
+#'   positions, required when \code{support = "custom"}.
 #'
-#' @param state The simulation state
+#' @return A list with \code{l_seq} and \code{r_seq}, the two daughter
+#'   sequences.
 #'
-#' @return Logical indicating whether simulation should continue
-continue_simulation <- function(state) {
-  # Active arrays contain only alive cells, so length() is O(1).
-  alive_count <- length(state$cell_ids)
-  state$time < state$input_parameters$max_time &&
-    alive_count > 0 &&
-    alive_count < state$input_parameters$max_cells
-}
-
-#' Determine the next event to occur
-#'
-#' @param state The simulation state
-#'
-#' @return List with time, cell ID, index in alive arrays, and event type
-get_next_event <- function(state) {
-  # All entries in cell_ids are alive — no alive filtering needed.
-  n_alive <- length(state$cell_ids)
-  if (n_alive == 0L) return(NULL)
-
-  # which.min over the compact alive vector only
-  min_idx         <- which.min(state$cell_next_event_times)
-  current_cell_id <- state$cell_ids[min_idx]
-  hotspot_count   <- state$hotspot_counts[min_idx]
-  sel_mult        <- compute_selection_multiplier(
-    hotspot_count, state$input_parameters$selection_type,
-    state$input_parameters$saturation_K
-  )
-
-  # Calculate modified birth and death rates for this specific cell
-  cell_birth_rate <- state$input_parameters$birth_rate *
-    (1 + state$input_parameters$positive_selection_rate * sel_mult)
-  cell_death_rate <- state$input_parameters$death_rate *
-    (1 + state$input_parameters$negative_selection_rate * sel_mult)
-
-  event_probability <- cell_birth_rate / (cell_birth_rate + cell_death_rate)
-  event_type <- if (stats::runif(1) < event_probability) "birth" else "death"
-
-  list(
-    time      = state$cell_next_event_times[min_idx],
-    cell_id   = current_cell_id,
-    cell_idx  = min_idx,   # index in alive arrays — passed to event handlers
-    event_type = event_type
-  )
-}
-
-
-# Cell to cn copy data
-# sequences_to_cndata <- function(sequences, chr_seq_lengths, bin_length) {
-#   cndata <- lapply(names(sequences), function(cell_id) {
-#     seqs <- sequences[[cell_id]]
-#     lapply(names(seqs), function(chr_allele) {
-#       s <- seqs[[chr_allele]]
-#
-#       chr <- strsplit(chr_allele, ":")[[1]][1]
-#       allele <- strsplit(chr_allele, ":")[[1]][2]
-#
-#       bin_idxs <- 1:chr_seq_lengths[[chr]]
-#       t <- table(seq2vec(s))[bin_idxs]
-#       d <- dplyr::tibble(
-#         cell_id = cell_id,
-#         bin_idx = bin_idxs,
-#         allele = allele,
-#         chr = chr,
-#         state = as.integer(t[as.character(bin_idxs)])
-#       )
-#       d$state[is.na(d$state)] <- 0
-#       d
-#     }) %>%
-#       do.call(dplyr::bind_rows, .)
-#   }) %>%
-#     do.call(dplyr::bind_rows, .)
-#
-#   cndata <- cndata %>%
-#     dplyr::group_by(.data$cell_id, .data$chr) %>%
-#     tidyr::pivot_wider(values_from = .data$state, names_from = .data$allele) %>%
-#     dplyr::mutate(CN = .data$A + .data$B) %>%
-#     dplyr::mutate(
-#       start = (.data$bin_idx - 1) * bin_length + 1,
-#       end = .data$bin_idx * bin_length
-#     )
-#
-#   cndata
-# }
-
-
-sim_amp_del <- function(sequence, operation = "dup", rate = 1e7) {
-  sim_amp_del_cpp(sequence, operation, rate)
-}
-
-sim_wgd = function(sequence) {
-  sim_wgd_cpp(sequence)
-}
-
-#' Simulate Breakage-Fusion-Bridge (BFB) Cycle for both daughters
-#'
-#' @param sequence Input sequence
-#' @param support Distribution type for breakpoint selection ("uniform" or "beta")
-#' @param alpha Shape parameter for beta distribution (only used if support="beta")
-#' @param beta Shape parameter for beta distribution (only used if support="beta")
-#' @param custom_breakpoints .
-#'
-#' @details Simulate left and right children from a BFB cycle using specified
-#'   breakpoint selection distribution
-#'
-#' @return List containing left and right sequences
+#' @keywords internal
 sim_bfb_left_and_right_sequences <- function(
     sequence,
     support = "uniform",
@@ -869,26 +420,6 @@ sim_bfb_left_and_right_sequences <- function(
   }
 }
 
-reverse_sequence <- function(sequence) {
-  reverse_sequence_cpp(sequence)
-}
-
-fuse_sequence <- function(sequence) {
-  fuse_sequence_cpp(sequence)
-}
-
-cut_sequence <- function(sequence, cut_index) {
-  cut_sequence_cpp(sequence, cut_index)
-}
-
-is_hotspot_gained <- function(cell, hotspot) {
-  hc <- get_hotspot_copies(cell, hotspot)
-  if (is.nan(hc)) return(NA)
-  hc > 1
-}
-
-
-# Count how many intervals in `cell` contain `hotspot` (a bin index).
 get_hotspot_copies <- function(cell, hotspot) {
   if (is.null(hotspot)) return(NaN)
   hotspot_copies_cpp(cell, hotspot)
@@ -952,98 +483,6 @@ compute_selection_multiplier <- function(hotspot_count, selection_type, saturati
 #   return(newick_tree)
 # }
 
-cell_history_to_newick <- function(cell_history) {
-  # Check there is a root and rename it
-  root_name = cell_history$cell_id[is.na(cell_history$parent_id)]
-  cell_history$cell_id[cell_history$cell_id == root_name] = "root"
-  cell_history$parent_id[cell_history$parent_id == root_name] = "root"
-
-  # Helper function to check if a node has any living descendants
-  has_living_descendants <- function(node) {
-    # Get node data
-    node_data <- cell_history %>%
-      dplyr::filter(.data$cell_id == node)
-
-    # If node doesn't exist, return FALSE
-    if (nrow(node_data) == 0) {
-      return(FALSE)
-    }
-
-    # If this node is alive, return TRUE
-    if (node_data$is_alive) {
-      return(TRUE)
-    }
-
-    # Find children of the current node
-    children <- cell_history %>%
-      dplyr::filter(.data$parent_id == node) %>%
-      dplyr::pull(.data$cell_id)
-
-    # If no children, this is a leaf - return whether it's alive
-    if (length(children) == 0) {
-      return(node_data$is_alive)
-    }
-
-    # If has children, check if any child has living descendants
-    child_results <- vapply(children, has_living_descendants, logical(1))
-    return(any(child_results))
-  }
-
-  # Helper function to recursively build the tree (only for nodes with living descendants)
-  build_tree <- function(node) {
-    # Skip this node if it has no living descendants
-    if (!has_living_descendants(node)) {
-      return(NULL)
-    }
-
-    # Find children of the current node
-    children <- cell_history %>%
-      dplyr::filter(.data$parent_id == node) %>%
-      dplyr::pull(.data$cell_id)
-
-    # Filter children to only those with living descendants
-    living_children <- children[vapply(
-      children,
-      has_living_descendants,
-      logical(1)
-    )]
-
-    if (length(living_children) == 0) {
-      # If no living children, return the node itself (this should be a living leaf)
-      return(node)
-    } else {
-      # Recursively build subtrees for each living child
-      subtrees <- sapply(living_children, build_tree)
-      # Remove any NULL subtrees (shouldn't happen with our filtering, but safety check)
-      subtrees <- subtrees[!sapply(subtrees, is.null)]
-
-      if (length(subtrees) == 0) {
-        return(node)
-      } else {
-        subtree_str <- paste(subtrees, collapse = ",")
-        return(paste0("(", subtree_str, ")", node))
-      }
-    }
-  }
-
-  # Identify the root node (cells with no parent)
-  root <- cell_history %>%
-    dplyr::filter(is.na(.data$parent_id)) %>%
-    dplyr::pull(.data$cell_id)
-
-  if (length(root) != 1) {
-    stop("Error: There must be exactly one root node.")
-  }
-
-  # Check if root has any living descendants
-  if (!has_living_descendants(root)) {
-    stop("Error: No living cells found in the tree.")
-  }
-
-  # Build the tree starting from the root
-  newick_tree <- paste0(build_tree(root), ";")
-  return(newick_tree)
-}
 
 validate_bridge_sim_params <- function(
   initial_cells,

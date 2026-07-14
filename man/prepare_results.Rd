@@ -7,13 +7,20 @@
 prepare_results(state, return_phylo = TRUE)
 }
 \arguments{
-\item{state}{The simulation state}
+\item{state}{The simulation state to finalize}
 
-\item{return_phylo}{Logical. Whether to build the phylogenetic tree. Default TRUE.}
+\item{return_phylo}{Logical; whether to reconstruct and include the
+phylogenetic tree (via \code{build_phylo_from_lineage}). Default
+TRUE.}
 }
 \value{
-A list containing simulation results
+A named list with the final simulation state and derived
+outputs (see \code{bridge_sim()}'s return value for the full
+structure).
 }
 \description{
-Prepare final results from simulation
+Assembles the final return list from a completed (or in-progress)
+simulation state: cell sequences, cell history, optionally the
+reconstructed phylogeny, and summary fields.
 }
+\keyword{internal}

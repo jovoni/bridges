@@ -28,3 +28,4 @@ Named list with \code{l_seq} and \code{r_seq} (each an R interval list)
 Implements the fuse-cut-reverse BFB cycle with configurable breakpoint
 selection (uniform or beta distribution).
 }
+\keyword{internal}

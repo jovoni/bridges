@@ -19,3 +19,4 @@ HeatmapAnnotation object
 \description{
 Create tree annotation for heatmap
 }
+\keyword{internal}

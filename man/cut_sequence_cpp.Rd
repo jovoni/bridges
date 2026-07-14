@@ -17,3 +17,4 @@ Named list with \code{left_seq} and \code{right_seq}
 \description{
 Elements 1..cut_index go to left; elements cut_index+1..end go to right.
 }
+\keyword{internal}

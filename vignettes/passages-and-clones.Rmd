@@ -1,0 +1,104 @@
+---
+title: "Serial Passages and Clonal Summaries"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Serial Passages and Clonal Summaries}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.align = "center",
+  fig.width  = 10,
+  fig.height = 6,
+  out.width  = "100%",
+  dpi        = 150,
+  warning    = FALSE,
+  message    = FALSE
+)
+```
+
+```{r libraries}
+library(bridges)
+set.seed(42)
+```
+
+## Where these functions fit in
+
+`simulate_serial_passages()` calls `bridge_sim()` internally, plus `clonal_params()` and `summarise_clone()` for building parameter sets and summarizing each passage's copy-number matrix. If you only need the raw simulator, `bridge_sim()` alone is sufficient; this vignette is for when you want built-in bottleneck/passage logic and ready-made summary statistics on top of it.
+
+---
+
+## 1  Building a parameter set
+
+`clonal_params()` is a small constructor collecting the `bridge_sim()` arguments relevant to a single clonal lineage into one named list, so they can be reused across many calls without repeating yourself:
+
+```{r clonal-params}
+p <- clonal_params(
+  bfb_prob = 0.6,
+  positive_selection_rate = 0
+)
+str(p)
+```
+
+---
+
+## 2  Summarizing a copy-number matrix
+
+`summarise_clone()` takes a cells-by-bins copy-number matrix (for one allele) and reduces it to a handful of scalar statistics centered on one "hotspot" bin: mean/max/variance of copy number at the hotspot, the fraction of cells with a hotspot gain, the genome-wide maximum copy number, and the mean number of breakpoints per cell.
+
+`tibble_to_matrix()` (used below to build that matrix from `cna_data`) is an internal, unexported helper -- accessed here via `:::` purely for illustration. In practice you won't usually call it directly: `simulate_serial_passages()` (Section 3) handles this conversion for you internally.
+
+```{r summarise-clone}
+sim <- bridge_sim(
+  chromosomes = "1", bfb_allele = "1:A",
+  max_cells = 100, lambda = 2,
+  bfb_prob = p$bfb_prob, positive_selection_rate = p$positive_selection_rate
+)
+cna_A <- bridges:::tibble_to_matrix(sim$cna_data, value_column = "A")
+
+summarise_clone(cna_A, hotspot_col = 60, base_value = 1, n_alive = sim$n_alive)
+```
+
+This is the building block `simulate_serial_passages()` uses internally at every passage -- you generally won't need to call it directly, but it's useful on its own if you're comparing a single simulated (or real) copy-number matrix against a specific hotspot position.
+
+---
+
+## 3  Serial passaging
+
+Real cell-culture experiments are often passaged: a population grows, a subset is sampled forward into the next passage (a bottleneck), and this repeats over many generations. `simulate_serial_passages()` models exactly this: grow to `N` cells, subsample `N_sub` cells, and those seed the next passage -- repeated `K` times. At each passage listed in `passages_to_keep`, summary statistics are computed immediately and the full copy-number matrix is discarded (so memory use doesn't grow with `K`).
+
+```{r serial-passages, fig.height=5}
+df <- simulate_serial_passages(
+  params           = clonal_params(positive_selection_rate = 0.25, bfb_prob = 0.95, lambda = 0.5),
+  chromosome       = "1",
+  allele           = "A",
+  hotspot_pos      = 60,
+  N                = 200,
+  N_sub            = 30,
+  K                = 8,
+  passages_to_keep = c(1, 4, 8),
+  n_replicates     = 10
+)
+
+dplyr::select(df, passage, replicate, hotspot_max_cn, mean_breakpoints, n_alive) |>
+  head()
+```
+
+The return format is one row per `(passage, replicate)` combination, with columns `hotspot_mean_cn`, `hotspot_max_cn`, `hotspot_fraction_amp`, `hotspot_cn_var`, `max_cn_global`, `mean_breakpoints`, `n_alive`, `n_cells`, and `failed` (`TRUE` for replicates where the lineage died out before reaching `N`).
+
+```{r plot-serial-passages, fig.height=5}
+plot_serial_passages(df)
+```
+
+For a self-consistent simulator, complexity metrics like `mean_breakpoints` and `hotspot_max_cn` should tend to increase (or at least not systematically decrease) across passages, as bottlenecked clonal sweeps and further BFB/amplification events accumulate. Because each bottleneck reintroduces drift, individual replicates can be noisy -- looking at the distribution across `n_replicates` (as `plot_serial_passages()` does) is more informative than any single trajectory.
+
+---
+
+## Next steps
+
+- **The simulator itself**: `vignette("simulator")`.
+- **Fitting a phylogeny and detecting BFB signal**: `vignette("inference")` and `vignette("batch-detection")`.

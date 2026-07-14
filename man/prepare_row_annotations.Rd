@@ -17,3 +17,4 @@ ComplexHeatmap annotation object or NULL
 \description{
 Prepare row annotations from a single data frame
 }
+\keyword{internal}

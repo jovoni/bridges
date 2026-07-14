@@ -17,3 +17,4 @@ Updated simulation state
 \description{
 Initialize simulation without BFB for initial cells (diploid version)
 }
+\keyword{internal}

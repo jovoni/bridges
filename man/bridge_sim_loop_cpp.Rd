@@ -22,3 +22,4 @@ Takes an already-initialised \code{sim_state} from R's
 the final state in the same list format expected by
 \code{prepare_results()}.
 }
+\keyword{internal}

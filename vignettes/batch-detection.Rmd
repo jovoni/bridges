@@ -1,0 +1,135 @@
+---
+title: "Batch BFB Detection from Raw Copy-Number Profiles"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Batch BFB Detection from Raw Copy-Number Profiles}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.align = "center",
+  fig.width  = 10,
+  fig.height = 6,
+  out.width  = "100%",
+  dpi        = 150,
+  warning    = FALSE,
+  message    = FALSE
+)
+```
+
+```{r libraries}
+library(bridges)
+library(dplyr)
+set.seed(1)
+```
+
+## Why a second detection method?
+
+`detect_bfb_branches()` (see `vignette("inference")`) asks "does this *branch* of my inferred phylogeny look BFB-like?" -- it needs a fitted tree and ancestral reconstruction first. Sometimes you just want to ask a simpler, tree-independent question about a single cell's raw profile: **could this copy-number pattern have been produced by a BFB schedule at all?** That's an exact combinatorial question (Kinsella & Bafna 2012; Zakov, Kinsella & Bafna 2013), answered by `bfbtools`, and `bridges` wraps it into batch-friendly, `cna_data`-aware functions: `bfb_detect_vectors()`, `bfb_detect_batch()`, and `split_chr_arms()`.
+
+Neither method supersedes the other -- they're complementary evidence.
+
+---
+
+## 1  From copy number to a count-vector
+
+The BFB algorithms in `bfbtools` work on plain integer count-vectors, not on tibbles or matrices. Given one cell's copy-number row (already ordered along the chromosome), the count-vector is obtained by run-length-encoding it, dropping runs of zero (deletions), and requiring at least two remaining segments to be informative at all -- a flat single-segment row carries no BFB signal to test.
+
+```{r extract-example}
+row <- c(1, 1, 1, 0, 0, 3, 3, 5, 5, 5)
+rle_vec <- rle(row)
+v <- rle_vec$values
+v <- v[v != 0]
+v
+```
+
+`bfb_detect_batch()` (Section 3) does this extraction for you across an entire `cna_data` tibble; this section is just to show what's actually being tested underneath.
+
+---
+
+## 2  `bfb_detect_vectors()` -- the core, sim-agnostic batch logic
+
+Given a plain list of count-vectors, `bfb_detect_vectors()` runs `bfbtools::admits_bfb()` on each, and `bfbtools::nearest_bfb()` for the ones that don't admit BFB exactly -- exploiting exact-duplicate profiles (very common across related cells in a lineage) so each distinct vector is only ever computed once.
+
+```{r detect-vectors}
+vec_list <- list(
+  c(6, 3, 5),                   # admits BFB exactly
+  c(6, 3, 5),                   # duplicate -- reused, not recomputed
+  c(14, 7, 18, 16, 9, 12),      # a real near-miss: does NOT admit BFB exactly
+  c(1, 1),                      # trivial: flat baseline + a deletion gap
+  NULL                          # uninformative
+)
+
+bfb_detect_vectors(vec_list)
+```
+
+A few things worth noting in that output:
+
+- **`bfb_distance`** is `-log(weight)` under a Poisson noise model: `0` for an exact match, increasing as more/larger corrections are needed to reach the nearest BFB-admitting vector.
+- **The trivial vector `c(1, 1)` comes back `NA`, not `TRUE`.** "Admits a BFB schedule" is technically true even for zero BFB cycles -- the untouched baseline chromosome is itself a (trivial) BFB schedule. Since every real BFB cycle is an inverted *duplication*, it necessarily pushes some segment's copy number above 1; a profile with no amplification anywhere (just a flat baseline interrupted by a deletion) is definitionally uninteresting for this question. `min_max_count` (default `2`) enforces that precondition -- lower it to `1` only if you want the raw, weaker "technically admits BFB" semantics back.
+- `n_unique` reports how many *distinct* count-vectors were actually run through `bfbtools` -- 3 here, out of 5 input rows.
+
+---
+
+## 3  `bfb_detect_batch()` -- straight from `cna_data`
+
+`bfb_detect_batch()` extracts count-vectors from a `cna_data` tibble (one per cell, per chromosome, per allele) and calls `bfb_detect_vectors()` on all of them at once, so duplicate profiles across cells *and* alleles *and* chromosomes are deduplicated in a single pass.
+
+```{r batch-sim}
+sim <- bridge_sim(
+  chromosomes = c(1:2), bfb_allele = "1:A",
+  max_cells = 60, lambda = 1.5,
+  bfb_prob = 0.5, amp_rate = 0.2, del_rate = 0.1
+)
+
+result <- bfb_detect_batch(sim$cna_data, alleles = c("A", "B"))
+head(result)
+```
+
+The output has one row per `(cell_id, chr, allele)`: `n_segments` and `max_count` (useful complexity signals for building your own filters/weights beyond the built-in `min_max_count`), `admits_bfb`, `bfb_distance`, `nearest_weight`, and `n_unique`.
+
+```{r batch-summary}
+result %>%
+  filter(!is.na(admits_bfb)) %>%
+  count(chr, allele, admits_bfb)
+```
+
+Chromosome 1, allele A -- where BFB was seeded -- should show a higher `admits_bfb` rate than chromosome 2 or allele B.
+
+---
+
+## 4  Chromosome arms: why direction matters
+
+A count-vector is only meaningful if it's oriented telomere-to-centromere. Real chromosomes have *two* telomeres, one on each arm, with the centromere in between -- so a whole-chromosome row mixes two opposite orientations into one, which will generally not read as a valid (or correctly-scored) BFB pattern even when the underlying biology is a clean BFB event confined to one arm.
+
+`split_chr_arms()` labels each row `"p"` or `"q"` based on position relative to the centromere. Ascending genomic coordinate is already telomere-to-centromere on the p-arm, but is centromere-to-telomere (backwards) on the q-arm -- only the q-arm needs reversing before extraction, and `bfb_detect_batch()` handles this automatically once you supply a `centromere`:
+
+```{r arm-aware}
+# Toy example: the SAME true [6,3,5] BFB pattern placed on both arms of one
+# chromosome, each laid out in that arm's own natural raw coordinate order.
+arm_cna <- rbind(
+  data.frame(cell_id = "cellZ", chr = 1, start = c(0, 10, 20), end = c(9, 19, 29),
+             A = c(6, 3, 5)),        # p-arm: ascending coordinate = telomere-first already
+  data.frame(cell_id = "cellZ", chr = 1, start = c(30, 40, 50), end = c(39, 49, 59),
+             A = c(5, 3, 6))         # q-arm: ascending coordinate = centromere-first
+)
+
+bfb_detect_batch(arm_cna, alleles = "A", centromere = c("1" = 30))
+```
+
+Both arms correctly recover the same `[6, 3, 5]` pattern and both correctly admit BFB, despite having opposite raw coordinate orientation on disk -- because `centromere` was supplied, `bfb_detect_batch()` ran `split_chr_arms()` internally and applied the right reversal to each arm independently. Compare this to what a whole-chromosome (non-arm-aware) reading of the *same* six rows would see: a single 6-segment run that doesn't reduce to either arm's true pattern.
+
+`centromere` accepts a single number (applied to every chromosome -- only sensible for single-chromosome data), a named vector keyed by chromosome (for multi-chromosome data where each has its own centromere position), or is left `NULL` by default (no arm-splitting; the whole chromosome is treated as one unit, matching the behavior in Section 3).
+
+**A caveat worth being explicit about:** if `centromere` is left `NULL` and your data spans both arms of a chromosome, whole-chromosome detection isn't just "less precise" -- it can silently give the wrong answer, in either direction, for exactly the reason shown above. If you're working with real (or realistically-simulated) whole-chromosome data, specifying `centromere` is the safer default, not an optional refinement. For real genomic data, use actual centromere coordinates for your genome build (e.g. from a UCSC cytoband/gap track) rather than the midpoint-of-observed-range fallback that `split_chr_arms()` uses when `centromere` isn't supplied per-chromosome -- that fallback is intended for simulated data, where "centromere" really just means "the point BFB breakage tends to occur near."
+
+---
+
+## Next steps
+
+- **The tree-based alternative**: `vignette("inference")`.
+- **The underlying algorithms on their own**, with no simulation or `cna_data` involved at all: `vignette("bfbtools-algorithms", package = "bfbtools")`.

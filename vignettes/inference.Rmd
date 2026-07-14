@@ -32,10 +32,10 @@ set.seed(42)
 
 ## 1  Input data format
 
-`fit()` and all plotting functions expect a data frame in long format with one row per **cell × genomic bin** combination.  Required columns:
+`fit()` and all plotting functions expect a data frame in long format with one row per **cell x genomic bin** combination. Required columns:
 
 | Column    | Type      | Description                                   |
-|-----------|-----------|-----------------------------------------------|
+|-----------|-----------|--------------------------------------------------|
 | `cell_id` | character | Unique cell identifier                        |
 | `chr`     | character | Chromosome (e.g. `"1"`, `"X"`)               |
 | `start`   | integer   | Bin start in base pairs                       |
@@ -44,7 +44,7 @@ set.seed(42)
 | `A`       | integer   | Allele A copy number (haploid, diploid = 1)   |
 | `B`       | integer   | Allele B copy number (haploid, diploid = 1)   |
 
-**Loading real scWGS data.**  Most single-cell WGS pipelines produce segment-level tables with similar columns.  Rename columns to match the format above, convert chromosome names to bare numbers/letters (no `"chr"` prefix), and ensure bins are uniformly sized within each chromosome.
+**Loading real scWGS data.** Most single-cell WGS pipelines produce segment-level tables with similar columns. Rename columns to match the format above, convert chromosome names to bare numbers/letters (no `"chr"` prefix), and ensure bins are uniformly sized within each chromosome.
 
 ```{r setup-data}
 # Generate synthetic data for this vignette
@@ -55,7 +55,7 @@ sim <- bridge_sim(
   lambda      = .75,
   bfb_prob    = 0.8,
   amp_rate    = 0.1,
-  del_rate    = 0.1, 
+  del_rate    = 0.1,
   subsample   = 256
 )
 
@@ -71,11 +71,11 @@ cat("Chromosomes:", paste(unique(cna_data$chr), collapse = ", "), "\n")
 
 `fit()` runs a five-step pipeline:
 
-1. **Validation** — confirms distance functions exist and inputs are well-formed.
-2. **Pre-processing** — jitter correction (optional), matrix conversion, insertion of a synthetic diploid reference cell.
-3. **Greedy (G) distances** — per-chromosome, per-allele minimum-edit distance matrices.
-4. **BFB/contiguity (B) distances** — per-chromosome, per-allele distance matrices penalizing non-contiguous CN changes.  Skipped when `b_dist_func = NULL`.
-5. **Tree construction** — `find_minimal_distances()` merges G and B matrices; `tree_func` (default `ape::nj`) builds the final tree.
+1. **Validation** -- confirms distance functions exist and inputs are well-formed.
+2. **Pre-processing** -- jitter correction (optional), matrix conversion, insertion of a synthetic diploid reference cell.
+3. **Greedy (G) distances** -- per-chromosome, per-allele minimum-edit distance matrices.
+4. **BFB/contiguity (B) distances** -- per-chromosome, per-allele distance matrices penalizing non-contiguous CN changes. Skipped when `b_dist_func = NULL`.
+5. **Tree construction** -- `find_minimal_distances()` merges G and B matrices; `tree_func` (default `ape::nj`) builds the final tree.
 
 ```{r fit}
 res <- fit(
@@ -90,21 +90,21 @@ The result is a list:
 names(res)
 ```
 
-- `res$tree` — the inferred phylogenetic tree (class `phylo`, rooted at diploid).
-- `res$D` — final distance matrix across all cells.
-- `res$greedy_Ds` / `res$avg_Ds` — per-chromosome/allele matrices.
-- `res$reconstructions` — ancestral CN states per branch, used for BFB detection.
+- `res$tree` -- the inferred phylogenetic tree (class `phylo`, rooted at diploid).
+- `res$D` -- final distance matrix across all cells.
+- `res$greedy_Ds` / `res$avg_Ds` -- per-chromosome/allele matrices.
+- `res$reconstructions` -- ancestral CN states per branch, used for tree-based BFB detection (Section 6).
 
 ---
 
 ## 3  Greedy (G) distance
 
-The **Greedy distance** between two cells is the minimum number of integer copy-number steps needed to transform one CN profile into the other, computed independently for each chromosome and allele.  It treats every bin independently, so a single event moving a large contiguous segment is counted the same as many independent changes.
+The **Greedy distance** between two cells is the minimum number of integer copy-number steps needed to transform one CN profile into the other, computed independently for each chromosome and allele. It treats every bin independently, so a single event moving a large contiguous segment is counted the same as many independent changes.
 
 Available G functions (inspect with `names(G_DISTS)`):
 
 | Name            | Description                                         |
-|-----------------|-----------------------------------------------------|
+|-----------------|--------------------------------------------------------|
 | `"greedy_fast"` | Per-bin absolute difference (default, fast)         |
 | `"greedy_avg"`  | Averaged over alleles before summing                |
 
@@ -119,17 +119,17 @@ This is useful for ablation studies or when allele-specific data is unavailable.
 
 ## 4  BFB/contiguity (B) distance
 
-The **BFB distance** adds a penalty for CN changes that are *non-contiguous* across genomic bins — the hallmark of BFB amplification, where a fold-back creates a mirror-image pattern rather than a simple contiguous change.  Combining G and B distances makes the final distance matrix sensitive to BFB-like evolutionary paths.
+The **BFB distance** adds a penalty for CN changes that are *non-contiguous* across genomic bins -- the hallmark of BFB amplification, where a fold-back creates a mirror-image pattern rather than a simple contiguous change. Combining G and B distances makes the final distance matrix sensitive to BFB-like evolutionary paths.
 
 Available B functions (inspect with `names(B_DISTS)`):
 
 | Name         | Description                                       |
-|--------------|---------------------------------------------------|
+|--------------|-------------------------------------------------------|
 | `"bfb_fast"` | Contiguity penalty on the difference profile (default) |
 | `"A_contig"` | Allele A contiguity                               |
 | `"B_contig"` | Allele B contiguity                               |
 
-`bfb_penalty` scales the contribution of the B distance relative to G.  At the default of `0`, the two are combined symmetrically via `find_minimal_distances()` which takes the element-wise minimum.
+`bfb_penalty` scales the contribution of the B distance relative to G. At the default of `0`, the two are combined symmetrically via `find_minimal_distances()`, which takes the element-wise minimum.
 
 ```{r b-dist}
 # Increase BFB penalty to make the tree more sensitive to BFB events
@@ -138,14 +138,16 @@ res_bfb <- fit(data = cna_data, alleles = c("A", "B"), bfb_penalty = 1)
 
 **When to set `b_dist_func = NULL`:** use greedy-only mode for total CN data (column `CN` only), for speed-ups in parameter sweeps, or as an ablation control when benchmarking BFB detection.
 
+Note: `distances.R` also ships six older, pure-R implementations of these G/B distance functions (`find_greedy_distance()` and variants). They're kept for convenience/reference only -- `fit()`'s own defaults use the much faster C++ versions shown above -- and are slated for removal in a future version. If you're not intentionally selecting one of the old names, you're not using them.
+
 ---
 
 ## 5  Jitter correction
 
-Real scWGS data often contains "jitter" — small random fluctuations in CN values caused by segmentation noise.  The `k_jitter_fix` parameter smooths profiles before distance computation:
+Real scWGS data often contains "jitter" -- small random fluctuations in CN values caused by segmentation noise. The `k_jitter_fix` parameter smooths profiles before distance computation:
 
-- `k_jitter_fix = 0` — no smoothing (default; appropriate for clean or simulated data).
-- `k_jitter_fix > 0` — a running median of width `2k + 1` is applied to each cell's CN profile before computing distances.
+- `k_jitter_fix = 0` -- no smoothing (default; appropriate for clean or simulated data).
+- `k_jitter_fix > 0` -- a running median of width `2k + 1` is applied to each cell's CN profile before computing distances.
 
 ```{r jitter, eval=FALSE}
 # For noisy real data, try k = 1 or 2
@@ -156,100 +158,115 @@ Start with `k_jitter_fix = 0` on simulated data and increase only if real data s
 
 ---
 
-## 6  BFB detection
+## 6  BFB detection: two complementary methods
+
+`bridges` provides two independent BFB detection mechanisms, answering different questions. This section covers the tree-based one, which is what `fit()`'s output feeds directly into; see `vignette("batch-detection")` for the other (which needs no tree or fit at all, and works on raw per-cell profiles using the exact combinatorial algorithms in `bfbtools`).
 
 ### The pseudo-cell approach
 
-`detect_bfb()` works on the reconstructed ancestral CN states stored in `res$reconstructions`.  For each internal branch in the phylogeny, it constructs a **pseudo-cell** by comparing the CN profile of the ancestor with that of its child.  It then computes:
+`detect_bfb_branches()` works on the reconstructed ancestral CN states stored in `res$reconstructions`. For each internal branch in the phylogeny, it constructs a **pseudo-cell** by comparing the CN profile of the ancestor with that of its child. It then computes:
 
-- **G cost** — greedy (contiguous) edit distance to explain the transition.
-- **B cost** — BFB/contiguity distance including the non-contiguous penalty.
-- **delta** = G − B.  A positive delta means the BFB model explains the transition *better* than simple edits: the CN change is non-contiguous, consistent with a fold-back event.
+- **G cost** -- greedy (contiguous) edit distance to explain the transition.
+- **B cost** -- BFB/contiguity distance including the non-contiguous penalty.
+- **delta** = G - B. A positive delta means the BFB model explains the transition *better* than simple edits: the CN change is non-contiguous, consistent with a fold-back event.
 
-Branches where `delta > threshold` are counted as BFB-positive.  A one-sided binomial test assesses whether the fraction of BFB-positive branches per chromosome-allele combination is significantly above chance.  P-values are corrected with the Benjamini-Hochberg procedure.
+Branches where `delta > threshold` are counted as BFB-positive. A one-sided binomial test assesses whether the fraction of BFB-positive branches per chromosome-allele combination is significantly above chance. P-values are corrected with the Benjamini-Hochberg procedure.
 
 ```{r detect-bfb}
-bfb_df <- bridges:::detect_bfb(res, threshold = 0.005)
+bfb_df <- detect_bfb_branches(res, threshold = 0.005)
 bfb_df
 ```
 
 Column interpretation:
-- `mean` — fraction of branches with BFB signal (between 0 and 1).
-- `N_successes / N_trials` — counts underlying the binomial test.
-- `p.value` / `adj.pval` — raw and BH-corrected p-values.
-- `threshold` — the delta threshold used.
 
-Chromosome 8, allele A should have the highest `mean` because that is where BFB was seeded in our simulation.
+- `mean` -- fraction of branches with BFB signal (between 0 and 1).
+- `N_successes` / `N_trials` -- counts underlying the binomial test.
+- `p.value` / `adj.pval` -- raw and BH-corrected p-values.
+- `threshold` -- the delta threshold used.
+
+Chromosome 1, allele A should have the highest `mean` because that is where BFB was seeded in our simulation.
 
 ### Tuning `threshold`
 
-Lower threshold → more sensitive (smaller delta counts as BFB), more false positives.  Higher → more specific.  A value of `0.005` works well for simulated data; for noisy real data try `0.01`–`0.05` and inspect the distribution of delta values manually via `res$reconstructions`.
+Lower threshold -> more sensitive (smaller delta counts as BFB), more false positives. Higher -> more specific. A value of `0.005` works well for simulated data; for noisy real data try `0.01`-`0.05` and inspect the distribution of delta values manually via `res$reconstructions`.
 
 ---
 
 ## 7  Visualization
 
-### 7.1  `plot_heatmap()` — combined CN + tree view
+### 7.1  `plot_heatmap()` -- combined CN + tree view
 
-The primary output.  Rows are cells ordered by the phylogenetic tree; columns are genomic bins.
+The primary output. Rows are cells ordered by the phylogenetic tree; columns are genomic bins.
 
 ```{r heatmap-basic, fig.height=6}
 plot_heatmap(
   cna_data,
-  tree         = res$tree,
-  to_plot      = c("CN", "A", "B"),
-  ladderize    = TRUE,
-  branch_length = 1,
-  use_raster   = FALSE
+  tree                 = res$tree,
+  chromosomes_to_plot  = c(1, 2),
+  to_plot              = c("CN", "A", "B"),
+  ladderize            = TRUE,
+  branch_length        = 1,
+  use_raster           = FALSE
 )
 ```
 
-**Reconstruction coloring** — branches can be colored by BFB signal intensity on a chosen chromosome and allele:
+**Reconstruction coloring** -- branches can be colored by BFB signal intensity on a chosen chromosome and allele:
 
 ```{r heatmap-recon, fig.height=6}
 plot_heatmap(
   cna_data,
   tree                = res$tree,
+  chromosomes_to_plot = c(1, 2),
   to_plot             = c("A", "B"),
   ladderize           = TRUE,
   branch_length       = 1,
-  use_raster          = FALSE
+  use_raster          = FALSE,
+  reconstruction      = res$reconstructions,
+  chr_for_coloring    = "1",
+  allele_for_coloring = "A"
 )
 ```
 
-Darker / more saturated branches carry stronger BFB signal on chromosome 8, allele A.
+Darker / more saturated branches carry stronger BFB signal on chromosome 1, allele A.
 
 **Other useful options:**
 
 | Argument          | Effect                                                            |
-|-------------------|-------------------------------------------------------------------|
+|-------------------|------------------------------------------------------------------------|
 | `reorder_tree`    | Optimize tip order to minimize crossed branches                   |
 | `distance_matrix` | Distance matrix to use for tip reordering                        |
-| `annotations`     | Data frame with `cell_id` + annotation columns → row color bars   |
+| `annotations`     | Data frame with `cell_id` + annotation columns -> row color bars   |
 | `show_tree`       | `FALSE` to hide the tree (heatmap only)                           |
 
-### 7.2  `plot_bfb_signature()` — segment-level BFB map
+### 7.2  `plot_bfb_signature()` -- segment-level BFB map
 
 ```{r bfb-sig, fig.height=4}
 plot_bfb_signature(res, chr_of_interest = "1", allele_of_interest = "A")
 ```
 
-Each bar represents one genomic bin.  Height = number of phylogenetic branches where that bin was involved in a BFB-like event.  Bins near the original breakpoint accumulate the most events.
+Each bar represents one genomic bin. Height = number of phylogenetic branches where that bin was involved in a BFB-like event. Bins near the original breakpoint accumulate the most events.
 
-### 7.3  `plot_chr_all_heatmap()` — per-chromosome detail
+### 7.3  `plot_chr_all_heatmap()` -- per-chromosome detail
 
 For a focused view of one chromosome without the phylogenetic tree:
 
 ```{r chr-heatmap, fig.height=5}
 plot_chr_all_heatmap(
   cna_data,
-  chr                 = "1",
-  allele              = "A",
-  order_heatmap       = TRUE,
-  add_avg_CN_profile  = TRUE,
+  chr                   = "1",
+  allele                = "A",
+  order_heatmap         = TRUE,
+  add_avg_CN_profile    = TRUE,
   add_gain_loss_profile = TRUE,
-  use_raster          = FALSE
+  use_raster            = FALSE
 )
 ```
 
-With `order_heatmap = TRUE`, rows are sorted by the number of bins matching the diploid baseline (fewest altered bins at the top).  The annotation bars above show average CN (barplot) and gain/loss fractions (stacked proportions) per bin.
+With `order_heatmap = TRUE`, rows are sorted by the number of bins matching the diploid baseline (fewest altered bins at the top). The annotation bars above show average CN (barplot) and gain/loss fractions (stacked proportions) per bin.
+
+---
+
+## Next steps
+
+- **Tree-free BFB detection directly on raw profiles** (works without ever calling `fit()`): `vignette("batch-detection")`.
+- **The underlying linear-time BFB algorithms on their own**: `vignette("bfbtools-algorithms", package = "bfbtools")`.

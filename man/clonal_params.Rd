@@ -43,6 +43,12 @@ drawn from Exp(1/rate).}
 
 \item{first_round_of_bfb}{If TRUE the founding cell already carries one BFB
 event, mimicking a clone that initiated from a single BFB.}
+
+\item{selection_type}{How hotspot copy number translates into a
+selection advantage: \code{"constant"} (any gain gives the same
+fixed advantage), \code{"linear"}, or \code{"saturation"} -- passed
+straight through to \code{bridge_sim()}. Default:
+\code{"constant"}.}
 }
 \value{
 Named list of simulation parameters.

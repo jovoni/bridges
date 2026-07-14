@@ -36,3 +36,4 @@ Delta values represent the difference between G distance and B distance costs.
 The binomial test uses alternative = "greater" to test if the proportion
 of positive deltas significantly exceeds the threshold.
 }
+\keyword{internal}

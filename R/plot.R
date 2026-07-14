@@ -8,6 +8,7 @@ get_ordered_cell_ids <- function(tree_plot_dat) {
 #' @param tree Phylogenetic tree object (optional)
 #' @param chromosomes_to_plot Vector of chromosomes to include
 #' @param to_plot Vector of features to plot
+#' @keywords internal
 validate_heatmap_inputs <- function(data, tree, chromosomes_to_plot, to_plot) {
   # Validate data structure
   required_cols <- c("cell_id", "chr", "start")
@@ -49,6 +50,7 @@ validate_heatmap_inputs <- function(data, tree, chromosomes_to_plot, to_plot) {
 #' @param annotations Data frame with cell_id and annotation columns
 #' @param ordered_cell_ids Vector of cell IDs in desired order
 #' @return ComplexHeatmap annotation object or NULL
+#' @keywords internal
 prepare_row_annotations <- function(annotations, ordered_cell_ids) {
   if (is.null(annotations)) {
     return(NULL)
@@ -143,6 +145,7 @@ prepare_row_annotations <- function(annotations, ordered_cell_ids) {
 #' @param tree Phylogenetic tree
 #' @param distance_matrix Distance matrix for optimization
 #' @return Reordered phylogenetic tree
+#' @keywords internal
 optimize_tree_ordering <- function(tree, distance_matrix) {
   if (!requireNamespace("seriation", quietly = TRUE)) {
     warning("seriation package not available, skipping tree optimization")
@@ -171,6 +174,7 @@ optimize_tree_ordering <- function(tree, distance_matrix) {
 #' @param reorder_tree Whether to optimize tree ordering
 #' @param distance_matrix Distance matrix for reordering (reorder_tree = TRUE)
 #' @return List containing processed tree and ggplot object
+#' @keywords internal
 process_tree <- function(tree, branch_length = NULL, ladderize = FALSE,
                          reorder_tree = FALSE, distance_matrix = NULL) {
 
@@ -201,6 +205,7 @@ process_tree <- function(tree, branch_length = NULL, ladderize = FALSE,
 #' @param feature_name Name of feature column to extract
 #' @param ordered_cell_ids Cell IDs in desired order
 #' @return List containing matrix and column information
+#' @keywords internal
 prepare_heatmap_matrix <- function(data, chromosomes_to_plot, feature_name, ordered_cell_ids) {
   # Filter and prepare data
   processed_data <- data %>%
@@ -255,6 +260,7 @@ prepare_heatmap_matrix <- function(data, chromosomes_to_plot, feature_name, orde
 #' @param tree_width Width of tree annotation
 #' @param n_cells Number of cells in heatmap
 #' @return HeatmapAnnotation object
+#' @keywords internal
 create_tree_annotation <- function(tree_ggplot, tree_width, n_cells) {
   tree_annot_func <- ComplexHeatmap::AnnotationFunction(
     fun = function(index) {

@@ -18,6 +18,11 @@ reconstruct_tree(fit, chr, allele, store_profiles = TRUE)
 \item{chr}{Character string specifying the chromosome to analyze}
 
 \item{allele}{Character string specifying the allele type ("CN" for copy number, others for allelic)}
+
+\item{store_profiles}{Logical; whether to retain each internal node's
+reconstructed profile in the returned \code{internal_nodes} list
+(set FALSE to save memory on large trees when only the final
+working input/deltas are needed). Default TRUE.}
 }
 \value{
 A list containing:
@@ -52,3 +57,4 @@ The function:
 The tree edge lengths are set to 1 for uniform weighting. Node labels
 are automatically generated if not present.
 }
+\keyword{internal}

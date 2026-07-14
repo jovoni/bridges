@@ -22,44 +22,44 @@ knitr::opts_chunk$set(
 ```
 
 ```{r libraries}
-library(bridges)
-library(ggplot2)
-library(dplyr)
 set.seed(42)
+library(bridges)
 ```
+
+This vignette covers the Gillespie simulation engine's own scope. If you're looking for serial-passage workflows or clonal-comparison summaries built on top of it, see `vignette("passages-and-clones")`.
 
 ---
 
 ## 1  The Gillespie model
 
-`bridge_sim` implements a **continuous-time Gillespie algorithm** for cancer cell evolution.  At each step, the next event is chosen proportionally to total rates and the simulation clock is advanced by an exponential waiting time.
+`bridge_sim` implements a **continuous-time Gillespie algorithm** for cancer cell evolution. At each step, the next event is chosen proportionally to total rates and the simulation clock is advanced by an exponential waiting time.
 
 ### Birth and death
 
 | Parameter    | Meaning                                  | Default |
-|--------------|------------------------------------------|---------|
+|--------------|--------------------------------------------|---------|
 | `birth_rate` | Rate at which a cell divides             | `0.1`   |
 | `death_rate` | Rate at which a cell dies                | `0.001` |
 | `max_cells`  | Stop when this many cells are alive      | `256`   |
 | `max_time`   | Hard time limit                          | `300`   |
 
-Cells with an amplified hotspot can have their birth rate boosted by `positive_selection_rate` (see Section 4).  The simulation stops as soon as `max_cells` **or** `max_time` is reached, whichever fires first.
+Cells with an amplified hotspot can have their birth rate boosted by `positive_selection_rate` (see Section 4). The simulation stops as soon as `max_cells` **or** `max_time` is reached, whichever fires first.
 
 ### Genomic events per division
 
-When a cell divides, each daughter independently draws a Poisson number of genomic events with mean `lambda`.  Each event is one of:
+When a cell divides, each daughter independently draws a Poisson number of genomic events with mean `lambda`. Each event is one of:
 
 | Event          | Relative weight  | Description                          |
-|----------------|------------------|--------------------------------------|
+|----------------|------------------|----------------------------------------|
 | BFB cycle      | `bfb_prob`       | Breakage-Fusion-Bridge on the target allele |
 | Amplification  | `amp_rate`       | Focal copy gain on a random chromosome |
 | Deletion       | `del_rate`       | Focal copy loss on a random chromosome |
 | Normal dup     | `normal_dup_rate`| Whole-chromosome duplication (rarely used) |
 
-The weights are automatically normalized to sum to 1.  For amplification and deletion events, the length of the affected segment is drawn from `Exp(1 / rate)` (in bins).
+The weights are automatically normalized to sum to 1. For amplification and deletion events, the length of the affected segment is drawn from `Exp(1 / rate)` (in bins).
 
 ```{r sim-basic}
-# A chromosome 7 simulation with moderate BFB and amplification
+# A chromosome 1 simulation with moderate BFB and amplification
 sim <- bridge_sim(
   chromosomes     = "1",
   bfb_allele      = "1:A",
@@ -78,7 +78,7 @@ cat("CNA tibble dimensions:", nrow(sim$cna_data), "rows x",
     length(unique(sim$cna_data$cell_id)), "cells\n")
 ```
 
-The `elapsed_time` field records the simulation clock when the stopping criterion fired.  For `max_cells`-driven simulations with `birth_rate = 1.0`, elapsed time is approximately `log2(max_cells)` cell doublings.
+The `elapsed_time` field records the simulation clock when the stopping criterion fired. For `max_cells`-driven simulations with `birth_rate = 1.0`, elapsed time is approximately `log2(max_cells)` cell doublings.
 
 ---
 
@@ -86,13 +86,13 @@ The `elapsed_time` field records the simulation clock when the stopping criterio
 
 ### Specifying the BFB locus
 
-The `bfb_allele` parameter identifies which chromosome:allele undergoes BFB cycles (e.g. `"1:A"` for allele A of chromosome 7).  The `hotspot` argument pinpoints the specific bin that is most likely to be amplified:
+The `bfb_allele` parameter identifies which chromosome:allele undergoes BFB cycles (e.g. `"1:A"` for allele A of chromosome 1). The `hotspot` argument pinpoints the specific bin that is most likely to be amplified:
 
-```{r}
+```{r hotspot}
 x <- bridge_sim(
   chromosomes = "1",
   bfb_allele  = "1:A",
-  hotspot     = list(chr = "1:A", pos = 60),  # bin 60 is the focal point
+  hotspot     = list(chr = "1:A", pos = 60)  # bin 60 is the focal point
 )
 ```
 
@@ -103,16 +103,28 @@ By default `pos = 100`, and the hotspot is used only for computing selection (Se
 The breakpoint position within a BFB event is drawn from `breakpoint_support`:
 
 | Value       | Behaviour                                                |
-|-------------|----------------------------------------------------------|
+|-------------|------------------------------------------------------------|
 | `"uniform"` | Uniform across the chromosome (default)                  |
 | `"beta"`    | Beta distribution; requires `alpha` and `beta` params    |
 | `"custom"`  | Sample from a user-supplied integer vector `custom_breakpoints` |
 
-The `"custom"` mode is used by the ABC pipeline to match the observed breakpoint distribution in real data.
+`"custom"` mode only applies to the founding cell's initial BFB event (`first_round_of_bfb`, below) -- the main simulation loop (implemented in C++ for speed) supports `"uniform"` and `"beta"` only. If you need custom breakpoints, combine `breakpoint_support = "custom"` with `bfb_prob = 0` so no further BFB events are attempted after the founding one:
+
+```{r custom-breakpoints}
+x_custom <- bridge_sim(
+  chromosomes = "1",
+  bfb_allele  = "1:A",
+  max_cells   = 50,
+  bfb_prob    = 0,                      # no further BFB after the founding event
+  first_round_of_bfb = TRUE,
+  breakpoint_support = "custom",
+  custom_breakpoints = c(50, 150, 250)
+)
+```
 
 ### `first_round_of_bfb`
 
-When `TRUE` (default), the founding cell already undergoes one BFB event before the simulation starts.  This mimics a clone that was initiated by a single BFB event.  Set to `FALSE` to start from a fully diploid founder.
+When `TRUE` (default), the founding cell already undergoes one BFB event before the simulation starts. This mimics a clone that was initiated by a single BFB event. Set to `FALSE` to start from a fully diploid founder.
 
 ```{r bfb-effect, fig.height=4}
 # Compare: with vs without first BFB round
@@ -131,7 +143,7 @@ cat("Max A copy number — without first BFB round:",
 
 ## 3  Whole-genome duplication
 
-Set `wgd_available > 0` to allow WGD events.  Each alive cell has a per-division probability `wgd_probability` of doubling its entire genome:
+Set `wgd_available > 0` to allow WGD events. Each alive cell has a per-division probability `wgd_probability` of doubling its entire genome:
 
 ```{r wgd-example}
 sim_wgd <- bridge_sim(
@@ -147,7 +159,7 @@ cat("Max total CN after potential WGD:",
     max(sim_wgd$cna_data$CN, na.rm = TRUE), "\n")
 ```
 
-After a WGD event the typical diploid baseline doubles from 2 to 4 total copies.  Use `base_value = 2` in `summarise_clone()` when analyzing total CN data from WGD-exposed simulations.
+After a WGD event the typical diploid baseline doubles from 2 to 4 total copies. If you use `bridges::summarise_clone()` downstream on total CN data from WGD-exposed simulations, pass `base_value = 2`.
 
 ---
 
@@ -162,7 +174,7 @@ sim_neutral <- bridge_sim(
   positive_selection_rate = 0
 )
 
-# Positively selected clone (amplified cells divide 3× faster)
+# Positively selected clone (amplified cells divide 3x faster)
 sim_sel <- bridge_sim(
   chromosomes = "1", bfb_allele = "1:A", max_cells = 150, lambda = 2,
   positive_selection_rate = 3
@@ -174,139 +186,12 @@ cat("Selected — median hotspot A CN: ",
     median(sim_sel$cna_data[sim_sel$cna_data$chr == "1", ]$A), "\n")
 ```
 
-`negative_selection_rate` penalizes cells *without* the hotspot gain, which has a similar net effect to positive selection but through a different mechanism (increased death rate for non-amplified cells).
+`negative_selection_rate` penalizes cells *without* the hotspot gain, which has a similar net effect to positive selection but through a different mechanism (increased death rate for non-amplified cells). `selection_type` controls how hotspot copy number translates into that advantage: `"constant"` (default; any gain above baseline gives the same fixed advantage), `"linear"` (advantage scales with copy number, unbounded), or `"saturation"` (advantage saturates, controlled by `saturation_K`).
 
 ---
 
-## 5  Clonal study tools
+## Next steps
 
-The clonal simulation functions wrap `bridge_sim` for systematic comparisons across parameter combinations.
-
-### 5.1  Single replicate
-
-```{r simulate-clone}
-p <- clonal_params(bfb_prob = 0.6, positive_selection_rate = 0)
-
-res <- bridges:::simulate_clone(
-  chromosome   = "1",
-  allele       = "A",
-  hotspot_pos  = 60,
-  params       = p,
-  max_cells    = 200,
-  sample_cells = 50
-)
-
-cat("n_alive:", res$n_alive, "  n_cells (sampled):", res$n_cells, "\n")
-summarise_clone(res$cna_matrix, hotspot_col = 60)
-```
-
-`simulate_clone` passes `sample_cells` directly to `bridge_sim(subsample = ...)`, so the CNA tibble is only ever built for the 50 kept cells — no double work.
-
-### 5.2  Replicated simulations
-
-`run_clonal_replicates` runs `N_replicates` independent clones and returns a tidy tibble of summary statistics:
-
-```{r run-replicates}
-reps <- run_clonal_replicates(
-  chromosome   = "1",
-  allele       = "A",
-  hotspot_pos  = 60,
-  params       = clonal_params(bfb_prob = 0.6),
-  N_replicates = 10,
-  max_cells    = 150,
-  sample_cells = 50
-)
-
-dplyr::select(reps, hotspot_max_cn, max_cn_global, mean_breakpoints, n_alive) |>
-  summary()
-```
-
-### 5.3  Multi-condition sweep
-
-`compare_clonal_params` runs replicates for a named list of parameter sets and returns all results in one tibble.
-
-```{r compare-conditions, fig.height=5}
-conditions <- list(
-  neutral       = clonal_params(positive_selection_rate = 0),
-  bfb_strong    = clonal_params(bfb_prob = 0.8, positive_selection_rate = 0),
-  bfb_selection = clonal_params(bfb_prob = 0.8, positive_selection_rate = 2)
-)
-
-sweep <- compare_clonal_params(
-  param_list   = conditions,
-  chromosome   = "1",
-  allele       = "A",
-  hotspot_pos  = 60,
-  N_replicates = 10,
-  max_cells    = 150,
-  sample_cells = 50
-)
-
-plot_clonal_comparison(sweep,
-  stats = c("hotspot_max_cn", "hotspot_cn_var", "max_cn_global", "mean_breakpoints"))
-```
-
-You can overlay observed statistics as reference lines by passing the output of `compute_observed_stats()` to the `observed_stats` argument.
-
----
-
-## 6  Passage-series self-consistency
-
-The passage-series framework tests whether the simulator correctly represents evolutionary accumulation: simulating more cells (longer elapsed time) should produce more complex CNA landscapes.
-
-```{r passage-series, fig.height=5}
-series <- simulate_passage_series(
-  passage_cell_counts = c(early = 50, mid = 250, late = 5000),
-  chromosome          = "1",
-  allele              = "A",
-  hotspot_pos         = 60,
-  params              = clonal_params(),
-  n_replicates        = 5,
-  sample_cells        = 30
-)
-
-stats <- summarise_passage_series(series)
-plot_passage_series(stats)
-```
-
-All complexity metrics (`hotspot_max_cn`, `max_cn_global`, `mean_breakpoints`, `hotspot_cn_var`) should increase monotonically from early → mid → late, confirming self-consistency.  Use `x = "passage_cells"` to show the raw max-cells value on the x-axis instead of expected doublings.
-
-<!-- --- -->
-
-<!-- ## 7  ABC parameter inference -->
-
-<!-- `abc_inference` uses rejection Approximate Bayesian Computation to infer simulator parameters that match an observed CNA dataset.  It runs `n_simulations` independent forward simulations with parameters drawn from the prior, then accepts the closest `tolerance_quantile` fraction as the approximate posterior. -->
-
-<!-- The six summary statistics compared are: per-bin gain rate, per-bin loss rate, mean CN profile, CN variance profile, maximum CN, and mean breakpoints per cell. -->
-
-<!-- ```{r abc, eval=FALSE} -->
-<!-- # Use the simulation as "observed" data (in practice, use real scWGS output) -->
-<!-- obs <- bridge_sim( -->
-<!--   chromosomes = "1", bfb_allele = "1:A", -->
-<!--   max_cells   = 100,  lambda = 2, -->
-<!--   bfb_prob    = 0.5,  amp_rate = 0.3, del_rate = 0.2 -->
-<!-- ) -->
-
-<!-- abc_res <- abc_inference( -->
-<!--   cna_data           = obs$cna_data, -->
-<!--   allele             = "A", -->
-<!--   chromosome         = "1", -->
-<!--   n_simulations      = 500,    # use >= 5000 in practice -->
-<!--   tolerance_quantile = 0.05, -->
-<!--   n_cores            = 1 -->
-<!-- ) -->
-
-<!-- abc_res$param_summary -->
-<!-- ``` -->
-
-<!-- ```{r abc-plot, eval=FALSE} -->
-<!-- plot_abc_results(abc_res) -->
-<!-- ``` -->
-
-<!-- `plot_abc_results` displays a 7-panel figure: histograms of the approximate posterior for `amp_rate`, `del_rate`, `bfb_prob`, `death_fraction`, and `lambda`; the distribution of accepted distances; and a scatter of `amp_rate` vs `del_rate` coloured by `bfb_prob`. -->
-
-<!-- **Practical guidance:** -->
-<!-- - `n_simulations = 1000` with `tolerance_quantile = 0.01` gives 10 posterior samples — adequate for exploration. -->
-<!-- - Use `n_simulations >= 5000` and `tolerance_quantile = 0.01–0.02` for publication-quality posteriors. -->
-<!-- - Set `n_cores` to the number of available cores; each simulation is fully independent. -->
-<!-- - The `pos` and `bin_length` arguments are automatically inferred from the observed data if not supplied. -->
+- **Serial passages and clonal summaries** (repeated bottlenecked growth, summary statistics): `vignette("passages-and-clones", package = "bridges")`.
+- **Fitting a phylogeny from simulated or real data**: `vignette("inference", package = "bridges")`.
+- **Detecting BFB signal**, either from a fitted tree or directly from raw profiles: `vignette("bridges", package = "bridges")` for the overview, or `vignette("batch-detection", package = "bridges")` for the tree-free method.

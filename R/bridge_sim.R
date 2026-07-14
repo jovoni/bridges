@@ -9,6 +9,11 @@
 #' Now supports modeling both alleles (A and B) of each chromosome.
 #'
 #' @param initial_cells Numeric. Number of cells at the start of simulation. Default: 1
+#' @param initial_sequences Optional list of pre-evolved chromosome sequences to
+#'   seed the simulation from (e.g. the \code{cells} output of a previous
+#'   \code{bridge_sim()} call, for serial-passage-style workflows). If
+#'   supplied, \code{initial_cells} is derived from its length instead of
+#'   used directly.
 #' @param chromosomes Character vector. Chromosomes to model (e.g., c("1", "2", "X")). Default: c(1:22, "X", "Y")
 #' @param bin_length Numeric. Length of each genomic bin in base pairs. Default: 5e5
 #' @param birth_rate Numeric. Base rate at which cells replicate per unit time. Default: 0.1
@@ -30,6 +35,10 @@
 #' @param max_cells Numeric. Maximum number of cells allowed before simulation stops. Default: 100
 #' @param first_round_of_bfb Logical. Whether to apply BFB to initial cells. Default: TRUE
 #' @param return_phylo Logical. Whether to build and return the phylogenetic tree.
+#' @param return_cna_data Logical. Whether to build and return the long-format
+#'   copy-number tibble (\code{cna_data}). Set to FALSE to skip this step
+#'   (e.g. in serial-passage workflows where only intermediate \code{cells}
+#'   sequences are needed until the final passage). Default: TRUE
 #'   Set to FALSE when only CNA data is needed (e.g. ABC or clonal comparison
 #'   workflows) to skip the expensive tree-building step. Default: TRUE
 #' @param breakpoint_support Character. Distribution used for breakpoint
@@ -49,6 +58,16 @@
 #'  are called, so the phylogeny and CNA tibble are built only once on the
 #'  subsampled cells.  The \code{n_alive} field in the return value still records
 #'  the pre-subsample count.  Default: NULL (keep all alive cells).
+#' @param selection_type Character. How hotspot copy number translates into a
+#'   birth/death rate multiplier: \code{"constant"} (any gain above baseline
+#'   copy number 1 gives the same fixed advantage), \code{"linear"}
+#'   (advantage scales as \code{hotspot_count - 1}, unbounded), or
+#'   \code{"saturation"} (advantage is \code{(n-1)/((n-1)+saturation_K)},
+#'   approaching 1 as copy number grows and reaching half-max at
+#'   \code{hotspot_count = saturation_K + 1}). Default: \code{"constant"}.
+#' @param saturation_K Numeric. Saturation constant for
+#'   \code{selection_type = "saturation"} (see above). Ignored for other
+#'   \code{selection_type} values. Default: 10
 #'
 #' @return A named list containing:
 #' \describe{

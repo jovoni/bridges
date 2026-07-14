@@ -17,3 +17,4 @@ Integer copy count
 \description{
 Count copies of a hotspot bin in an interval-encoded sequence
 }
+\keyword{internal}

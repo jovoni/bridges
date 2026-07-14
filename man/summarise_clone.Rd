@@ -2,44 +2,36 @@
 % Please edit documentation in R/clonal_sim.R
 \name{summarise_clone}
 \alias{summarise_clone}
-\title{Compute Summary Statistics for a Single Clonal CN Matrix}
+\title{Summarize a copy-number matrix into scalar statistics}
 \usage{
 summarise_clone(cna_matrix, hotspot_col, base_value = 1, n_alive = NA)
 }
 \arguments{
-\item{cna_matrix}{Integer matrix (cells x bins) from \code{simulate_clone()}.}
+\item{cna_matrix}{Integer matrix (cells x bins), e.g. one allele's
+worth of copy-number calls for a set of cells.}
 
-\item{hotspot_col}{Column index of the hotspot bin in \code{cna_matrix}.}
+\item{hotspot_col}{1-based column index of the position of interest
+(clamped to \code{ncol(cna_matrix)} if out of range).}
 
-\item{base_value}{Baseline (diploid) copy number: 1 for allele-specific, 2 for CN.}
+\item{base_value}{Baseline copy number used to define a "gain" at
+the hotspot (\code{hotspot_cn > base_value}). Default 1.}
 
-\item{n_alive}{Number of alive cells before subsampling (from
-\code{simulate_clone()$n_alive}).  Stored as-is for downstream analysis.}
+\item{n_alive}{Optional: number of cells alive before any
+subsampling, stored as-is in the output for downstream reference.}
 }
 \value{
-Named numeric vector with eight elements:
-\describe{
-\item{hotspot_mean_cn}{Mean copy number at the hotspot column.}
-\item{hotspot_max_cn}{Maximum copy number at the hotspot column.}
-\item{hotspot_fraction_amp}{Fraction of cells with hotspot CN > \code{base_value}.}
-\item{hotspot_cn_var}{Variance of copy number at the hotspot column.}
-\item{max_cn_global}{Maximum copy number across the entire matrix.}
-\item{mean_breakpoints}{Mean number of CN breakpoints per cell (positions where
-adjacent bins differ).}
-\item{n_alive}{Passed through unchanged; records pre-subsampling cell count.}
-\item{n_cells}{Number of rows in \code{cna_matrix} (post-subsampling count).}
-}
-Returns an all-NA vector (with the same names) if the matrix is empty.
+A named numeric vector: \code{hotspot_mean_cn},
+\code{hotspot_max_cn}, \code{hotspot_fraction_amp},
+\code{hotspot_cn_var}, \code{max_cn_global}, \code{mean_breakpoints},
+\code{n_alive}, \code{n_cells}. All \code{NA} (with \code{n_cells = 0})
+if \code{cna_matrix} is empty.
 }
 \description{
-Compute Summary Statistics for a Single Clonal CN Matrix
-}
-\examples{
-\dontrun{
-p   <- clonal_params()
-res <- simulate_clone("7", "A", hotspot_pos = 60, params = p,
-                       max_cells = 100, sample_cells = 50)
-summarise_clone(res$cna_matrix, hotspot_col = 60, n_alive = res$n_alive)
-}
-
+Computes a fixed set of summary statistics from a cells-by-bins
+copy-number matrix, centered on one "hotspot" column of interest:
+mean/max/variance of copy number at the hotspot, the fraction of
+cells with a hotspot gain above \code{base_value}, the genome-wide
+maximum copy number, and the mean number of breakpoints per cell.
+Used internally by \code{simulate_serial_passages()} to summarize
+each passage.
 }

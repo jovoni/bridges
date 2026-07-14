@@ -15,3 +15,4 @@ IntegerVector of genomic bin values
 \description{
 Expand interval-encoded sequence to an integer vector
 }
+\keyword{internal}

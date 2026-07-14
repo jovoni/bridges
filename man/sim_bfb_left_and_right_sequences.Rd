@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils_bridge_sim.R
 \name{sim_bfb_left_and_right_sequences}
 \alias{sim_bfb_left_and_right_sequences}
-\title{Simulate Breakage-Fusion-Bridge (BFB) Cycle for both daughters}
+\title{Simulate Breakage-Fusion-Bridge (BFB) cycle for both daughters}
 \usage{
 sim_bfb_left_and_right_sequences(
   sequence,
@@ -13,23 +13,27 @@ sim_bfb_left_and_right_sequences(
 )
 }
 \arguments{
-\item{sequence}{Input sequence}
+\item{sequence}{Interval-encoded chromosome sequence to break.}
 
-\item{support}{Distribution type for breakpoint selection ("uniform" or "beta")}
+\item{support}{Breakpoint distribution: \code{"uniform"},
+\code{"beta"}, or \code{"custom"}.}
 
-\item{alpha}{Shape parameter for beta distribution (only used if support="beta")}
+\item{alpha, beta}{Beta-distribution shape parameters, used when
+\code{support = "beta"}.}
 
-\item{beta}{Shape parameter for beta distribution (only used if support="beta")}
-
-\item{custom_breakpoints}{.}
+\item{custom_breakpoints}{Integer vector of candidate breakpoint
+positions, required when \code{support = "custom"}.}
 }
 \value{
-List containing left and right sequences
+A list with \code{l_seq} and \code{r_seq}, the two daughter
+sequences.
 }
 \description{
-Simulate Breakage-Fusion-Bridge (BFB) Cycle for both daughters
+Generates the left and right daughter sequences resulting from one
+BFB cycle applied to \code{sequence}. For \code{support = "uniform"}
+or \code{"beta"}, delegates to the C++ engine (\code{sim_bfb_cpp});
+for \code{support = "custom"} (a fixed set of candidate breakpoint
+positions), uses a pure-R fallback, since the C++ main-loop engine
+does not support custom breakpoints.
 }
-\details{
-Simulate left and right children from a BFB cycle using specified
-breakpoint selection distribution
-}
+\keyword{internal}

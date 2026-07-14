@@ -1,3 +1,17 @@
+# ============================================================
+# NOTE (kept for convenience, will be removed in a future version):
+#
+# These are the original pure-R implementations of the greedy (G) and
+# BFB/contiguity (B) distance functions. fit()'s own defaults
+# ("greedy_fast" / "bfb_fast", see get_distance.R) use the much faster
+# C++ versions (greedy_distance_cpp / greedy_bfb_distance_cpp,
+# src/fast_distances.cpp) instead. These R versions remain selectable
+# via fit(g_dist_func = "G", ...) etc. mostly as a historical/debugging
+# reference -- if you're not intentionally choosing one of these by
+# name, you're not using them. Slated for removal once we're confident
+# they're no longer needed for validation.
+# ============================================================
+
 # G distances ####
 # Original one
 find_greedy_distance = function(a, b, target_val = 2) {

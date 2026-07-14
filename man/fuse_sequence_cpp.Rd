@@ -15,3 +15,4 @@ R list of fused intervals
 \description{
 Fuse a sequence with its reverse (BFB palindrome creation)
 }
+\keyword{internal}

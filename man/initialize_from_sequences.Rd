@@ -21,3 +21,4 @@ for serial passage simulations).  Builds the same \code{sim_state} structure
 as \code{initialize_simulation()} but seeds the population from an existing
 set of heterogeneous cell sequences rather than a fresh diploid cell.
 }
+\keyword{internal}

@@ -1,4 +1,56 @@
-url: https://jovoni.github.io/bridges/
+url: https://<github-user-or-org>.github.io/bridges/
+
 template:
   bootstrap: 5
 
+navbar:
+  structure:
+    left:  [intro, reference, articles]
+    right: [search, github]
+
+home:
+  title: bridges
+  description: >
+    Simulate, fit, and detect breakage-fusion-bridge (BFB) signal in
+    single-cell copy-number data. Depends on bfbtools for the
+    underlying linear-time BFB count-vector algorithms (kept separate
+    due to its GPL-3 license).
+
+articles:
+- title: Get started
+  contents:
+  - bridges
+- title: Deep dives
+  contents:
+  - simulator
+  - inference
+  - batch-detection
+  - passages-and-clones
+
+reference:
+- title: Simulation
+  contents:
+  - bridge_sim
+- title: Fitting
+  contents:
+  - fit
+- title: BFB detection
+  desc: >
+    Two independent methods -- see the "batch-detection" article for
+    why both exist.
+  contents:
+  - detect_bfb_branches
+  - bfb_detect_batch
+  - bfb_detect_vectors
+  - split_chr_arms
+- title: Serial passages and clonal summaries
+  contents:
+  - simulate_serial_passages
+  - clonal_params
+  - summarise_clone
+- title: Visualization
+  contents:
+  - plot_heatmap
+  - plot_bfb_signature
+  - plot_chr_all_heatmap
+  - plot_serial_passages

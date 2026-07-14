@@ -17,3 +17,4 @@ Reordered phylogenetic tree
 \description{
 Optimize tree tip ordering based on distance matrix
 }
+\keyword{internal}

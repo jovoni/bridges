@@ -35,3 +35,4 @@ then performs a one-sample t-test on the delta values (difference between G and 
 If all delta values are identical, no statistical test is performed and
 p.value is set to NA.
 }
+\keyword{internal}

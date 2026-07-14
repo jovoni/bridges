@@ -15,3 +15,4 @@ R list of intervals
 \description{
 Compress an integer vector to an interval-encoded sequence
 }
+\keyword{internal}

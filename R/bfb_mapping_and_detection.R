@@ -1,4 +1,17 @@
-#' Detect Breakpoint-Free Branches (BFB) in Phylogenetic Trees
+#' Detect BFB Signal on Phylogenetic Tree Branches (tree/branch-based)
+#'
+#' NOTE ON NAMING: this is one of two independent BFB-detection
+#' mechanisms in this package, and they answer different questions.
+#' This one (\code{detect_bfb_branches}) works on a \emph{fitted tree}
+#' (the output of \code{fit()}) and asks "does this branch of my
+#' inferred phylogeny show a BFB-like signature", via ancestral
+#' reconstruction and a binomial test on the greedy-vs-BFB cost delta
+#' per branch. The other, \code{\link{bfb_detect_batch}} (and its
+#' single-vector core, \code{\link{bfb_detect_vectors}}), works
+#' directly on raw per-cell copy-number profiles -- no tree or fit
+#' required -- and asks "does this cell's raw profile admit a BFB
+#' schedule at all", using the exact BFB combinatorics from
+#' \code{bfbtools}. Neither supersedes the other.
 #'
 #' This function performs binomial tests across all chromosomes and alleles to detect
 #' breakpoint-free branches in a phylogenetic tree reconstruction. It uses pseudo-cell
@@ -48,11 +61,12 @@
 #' sim <- bridge_sim(chromosomes = "8", bfb_allele = "8:A",
 #'                   max_cells = 128, lambda = 2)
 #' res <- fit(data = sim$cna_data, alleles = c("A", "B"))
-#' bfb_df <- detect_bfb(res, threshold = 0.005)
+#' bfb_df <- detect_bfb_branches(res, threshold = 0.005)
 #' head(bfb_df)
 #' # Chromosome 8 allele A should show high mean and low adj.pval
 #' }
-detect_bfb = function(fit, threshold = .005) {
+#' @export
+detect_bfb_branches = function(fit, threshold = .005) {
   alleles = names(fit$all_input_Xs[[1]])
   chromosomes = names(fit$all_input_Xs)
 
@@ -95,6 +109,7 @@ detect_bfb = function(fit, threshold = .005) {
 #'
 #' @details If all delta values are identical, no statistical test is performed and
 #' p.value is set to NA.
+#' @keywords internal
 pseudo_cell_t_test = function(
     fit,
     chr,
@@ -152,6 +167,7 @@ pseudo_cell_t_test = function(
 #'
 #' @details The binomial test uses alternative = "greater" to test if the proportion
 #' of positive deltas significantly exceeds the threshold.
+#' @keywords internal
 pseudo_cell_bin_test = function(fit, chr, allele, threshold) {
   r = fit$reconstructions[[chr]][[allele]]  # use precomputed
   delta_values <- unlist(r$deltas)
@@ -806,6 +822,12 @@ compute_reconstructions = function(fit, chromosomes = NULL, alleles = NULL) {
 #'
 #' @note The tree edge lengths are set to 1 for uniform weighting. Node labels
 #' are automatically generated if not present.
+#' @param store_profiles Logical; whether to retain each internal node's
+#'   reconstructed profile in the returned \code{internal_nodes} list
+#'   (set FALSE to save memory on large trees when only the final
+#'   working input/deltas are needed). Default TRUE.
+#'
+#' @keywords internal
 reconstruct_tree <- function(fit, chr, allele, store_profiles = TRUE) {
   # Get distances
   B_dist <- if (!is.null(fit$b_dist_func)) get_b_dist(fit$b_dist_func) else function(a, b, penalty) list(cost = Inf)

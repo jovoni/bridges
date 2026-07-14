@@ -323,7 +323,7 @@ static Sequence sim_wgd_impl(const Sequence& seq) {
 //'
 //' @param seq_list R list of intervals (each a named list with start, end, direction)
 //' @return Integer total length
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 int seq_length_cpp(List seq_list) {
     return seq_length_impl(rlist_to_sequence(seq_list));
@@ -333,7 +333,7 @@ int seq_length_cpp(List seq_list) {
 //'
 //' @param seq_list R list of intervals
 //' @return R list of reversed intervals
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 List reverse_sequence_cpp(List seq_list) {
     return sequence_to_rlist(reverse_sequence_impl(rlist_to_sequence(seq_list)));
@@ -343,7 +343,7 @@ List reverse_sequence_cpp(List seq_list) {
 //'
 //' @param seq_list R list of intervals
 //' @return R list of fused intervals
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 List fuse_sequence_cpp(List seq_list) {
     return sequence_to_rlist(fuse_sequence_impl(rlist_to_sequence(seq_list)));
@@ -356,7 +356,7 @@ List fuse_sequence_cpp(List seq_list) {
 //' @param seq_list R list of intervals
 //' @param cut_index Integer cut position (1-based)
 //' @return Named list with \code{left_seq} and \code{right_seq}
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 List cut_sequence_cpp(List seq_list, int cut_index) {
     Sequence seq = rlist_to_sequence(seq_list);
@@ -373,7 +373,7 @@ List cut_sequence_cpp(List seq_list, int cut_index) {
 //' @param seq_list R list of intervals
 //' @param bin Integer bin position to query
 //' @return Integer copy count
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 int hotspot_copies_cpp(List seq_list, int bin) {
     return hotspot_copies_impl(rlist_to_sequence(seq_list), bin);
@@ -383,7 +383,7 @@ int hotspot_copies_cpp(List seq_list, int bin) {
 //'
 //' @param seq_list R list of intervals
 //' @return IntegerVector of genomic bin values
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 IntegerVector seq2vec_cpp(List seq_list) {
     return seq2vec_impl(rlist_to_sequence(seq_list));
@@ -393,7 +393,7 @@ IntegerVector seq2vec_cpp(List seq_list) {
 //'
 //' @param vec IntegerVector of genomic bin values
 //' @return R list of intervals
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 List vec2seq_cpp(IntegerVector vec) {
     return sequence_to_rlist(vec2seq_impl(vec));
@@ -405,7 +405,7 @@ List vec2seq_cpp(IntegerVector vec) {
 //' @param operation \code{"dup"} for duplication or \code{"del"} for deletion
 //' @param rate Mean of the exponential event-length distribution
 //' @return R list of intervals
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 List sim_amp_del_cpp(List seq_list, std::string operation, double rate) {
     RNGScope rng_scope;
@@ -420,7 +420,7 @@ List sim_amp_del_cpp(List seq_list, std::string operation, double rate) {
 //'
 //' @param seq_list R list of intervals
 //' @return R list of intervals representing the doubled genome
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 List sim_wgd_cpp(List seq_list) {
     return sequence_to_rlist(sim_wgd_impl(rlist_to_sequence(seq_list)));
@@ -437,7 +437,7 @@ List sim_wgd_cpp(List seq_list) {
 //' @param alpha Beta distribution shape parameter (ignored unless support="beta")
 //' @param beta_param Beta distribution shape parameter (ignored unless support="beta")
 //' @return Named list with \code{l_seq} and \code{r_seq} (each an R interval list)
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 List sim_bfb_cpp(
     List seq_list,
@@ -909,7 +909,7 @@ static SimP extract_simp(const Rcpp::List& sim_state, double lambda, double rate
 //' @param lambda Poisson rate for genomic events per daughter
 //' @param rate Mean of exponential event-length distribution for amp/del
 //' @return Named list with same structure as \code{sim_state_r}
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 List bridge_sim_loop_cpp(List sim_state_r, double lambda, double rate) {
     RNGScope rng_scope;

@@ -63,3 +63,5 @@ plot_bfb_signature = function(res, chr_of_interest, allele_of_interest) {
     ggplot2::theme_bw() +
     ggplot2::labs(x = paste0("Genomic position (chr", chr_of_interest, ")"), y = "BFB-like events", fill = "BFB count")
 }
+
+

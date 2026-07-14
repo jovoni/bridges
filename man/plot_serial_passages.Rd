@@ -20,7 +20,7 @@ A \code{ggplot} object (faceted by statistic).
 }
 \description{
 Takes the wide tibble from \code{simulate_serial_passages()} and displays
-how each summary statistic evolves with passage number (median ± IQR ribbon
+how each summary statistic evolves with passage number (median and IQR ribbon
 across replicates, faceted by statistic).
 }
 \examples{

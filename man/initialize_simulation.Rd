@@ -17,3 +17,4 @@ A list containing the initialized simulation state
 Helper functions modified for diploid chromosome modeling
 Initialize simulation state for diploid chromosomes
 }
+\keyword{internal}

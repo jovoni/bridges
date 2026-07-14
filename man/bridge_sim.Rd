@@ -41,6 +41,12 @@ bridge_sim(
 \arguments{
 \item{initial_cells}{Numeric. Number of cells at the start of simulation. Default: 1}
 
+\item{initial_sequences}{Optional list of pre-evolved chromosome sequences to
+seed the simulation from (e.g. the \code{cells} output of a previous
+\code{bridge_sim()} call, for serial-passage-style workflows). If
+supplied, \code{initial_cells} is derived from its length instead of
+used directly.}
+
 \item{chromosomes}{Character vector. Chromosomes to model (e.g., c("1", "2", "X")). Default: c(1:22, "X", "Y")}
 
 \item{bin_length}{Numeric. Length of each genomic bin in base pairs. Default: 5e5}
@@ -85,7 +91,12 @@ the pre-subsample count.  Default: NULL (keep all alive cells).}
 
 \item{first_round_of_bfb}{Logical. Whether to apply BFB to initial cells. Default: TRUE}
 
-\item{return_phylo}{Logical. Whether to build and return the phylogenetic tree.
+\item{return_phylo}{Logical. Whether to build and return the phylogenetic tree.}
+
+\item{return_cna_data}{Logical. Whether to build and return the long-format
+copy-number tibble (\code{cna_data}). Set to FALSE to skip this step
+(e.g. in serial-passage workflows where only intermediate \code{cells}
+sequences are needed until the final passage). Default: TRUE
 Set to FALSE when only CNA data is needed (e.g. ABC or clonal comparison
 workflows) to skip the expensive tree-building step. Default: TRUE}
 
@@ -105,6 +116,18 @@ breakpoint selection. Default: 10}
 position distribution when \code{breakpoint_support = "custom"}.  Each draw
 during the simulation is sampled uniformly from this vector.  Ignored for
 other breakpoint support modes.  Default: NULL}
+
+\item{selection_type}{Character. How hotspot copy number translates into a
+birth/death rate multiplier: \code{"constant"} (any gain above baseline
+copy number 1 gives the same fixed advantage), \code{"linear"}
+(advantage scales as \code{hotspot_count - 1}, unbounded), or
+\code{"saturation"} (advantage is \code{(n-1)/((n-1)+saturation_K)},
+approaching 1 as copy number grows and reaching half-max at
+\code{hotspot_count = saturation_K + 1}). Default: \code{"constant"}.}
+
+\item{saturation_K}{Numeric. Saturation constant for
+\code{selection_type = "saturation"} (see above). Ignored for other
+\code{selection_type} values. Default: 10}
 }
 \value{
 A named list containing:

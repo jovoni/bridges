@@ -26,3 +26,4 @@ List containing matrix and column information
 \description{
 Prepare matrix data for heatmap plotting
 }
+\keyword{internal}

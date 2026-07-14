@@ -15,3 +15,4 @@ Named list of initial sequences for each chromosome allele
 \description{
 Create initial chromosome sequences for all alleles
 }
+\keyword{internal}

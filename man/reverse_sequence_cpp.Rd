@@ -15,3 +15,4 @@ R list of reversed intervals
 \description{
 Reverse an interval-encoded sequence
 }
+\keyword{internal}

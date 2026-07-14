@@ -15,3 +15,4 @@ An integer representing the total length of the sequence.
 \description{
 This function calculates the length of a sequence by summing the lengths of its intervals.
 }
+\keyword{internal}

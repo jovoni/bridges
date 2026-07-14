@@ -15,3 +15,4 @@ Integer total length
 \description{
 Compute length of an interval-encoded sequence
 }
+\keyword{internal}

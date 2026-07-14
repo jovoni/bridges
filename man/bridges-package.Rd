@@ -4,9 +4,9 @@
 \name{bridges-package}
 \alias{bridges}
 \alias{bridges-package}
-\title{bridges: What the Package Does (One Line, Title Case)}
+\title{bridges: Fit, Detect, and Visualize Breakage-Fusion-Bridge in Single-Cell Copy Number Data}
 \description{
-What the package does (one paragraph).
+Simulates single-cell copy-number evolution under a continuous-time Gillespie process (bridge_sim()), including breakage-fusion-bridge (BFB) cycles, focal amplifications/deletions, and whole-genome duplication; infers phylogenies from single-cell copy-number data (fit()); detects BFB signal both on inferred tree branches (detect_bfb_branches()) and directly on raw per-cell profiles via exact BFB combinatorics (bfb_detect_batch()); and visualizes the results as annotated heatmaps. Depends on 'bfbtools' for the underlying linear-time BFB count-vector algorithms, kept as a separate package because it is GPL-3 licensed (a derivative of GPL-3 reference code), unlike this package (MIT).
 }
 \seealso{
 Useful links:

@@ -19,3 +19,4 @@ R list of intervals
 \description{
 Simulate amplification or deletion on an interval-encoded sequence
 }
+\keyword{internal}

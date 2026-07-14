@@ -18,3 +18,4 @@ validate_heatmap_inputs(data, tree, chromosomes_to_plot, to_plot)
 \description{
 Validate input parameters for heatmap plotting
 }
+\keyword{internal}

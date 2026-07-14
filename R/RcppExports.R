@@ -16,7 +16,7 @@ greedy_bfb_distance_cpp <- function(a, b, penalty = 0.0) {
 #'
 #' @param seq_list R list of intervals (each a named list with start, end, direction)
 #' @return Integer total length
-#' @export
+#' @keywords internal
 seq_length_cpp <- function(seq_list) {
     .Call(`_bridges_seq_length_cpp`, seq_list)
 }
@@ -25,7 +25,7 @@ seq_length_cpp <- function(seq_list) {
 #'
 #' @param seq_list R list of intervals
 #' @return R list of reversed intervals
-#' @export
+#' @keywords internal
 reverse_sequence_cpp <- function(seq_list) {
     .Call(`_bridges_reverse_sequence_cpp`, seq_list)
 }
@@ -34,7 +34,7 @@ reverse_sequence_cpp <- function(seq_list) {
 #'
 #' @param seq_list R list of intervals
 #' @return R list of fused intervals
-#' @export
+#' @keywords internal
 fuse_sequence_cpp <- function(seq_list) {
     .Call(`_bridges_fuse_sequence_cpp`, seq_list)
 }
@@ -46,7 +46,7 @@ fuse_sequence_cpp <- function(seq_list) {
 #' @param seq_list R list of intervals
 #' @param cut_index Integer cut position (1-based)
 #' @return Named list with \code{left_seq} and \code{right_seq}
-#' @export
+#' @keywords internal
 cut_sequence_cpp <- function(seq_list, cut_index) {
     .Call(`_bridges_cut_sequence_cpp`, seq_list, cut_index)
 }
@@ -56,7 +56,7 @@ cut_sequence_cpp <- function(seq_list, cut_index) {
 #' @param seq_list R list of intervals
 #' @param bin Integer bin position to query
 #' @return Integer copy count
-#' @export
+#' @keywords internal
 hotspot_copies_cpp <- function(seq_list, bin) {
     .Call(`_bridges_hotspot_copies_cpp`, seq_list, bin)
 }
@@ -65,7 +65,7 @@ hotspot_copies_cpp <- function(seq_list, bin) {
 #'
 #' @param seq_list R list of intervals
 #' @return IntegerVector of genomic bin values
-#' @export
+#' @keywords internal
 seq2vec_cpp <- function(seq_list) {
     .Call(`_bridges_seq2vec_cpp`, seq_list)
 }
@@ -74,7 +74,7 @@ seq2vec_cpp <- function(seq_list) {
 #'
 #' @param vec IntegerVector of genomic bin values
 #' @return R list of intervals
-#' @export
+#' @keywords internal
 vec2seq_cpp <- function(vec) {
     .Call(`_bridges_vec2seq_cpp`, vec)
 }
@@ -85,7 +85,7 @@ vec2seq_cpp <- function(vec) {
 #' @param operation \code{"dup"} for duplication or \code{"del"} for deletion
 #' @param rate Mean of the exponential event-length distribution
 #' @return R list of intervals
-#' @export
+#' @keywords internal
 sim_amp_del_cpp <- function(seq_list, operation, rate) {
     .Call(`_bridges_sim_amp_del_cpp`, seq_list, operation, rate)
 }
@@ -96,7 +96,7 @@ sim_amp_del_cpp <- function(seq_list, operation, rate) {
 #'
 #' @param seq_list R list of intervals
 #' @return R list of intervals representing the doubled genome
-#' @export
+#' @keywords internal
 sim_wgd_cpp <- function(seq_list) {
     .Call(`_bridges_sim_wgd_cpp`, seq_list)
 }
@@ -112,7 +112,7 @@ sim_wgd_cpp <- function(seq_list) {
 #' @param alpha Beta distribution shape parameter (ignored unless support="beta")
 #' @param beta_param Beta distribution shape parameter (ignored unless support="beta")
 #' @return Named list with \code{l_seq} and \code{r_seq} (each an R interval list)
-#' @export
+#' @keywords internal
 sim_bfb_cpp <- function(seq_list, support = "uniform", alpha = NA_real_, beta_param = NA_real_) {
     .Call(`_bridges_sim_bfb_cpp`, seq_list, support, alpha, beta_param)
 }
@@ -128,7 +128,7 @@ sim_bfb_cpp <- function(seq_list, support = "uniform", alpha = NA_real_, beta_pa
 #' @param lambda Poisson rate for genomic events per daughter
 #' @param rate Mean of exponential event-length distribution for amp/del
 #' @return Named list with same structure as \code{sim_state_r}
-#' @export
+#' @keywords internal
 bridge_sim_loop_cpp <- function(sim_state_r, lambda, rate) {
     .Call(`_bridges_bridge_sim_loop_cpp`, sim_state_r, lambda, rate)
 }

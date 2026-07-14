@@ -29,3 +29,4 @@ List containing processed tree and ggplot object
 \description{
 Process tree for heatmap visualization
 }
+\keyword{internal}
