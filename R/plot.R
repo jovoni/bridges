@@ -441,7 +441,6 @@ plot_heatmap <- function(data,
   row_annotations <- prepare_row_annotations(annotations, ordered_cell_ids)
 
   # Create heatmaps for each feature
-
   for (i in seq_along(to_plot_vec)) {
     feature_name <- to_plot_vec[i]
     message(sprintf("Processing feature: %s", feature_name))
