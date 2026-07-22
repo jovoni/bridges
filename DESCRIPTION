@@ -1,6 +1,6 @@
 Package: bridges
 Title: Fit, Detect, and Visualize Breakage-Fusion-Bridge in Single-Cell Copy Number Data
-Version: 0.1.0
+Version: 0.2.0
 Authors@R: 
     person("Giovanni", "Santacatterina", , "first.last@example.com", role = c("aut", "cre"))
 Description: Simulates single-cell copy-number evolution under a
@@ -49,3 +49,6 @@ Remotes:
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 URL: https://jovoni.github.io/bridges/
+Depends: 
+    R (>= 3.5)
+LazyData: true

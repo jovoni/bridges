@@ -15,6 +15,9 @@
 #'   supplied, \code{initial_cells} is derived from its length instead of
 #'   used directly.
 #' @param chromosomes Character vector. Chromosomes to model (e.g., c("1", "2", "X")). Default: c(1:22, "X", "Y")
+#' @param genome Character. Genome build used to look up chromosome lengths
+#'   for simulation binning: one of \code{"hg19"} (GRCh37) or \code{"hg38"}
+#'   (GRCh38). See \code{\link{centromeres}}. Default: \code{"hg19"}
 #' @param bin_length Numeric. Length of each genomic bin in base pairs. Default: 5e5
 #' @param birth_rate Numeric. Base rate at which cells replicate per unit time. Default: 0.1
 #' @param death_rate Numeric. Rate at which cells die per unit time. Default: 0.001
@@ -116,6 +119,7 @@ bridge_sim <- function(
   initial_cells = 1,
   initial_sequences = NULL,
   chromosomes = c(1:22, "X", "Y"),
+  genome = "hg19",
   bin_length = 1e6,
   birth_rate = 0.1,
   death_rate = 0.001,
@@ -173,34 +177,9 @@ bridge_sim <- function(
     saturation_K
   )
 
-  # Default human chromosome lengths (approximate, in base pairs)
-  default_chr_lengths <- c(
-    "1" = 247249719,
-    "2" = 242193529,
-    "3" = 198295559,
-    "4" = 190214555,
-    "5" = 181538259,
-    "6" = 170805979,
-    "7" = 159345973,
-    "8" = 145138636,
-    "9" = 138394717,
-    "10" = 133797422,
-    "11" = 135086622,
-    "12" = 133275309,
-    "13" = 114364328,
-    "14" = 107043718,
-    "15" = 101991189,
-    "16" = 90338345,
-    "17" = 83257441,
-    "18" = 80373285,
-    "19" = 58617616,
-    "20" = 64444167,
-    "21" = 46709983,
-    "22" = 50818468,
-    "X" = 156040895,
-    "Y" = 57227415
-  )
-  chr_lengths <- default_chr_lengths[as.character(chromosomes)]
+  # Real chromosome lengths for the requested genome build, from the
+  # bundled `centromeres` dataset (see ?centromeres).
+  chr_lengths <- .chr_lengths_for(genome, chromosomes)
 
   # Calculate sequence lengths for each chromosome
   chr_seq_lengths <- round(chr_lengths / bin_length)
@@ -227,6 +206,7 @@ bridge_sim <- function(
   input_parameters <- list(
     initial_cells = initial_cells,
     chromosomes = chromosomes,
+    genome = genome,
     chr_alleles = chr_alleles,
     chr_seq_lengths = chr_seq_lengths,
     bin_length = bin_length,

@@ -6,7 +6,7 @@
 \usage{
 split_chr_arms(
   cna_data,
-  centromere = NULL,
+  genome,
   chr_col = "chr",
   start_col = "start",
   end_col = "end"
@@ -16,22 +16,9 @@ split_chr_arms(
 \item{cna_data}{a copy-number tibble with (at least) chr/start/end
 columns.}
 
-\item{centromere}{centromere position(s). One of:
-\itemize{
-\item a single number, applied to every chromosome in
-\code{cna_data} -- only sensible for single-chromosome data;
-\item a named vector/list keyed by chromosome id, for
-multi-chromosome data where each chromosome has its own
-centromere position;
-\item \code{NULL} (default), falling back to the midpoint of
-each chromosome's own observed position range.
-}
-The midpoint fallback is a reasonable default for \strong{simulated}
-data (where "centromere" is really just "the point BFB breakage
-tends to occur near", and can be arbitrary), but is almost
-certainly wrong for \strong{real} genomic data, where actual
-centromere coordinates should be supplied explicitly (e.g. from
-your genome build's cytoband/gap reference table).}
+\item{genome}{genome build to use for centromere positions: one of
+\code{"hg19"} (GRCh37) or \code{"hg38"} (GRCh38). Required -- see
+\code{\link{centromeres}}.}
 
 \item{chr_col, start_col, end_col}{column names in \code{cna_data}.}
 }
@@ -50,5 +37,12 @@ telomere-to-centromere for the p-arm, but is centromere-to-telomere
 both into the telomere-to-centromere convention \code{bfbtools}
 expects; see \code{.extract_count_vector}'s \code{reverse}
 argument, which \code{\link{bfb_detect_batch}} sets automatically
-per arm once you supply a \code{centromere}.
+per arm once you supply a \code{genome}.
+}
+\details{
+Centromere positions come from the \code{\link{centromeres}} dataset
+bundled with this package (real hg19/hg38 coordinates for chromosomes
+1-22, X, Y) -- there is no manual-override or fallback-heuristic path,
+so arm-splitting is always based on real genomic coordinates for a
+real genome build.
 }

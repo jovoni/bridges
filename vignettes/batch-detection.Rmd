@@ -106,26 +106,31 @@ Chromosome 1, allele A -- where BFB was seeded -- should show a higher `admits_b
 
 A count-vector is only meaningful if it's oriented telomere-to-centromere. Real chromosomes have *two* telomeres, one on each arm, with the centromere in between -- so a whole-chromosome row mixes two opposite orientations into one, which will generally not read as a valid (or correctly-scored) BFB pattern even when the underlying biology is a clean BFB event confined to one arm.
 
-`split_chr_arms()` labels each row `"p"` or `"q"` based on position relative to the centromere. Ascending genomic coordinate is already telomere-to-centromere on the p-arm, but is centromere-to-telomere (backwards) on the q-arm -- only the q-arm needs reversing before extraction, and `bfb_detect_batch()` handles this automatically once you supply a `centromere`:
+`split_chr_arms()` labels each row `"p"` or `"q"` based on position relative to the centromere. Ascending genomic coordinate is already telomere-to-centromere on the p-arm, but is centromere-to-telomere (backwards) on the q-arm -- only the q-arm needs reversing before extraction, and `bfb_detect_batch()` handles this automatically once you supply a `genome`.
+
+Centromere positions come from the `centromeres` dataset bundled with `bridges` -- real hg19 (GRCh37) and hg38 (GRCh38) coordinates for chromosomes 1-22, X, Y (see `?centromeres`). There is no manual-override or midpoint-guessing fallback: `genome` is the only way to enable arm-awareness, so arm-splitting is always anchored to real genomic coordinates for a real genome build.
 
 ```{r arm-aware}
-# Toy example: the SAME true [6,3,5] BFB pattern placed on both arms of one
-# chromosome, each laid out in that arm's own natural raw coordinate order.
+# The SAME true [6,3,5] BFB pattern placed on both arms of chr1, each laid
+# out in that arm's own natural raw coordinate order, at real-scale
+# coordinates either side of hg19 chr1's real centromere (~121.5-124.5 Mb).
 arm_cna <- rbind(
-  data.frame(cell_id = "cellZ", chr = 1, start = c(0, 10, 20), end = c(9, 19, 29),
+  data.frame(cell_id = "cellZ", chr = "1", start = c(100, 110, 120), end = c(109, 119, 129),
              A = c(6, 3, 5)),        # p-arm: ascending coordinate = telomere-first already
-  data.frame(cell_id = "cellZ", chr = 1, start = c(30, 40, 50), end = c(39, 49, 59),
+  data.frame(cell_id = "cellZ", chr = "1",
+             start = c(124600000, 124600010, 124600020),
+             end   = c(124600009, 124600019, 124600029),
              A = c(5, 3, 6))         # q-arm: ascending coordinate = centromere-first
 )
 
-bfb_detect_batch(arm_cna, alleles = "A", centromere = c("1" = 30))
+bfb_detect_batch(arm_cna, alleles = "A", genome = "hg19")
 ```
 
-Both arms correctly recover the same `[6, 3, 5]` pattern and both correctly admit BFB, despite having opposite raw coordinate orientation on disk -- because `centromere` was supplied, `bfb_detect_batch()` ran `split_chr_arms()` internally and applied the right reversal to each arm independently. Compare this to what a whole-chromosome (non-arm-aware) reading of the *same* six rows would see: a single 6-segment run that doesn't reduce to either arm's true pattern.
+Both arms correctly recover the same `[6, 3, 5]` pattern and both correctly admit BFB, despite having opposite raw coordinate orientation on disk -- because `genome` was supplied, `bfb_detect_batch()` ran `split_chr_arms()` internally, looked up real hg19 centromere positions, and applied the right reversal to each arm independently. Compare this to what a whole-chromosome (non-arm-aware) reading of the *same* six rows would see: a single 6-segment run that doesn't reduce to either arm's true pattern.
 
-`centromere` accepts a single number (applied to every chromosome -- only sensible for single-chromosome data), a named vector keyed by chromosome (for multi-chromosome data where each has its own centromere position), or is left `NULL` by default (no arm-splitting; the whole chromosome is treated as one unit, matching the behavior in Section 3).
+`genome` is one of `"hg19"` or `"hg38"`, or is left `NULL` by default (no arm-splitting; the whole chromosome is treated as one unit, matching the behavior in Section 3).
 
-**A caveat worth being explicit about:** if `centromere` is left `NULL` and your data spans both arms of a chromosome, whole-chromosome detection isn't just "less precise" -- it can silently give the wrong answer, in either direction, for exactly the reason shown above. If you're working with real (or realistically-simulated) whole-chromosome data, specifying `centromere` is the safer default, not an optional refinement. For real genomic data, use actual centromere coordinates for your genome build (e.g. from a UCSC cytoband/gap track) rather than the midpoint-of-observed-range fallback that `split_chr_arms()` uses when `centromere` isn't supplied per-chromosome -- that fallback is intended for simulated data, where "centromere" really just means "the point BFB breakage tends to occur near."
+**A caveat worth being explicit about:** if `genome` is left `NULL` and your data spans both arms of a chromosome, whole-chromosome detection isn't just "less precise" -- it can silently give the wrong answer, in either direction, for exactly the reason shown above. If you're working with real (or realistically-simulated) whole-chromosome data, specifying `genome` is the safer default, not an optional refinement.
 
 ---
 

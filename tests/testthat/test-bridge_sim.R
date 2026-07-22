@@ -28,6 +28,32 @@ test_that("bridge_sim is reproducible under a fixed seed", {
   expect_identical(sim1$cna_data, sim2$cna_data)
 })
 
+test_that("bridge_sim(genome=) wires through to real chr_lengths and bin counts", {
+  set.seed(5)
+  sim_hg19 <- bridge_sim(initial_cells = 1, chromosomes = c("1"), genome = "hg19",
+                          bin_length = 1e4,
+                          bfb_prob = 0.2, amp_rate = 0.2, del_rate = 0.05,
+                          max_cells = 10, lambda = 1)
+  set.seed(5)
+  sim_hg38 <- bridge_sim(initial_cells = 1, chromosomes = c("1"), genome = "hg38",
+                          bin_length = 1e4,
+                          bfb_prob = 0.2, amp_rate = 0.2, del_rate = 0.05,
+                          max_cells = 10, lambda = 1)
+
+  expect_equal(sim_hg19$input_parameters$genome, "hg19")
+  expect_equal(unname(sim_hg19$input_parameters$chr_lengths["1"]), 249250621)
+  expect_equal(unname(sim_hg38$input_parameters$chr_lengths["1"]), 248956422)
+  expect_false(identical(sim_hg19$input_parameters$chr_seq_lengths,
+                          sim_hg38$input_parameters$chr_seq_lengths))
+})
+
+test_that("bridge_sim errors clearly on an invalid genome", {
+  expect_error(
+    bridge_sim(initial_cells = 1, chromosomes = c("1"), genome = "hg37", max_cells = 5),
+    "should be one of"
+  )
+})
+
 test_that("bridge_sim works with custom breakpoint_support (exercises get_seq_length)", {
   # sim_bfb_left_and_right_sequences's "custom" branch calls
   # get_seq_length() directly rather than going through the C++ engine --

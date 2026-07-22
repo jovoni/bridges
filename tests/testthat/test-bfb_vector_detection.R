@@ -25,17 +25,38 @@ test_that("bfb_detect_vectors: correctness + dedup", {
   expect_equal(res$n_unique[1], 2)       # only 2 distinct informative vectors among 9 rows
 })
 
-test_that("split_chr_arms labels p/q correctly", {
+test_that("split_chr_arms labels p/q correctly using real hg19 centromere positions", {
+  # hg19 chr1 centromere spans ~121,535,435-124,535,434; hg19 chr2 centromere
+  # spans ~92,326,172-95,326,171 (see data-raw/centromeres.R).
   arm_test_data <- rbind(
-    data.frame(chr = 1, start = c(0, 10, 20, 30, 40, 50), end = c(9,19,29,39,49,59)),
-    data.frame(chr = 2, start = c(0, 100), end = c(99, 199))
+    data.frame(chr = "1", start = c(100, 121535000, 121535500, 124600000), end = c(200, 121535100, 121535600, 124600100)),
+    data.frame(chr = "2", start = c(100, 93000000), end = c(200, 93000100))
   )
-  arm_out <- split_chr_arms(arm_test_data, centromere = c("1" = 30, "2" = 50))
+  arm_out <- split_chr_arms(arm_test_data, genome = "hg19")
 
-  expect_true(all(arm_out$arm[arm_out$chr == 1 & arm_out$start < 30] == "p"))
-  expect_true(all(arm_out$arm[arm_out$chr == 1 & arm_out$start >= 30] == "q"))
-  expect_true(all(arm_out$arm[arm_out$chr == 2 & arm_out$start < 50] == "p"))
-  expect_true(all(arm_out$arm[arm_out$chr == 2 & arm_out$start >= 50] == "q"))
+  expect_true(all(arm_out$arm[arm_out$chr == "1" & arm_out$start < 123035434] == "p"))
+  expect_true(all(arm_out$arm[arm_out$chr == "1" & arm_out$start >= 123035434] == "q"))
+  expect_true(all(arm_out$arm[arm_out$chr == "2" & arm_out$start < 93826172] == "p"))
+})
+
+test_that("split_chr_arms: hg19 and hg38 give different arm assignments", {
+  # hg19 chr1 centromere midpoint ~123,035,434; hg38 chr1 centromere
+  # midpoint ~123,479,592 -- a row in between falls on opposite arms.
+  in_between <- data.frame(chr = "1", start = 123200000, end = 123200100)
+
+  hg19_out <- split_chr_arms(in_between, genome = "hg19")
+  hg38_out <- split_chr_arms(in_between, genome = "hg38")
+
+  expect_equal(hg19_out$arm, "q")
+  expect_equal(hg38_out$arm, "p")
+})
+
+test_that("split_chr_arms requires a valid genome", {
+  toy <- data.frame(chr = "1", start = 1, end = 2)
+  expect_error(split_chr_arms(toy), "missing")
+  expect_error(split_chr_arms(toy, genome = "hg37"), "should be one of")
+  expect_error(split_chr_arms(toy_mt <- data.frame(chr = "MT", start = 1, end = 2), genome = "hg19"),
+               "No centromere position available")
 })
 
 test_that("bfb_detect_batch: whole-chromosome mode end to end", {
@@ -70,15 +91,31 @@ test_that("bfb_detect_batch: arm-aware mode recovers the true pattern on both ar
   # ascending = telomere-first already (raw = true vector directly);
   # q-arm ascending = centromere-first (raw = reversed true vector). A
   # whole-chromosome (non-arm-aware) reading of this row would see a
-  # single 6-segment run and get it wrong.
+  # single 6-segment run and get it wrong. Coordinates are real-scale,
+  # placed either side of hg19 chr1's real centromere (~121.5-124.5 Mb).
   arm_cna <- rbind(
-    data.frame(cell_id = "cellZ", chr = 1, start = c(0,10,20), end = c(9,19,29),
+    data.frame(cell_id = "cellZ", chr = "1", start = c(100, 110, 120), end = c(109, 119, 129),
                A = c(6,3,5), B = c(1,1,1)),        # p-arm: raw = true vector
-    data.frame(cell_id = "cellZ", chr = 1, start = c(30,40,50), end = c(39,49,59),
+    data.frame(cell_id = "cellZ", chr = "1", start = c(124600000, 124600010, 124600020),
+               end = c(124600009, 124600019, 124600029),
                A = c(5,3,6), B = c(1,1,1))         # q-arm: raw = reversed true vector
   )
-  arm_result <- bfb_detect_batch(arm_cna, alleles = "A", centromere = c("1" = 30))
+  arm_result <- bfb_detect_batch(arm_cna, alleles = "A", genome = "hg19")
 
   expect_equal(nrow(arm_result), 2)  # p and q, allele A only
   expect_true(all(arm_result$admits_bfb))
+})
+
+test_that("bfb_detect_batch: genome argument works for both hg19 and hg38", {
+  skip_if_not_installed("bfbtools")
+  arm_cna <- rbind(
+    data.frame(cell_id = "cellZ", chr = "1", start = c(100, 110, 120), end = c(109, 119, 129),
+               A = c(6,3,5)),
+    data.frame(cell_id = "cellZ", chr = "1", start = c(124600000, 124600010, 124600020),
+               end = c(124600009, 124600019, 124600029),
+               A = c(5,3,6))
+  )
+  hg38_result <- bfb_detect_batch(arm_cna, alleles = "A", genome = "hg38")
+  expect_equal(nrow(hg38_result), 2)
+  expect_setequal(hg38_result$arm, c("p", "q"))
 })

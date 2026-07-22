@@ -9,6 +9,7 @@ bridge_sim(
   initial_cells = 1,
   initial_sequences = NULL,
   chromosomes = c(1:22, "X", "Y"),
+  genome = "hg19",
   bin_length = 1e+06,
   birth_rate = 0.1,
   death_rate = 0.001,
@@ -48,6 +49,10 @@ supplied, \code{initial_cells} is derived from its length instead of
 used directly.}
 
 \item{chromosomes}{Character vector. Chromosomes to model (e.g., c("1", "2", "X")). Default: c(1:22, "X", "Y")}
+
+\item{genome}{Character. Genome build used to look up chromosome lengths
+for simulation binning: one of \code{"hg19"} (GRCh37) or \code{"hg38"}
+(GRCh38). See \code{\link{centromeres}}. Default: \code{"hg19"}}
 
 \item{bin_length}{Numeric. Length of each genomic bin in base pairs. Default: 5e5}
 

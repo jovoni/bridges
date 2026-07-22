@@ -8,7 +8,7 @@ bfb_detect_batch(
   cna_data,
   alleles = c("A", "B"),
   chr_col = "chr",
-  centromere = NULL,
+  genome = NULL,
   model = c("poisson", "none"),
   min_weight = 1e-06,
   min_max_count = 2
@@ -26,9 +26,10 @@ the \code{value_column} argument to
 present (default \code{"chr"}); set to \code{NULL} to force
 single-chromosome handling even if such a column exists.}
 
-\item{centromere}{centromere position(s), passed to
-\code{\link{split_chr_arms}} to enable per-arm handling; see
-"ARM AWARENESS" above. Default \code{NULL} (no arm-splitting).}
+\item{genome}{genome build to use for centromere positions, passed to
+\code{\link{split_chr_arms}} to enable per-arm handling; one of
+\code{"hg19"} or \code{"hg38"}. See "ARM AWARENESS" above. Default
+\code{NULL} (no arm-splitting).}
 
 \item{model, min_weight, min_max_count}{passed to
 \code{\link{bfb_detect_vectors}} (see that function for the
@@ -36,7 +37,7 @@ trivial-vector filter rationale).}
 }
 \value{
 a tibble with one row per (cell_id, chr, allele) -- or per
-(cell_id, chr, arm, allele) if \code{centromere} is supplied:
+(cell_id, chr, arm, allele) if \code{genome} is supplied:
 n_segments, max_count, admits_bfb, bfb_distance, nearest_weight,
 n_unique (per group).
 }
@@ -48,24 +49,26 @@ has more than one) copy-number count-vectors from a
 duplicate profiles across cells/alleles are only computed once).
 }
 \details{
-ARM AWARENESS: if \code{centromere} is supplied (anything other than
-the default \code{NULL}), each chromosome is first split into p-arm
-and q-arm via \code{\link{split_chr_arms}}, and each arm is extracted
-and detected \emph{separately}, with the correct reversal direction
+ARM AWARENESS: if \code{genome} is supplied (anything other than the
+default \code{NULL}), each chromosome is first split into p-arm and
+q-arm via \code{\link{split_chr_arms}} (using real centromere
+positions for that genome build, from the bundled
+\code{\link{centromeres}} dataset), and each arm is extracted and
+detected \emph{separately}, with the correct reversal direction
 applied automatically per arm (p: no reversal, q: reversed -- see
 \code{\link{split_chr_arms}}'s documentation for why). The output
 then has one row per (cell_id, chr, arm, allele) instead of one row
 per (cell_id, chr, allele), with an added \code{arm} column.
 
-If \code{centromere} is left \code{NULL} (the default), the entire
+If \code{genome} is left \code{NULL} (the default), the entire
 chromosome is extracted as a single unit with \code{reverse = TRUE}
 -- this matches this function's original behavior, but note that
 this is only correct if your data's coordinate convention actually
 warrants reversing the whole chromosome (e.g. if it only ever
 represents a single arm to begin with). \strong{If your simulations
 or data can contain material from both arms of a chromosome, you
-should supply \code{centromere} rather than relying on this default}
--- see \code{\link{split_chr_arms}}.
+should supply \code{genome} rather than relying on this default} --
+see \code{\link{split_chr_arms}}.
 
 ASSUMPTIONS (please verify against your actual bridges output and
 adjust arguments as needed -- I don't have the bridges package

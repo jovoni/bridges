@@ -141,58 +141,45 @@ bfb_detect_vectors <- function(vec_list, model = c("poisson", "none"), min_weigh
 #' both into the telomere-to-centromere convention \code{bfbtools}
 #' expects; see \code{.extract_count_vector}'s \code{reverse}
 #' argument, which \code{\link{bfb_detect_batch}} sets automatically
-#' per arm once you supply a \code{centromere}.
+#' per arm once you supply a \code{genome}.
+#'
+#' Centromere positions come from the \code{\link{centromeres}} dataset
+#' bundled with this package (real hg19/hg38 coordinates for chromosomes
+#' 1-22, X, Y) -- there is no manual-override or fallback-heuristic path,
+#' so arm-splitting is always based on real genomic coordinates for a
+#' real genome build.
 #'
 #' @param cna_data a copy-number tibble with (at least) chr/start/end
 #'   columns.
-#' @param centromere centromere position(s). One of:
-#'   \itemize{
-#'     \item a single number, applied to every chromosome in
-#'       \code{cna_data} -- only sensible for single-chromosome data;
-#'     \item a named vector/list keyed by chromosome id, for
-#'       multi-chromosome data where each chromosome has its own
-#'       centromere position;
-#'     \item \code{NULL} (default), falling back to the midpoint of
-#'       each chromosome's own observed position range.
-#'   }
-#'   The midpoint fallback is a reasonable default for \strong{simulated}
-#'   data (where "centromere" is really just "the point BFB breakage
-#'   tends to occur near", and can be arbitrary), but is almost
-#'   certainly wrong for \strong{real} genomic data, where actual
-#'   centromere coordinates should be supplied explicitly (e.g. from
-#'   your genome build's cytoband/gap reference table).
+#' @param genome genome build to use for centromere positions: one of
+#'   \code{"hg19"} (GRCh37) or \code{"hg38"} (GRCh38). Required -- see
+#'   \code{\link{centromeres}}.
 #' @param chr_col,start_col,end_col column names in \code{cna_data}.
 #' @return \code{cna_data} with an added \code{arm} column (\code{"p"}
 #'   or \code{"q"}).
 #' @export
-split_chr_arms <- function(cna_data, centromere = NULL, chr_col = "chr",
+split_chr_arms <- function(cna_data, genome, chr_col = "chr",
                             start_col = "start", end_col = "end") {
   stopifnot(is.data.frame(cna_data))
-  chrs <- unique(cna_data[[chr_col]])
-
-  centromere_for <- function(chr) {
-    if (is.null(centromere)) {
-      rng <- range(cna_data[[start_col]][cna_data[[chr_col]] == chr])
-      mean(rng)
-    } else if (length(centromere) == 1 && is.null(names(centromere))) {
-      centromere
-    } else {
-      key <- as.character(chr)
-      if (!key %in% names(centromere)) {
-        stop("No centromere position supplied for chromosome '", key, "'", call. = FALSE)
-      }
-      centromere[[key]]
-    }
-  }
+  genome <- match.arg(genome, choices = c("hg19", "hg38"))
+  centromere <- .centromere_vector_for(genome)
 
   cna_data$arm <- NA_character_
+  chrs <- unique(cna_data[[chr_col]])
   for (chr in chrs) {
-    cm <- centromere_for(chr)
+    key <- .strip_chr_prefix(as.character(chr))
+    if (!key %in% names(centromere)) {
+      stop("No centromere position available for chromosome '", key,
+           "' under genome = '", genome, "'. bridges bundles centromere data ",
+           "for chromosomes 1-22, X, Y only (see ?centromeres).", call. = FALSE)
+    }
     idx <- cna_data[[chr_col]] == chr
-    cna_data$arm[idx] <- ifelse(cna_data[[start_col]][idx] < cm, "p", "q")
+    cna_data$arm[idx] <- ifelse(cna_data[[start_col]][idx] < centromere[[key]], "p", "q")
   }
   cna_data
 }
+
+.strip_chr_prefix <- function(x) sub("^chr", "", x)
 
 #' Extract a BFB count-vector from one row of a copy-number matrix
 #'
@@ -207,7 +194,7 @@ split_chr_arms <- function(cna_data, centromere = NULL, chr_col = "chr",
 #'   q-arm and needs reversing (\code{reverse = TRUE}) to match
 #'   \code{bfbtools}'s expected convention. Defaults to \code{TRUE}
 #'   (matching this function's original whole-chromosome behavior) when
-#'   arm information isn't available -- see the \code{centromere}
+#'   arm information isn't available -- see the \code{genome}
 #'   argument on \code{\link{bfb_detect_batch}} to enable proper
 #'   per-arm handling instead of relying on this default.
 #' @noRd
@@ -229,24 +216,26 @@ split_chr_arms <- function(cna_data, centromere = NULL, chr_col = "chr",
 #' \code{\link{bfb_detect_vectors}} on all of them at once (so exact
 #' duplicate profiles across cells/alleles are only computed once).
 #'
-#' ARM AWARENESS: if \code{centromere} is supplied (anything other than
-#' the default \code{NULL}), each chromosome is first split into p-arm
-#' and q-arm via \code{\link{split_chr_arms}}, and each arm is extracted
-#' and detected \emph{separately}, with the correct reversal direction
+#' ARM AWARENESS: if \code{genome} is supplied (anything other than the
+#' default \code{NULL}), each chromosome is first split into p-arm and
+#' q-arm via \code{\link{split_chr_arms}} (using real centromere
+#' positions for that genome build, from the bundled
+#' \code{\link{centromeres}} dataset), and each arm is extracted and
+#' detected \emph{separately}, with the correct reversal direction
 #' applied automatically per arm (p: no reversal, q: reversed -- see
 #' \code{\link{split_chr_arms}}'s documentation for why). The output
 #' then has one row per (cell_id, chr, arm, allele) instead of one row
 #' per (cell_id, chr, allele), with an added \code{arm} column.
 #'
-#' If \code{centromere} is left \code{NULL} (the default), the entire
+#' If \code{genome} is left \code{NULL} (the default), the entire
 #' chromosome is extracted as a single unit with \code{reverse = TRUE}
 #' -- this matches this function's original behavior, but note that
 #' this is only correct if your data's coordinate convention actually
 #' warrants reversing the whole chromosome (e.g. if it only ever
 #' represents a single arm to begin with). \strong{If your simulations
 #' or data can contain material from both arms of a chromosome, you
-#' should supply \code{centromere} rather than relying on this default}
-#' -- see \code{\link{split_chr_arms}}.
+#' should supply \code{genome} rather than relying on this default} --
+#' see \code{\link{split_chr_arms}}.
 #'
 #' ASSUMPTIONS (please verify against your actual bridges output and
 #' adjust arguments as needed -- I don't have the bridges package
@@ -279,19 +268,20 @@ split_chr_arms <- function(cna_data, centromere = NULL, chr_col = "chr",
 #' @param chr_col name of the chromosome column in \code{cna_data}, if
 #'   present (default \code{"chr"}); set to \code{NULL} to force
 #'   single-chromosome handling even if such a column exists.
-#' @param centromere centromere position(s), passed to
-#'   \code{\link{split_chr_arms}} to enable per-arm handling; see
-#'   "ARM AWARENESS" above. Default \code{NULL} (no arm-splitting).
+#' @param genome genome build to use for centromere positions, passed to
+#'   \code{\link{split_chr_arms}} to enable per-arm handling; one of
+#'   \code{"hg19"} or \code{"hg38"}. See "ARM AWARENESS" above. Default
+#'   \code{NULL} (no arm-splitting).
 #' @param model,min_weight,min_max_count passed to
 #'   \code{\link{bfb_detect_vectors}} (see that function for the
 #'   trivial-vector filter rationale).
 #' @return a tibble with one row per (cell_id, chr, allele) -- or per
-#'   (cell_id, chr, arm, allele) if \code{centromere} is supplied:
+#'   (cell_id, chr, arm, allele) if \code{genome} is supplied:
 #'   n_segments, max_count, admits_bfb, bfb_distance, nearest_weight,
 #'   n_unique (per group).
 #' @export
 bfb_detect_batch <- function(cna_data, alleles = c("A", "B"), chr_col = "chr",
-                              centromere = NULL,
+                              genome = NULL,
                               model = c("poisson", "none"), min_weight = 1e-6,
                               min_max_count = 2) {
   model <- match.arg(model)
@@ -300,9 +290,9 @@ bfb_detect_batch <- function(cna_data, alleles = c("A", "B"), chr_col = "chr",
          "a bridge_sim() result), got: ", class(cna_data)[1], call. = FALSE)
   }
 
-  arm_aware <- !is.null(centromere)
+  arm_aware <- !is.null(genome)
   if (arm_aware) {
-    cna_data <- split_chr_arms(cna_data, centromere = centromere, chr_col = chr_col %||% "chr")
+    cna_data <- split_chr_arms(cna_data, genome = genome, chr_col = chr_col %||% "chr")
   }
 
   has_chr_col <- !is.null(chr_col) && chr_col %in% names(cna_data)
