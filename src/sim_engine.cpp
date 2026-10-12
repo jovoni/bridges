@@ -317,6 +317,84 @@ static Sequence sim_wgd_impl(const Sequence& seq) {
     return result;
 }
 
+// Pick a cut position for a custom breakpoint set: a position p in the fused
+// (length 2L) sequence whose bin value is one of `custom` (sorted). The cut at L
+// (no-op: reproduces the parent) and at 2L (empty daughter) are excluded.
+static bool pick_custom_breakpoint(const Sequence& fused, int L,
+                                   const std::vector<int>& custom, int& bp_out) {
+    std::vector<int> candidates;
+    int pos = 0;
+    for (size_t i = 0; i < fused.size(); ++i) {
+        const Interval& iv = fused[i];
+        int len  = (iv.direction == 0) ? 1 : (std::abs(iv.end - iv.start) + 1);
+        int step = (iv.direction == 0) ? 0 : iv.direction;
+        for (int k = 0; k < len; ++k) {
+            ++pos;
+            int value = iv.start + step * k;
+            if (pos != L && pos < 2 * L &&
+                std::binary_search(custom.begin(), custom.end(), value))
+                candidates.push_back(pos);
+        }
+    }
+    if (candidates.empty()) return false;
+    int pick = (int)(R::unif_rand() * (double)candidates.size());
+    if (pick >= (int)candidates.size()) pick = (int)candidates.size() - 1;
+    bp_out = candidates[pick];
+    return true;
+}
+
+// One BFB cycle: fuse -> cut -> reverse right half -> random 50/50 swap.
+// Returns false (outputs = input) when no valid breakpoint could be drawn.
+static bool bfb_cycle(const Sequence& seq, const std::string& support,
+                      double alpha, double beta_param,
+                      const std::vector<int>& custom,
+                      Sequence& l_out, Sequence& r_out) {
+    int L = seq_length_impl(seq);
+    Sequence fused = fuse_sequence_impl(seq);
+    int bp_idx = L;
+
+    if (support == "custom") {
+        if (!pick_custom_breakpoint(fused, L, custom, bp_idx)) {
+            l_out = seq; r_out = seq; return false;
+        }
+    } else {
+        // Collect fusion values: junction bins where interval[k].end == interval[k+1].start.
+        std::vector<int> bps;
+        for (size_t k = 0; k + 1 < seq.size(); ++k)
+            if (seq[k].end == seq[k + 1].start) bps.push_back(seq[k].end);
+
+        auto forbidden = [&](int bp) {
+            if (bp == L) return true;
+            for (int b : bps) if (bp == b) return true;
+            return false;
+        };
+
+        int att = 0;
+        while (forbidden(bp_idx) && att < 10) {
+            ++att;
+            if (support == "uniform") {
+                bp_idx = (int)(R::unif_rand() * (double)(2 * L)) + 1;
+                if (bp_idx > 2 * L) bp_idx = 2 * L;
+            } else if (support == "beta") {
+                if (ISNAN(alpha) || ISNAN(beta_param))
+                    Rcpp::stop("For beta distribution both alpha and beta must be provided");
+                double tau = R::rbeta(alpha, beta_param);
+                bp_idx = std::max(1, (int)std::round(tau * 2.0 * L));
+            } else {
+                Rcpp::stop("Unsupported breakpoint support. Use 'uniform', 'beta', or 'custom'.");
+            }
+        }
+        if (att >= 10 && forbidden(bp_idx)) {
+            l_out = seq; r_out = seq; return false;
+        }
+    }
+
+    cut_sequence_impl(fused, bp_idx, l_out, r_out);
+    r_out = reverse_sequence_impl(r_out);
+    if (R::unif_rand() > 0.5) std::swap(l_out, r_out);
+    return true;
+}
+
 // ── Exported wrappers (Phase 1) ───────────────────────────────────────────────
 
 //' Compute length of an interval-encoded sequence
@@ -429,13 +507,15 @@ List sim_wgd_cpp(List seq_list) {
 //' Simulate BFB left and right daughter sequences
 //'
 //' Implements the fuse-cut-reverse BFB cycle with configurable breakpoint
-//' selection (uniform or beta distribution).
+//' selection (uniform, beta, or a custom set of bins).
 //'
 //' @param seq_list R list of intervals
-//' @param support Breakpoint distribution: \code{"uniform"} or \code{"beta"}
-//'   (\code{"custom"} falls back to the R implementation)
+//' @param support Breakpoint distribution: \code{"uniform"}, \code{"beta"} or
+//'   \code{"custom"}
 //' @param alpha Beta distribution shape parameter (ignored unless support="beta")
 //' @param beta_param Beta distribution shape parameter (ignored unless support="beta")
+//' @param custom_breakpoints Integer vector of bin indices eligible as breakpoints
+//'   (used only when support="custom")
 //' @return Named list with \code{l_seq} and \code{r_seq} (each an R interval list)
 //' @keywords internal
 // [[Rcpp::export]]
@@ -443,67 +523,23 @@ List sim_bfb_cpp(
     List seq_list,
     std::string support    = "uniform",
     double alpha           = NA_REAL,
-    double beta_param      = NA_REAL
+    double beta_param      = NA_REAL,
+    IntegerVector custom_breakpoints = IntegerVector()
 ) {
     RNGScope rng_scope;
     Sequence seq = rlist_to_sequence(seq_list);
-    int L = seq_length_impl(seq);
+    std::vector<int> custom(custom_breakpoints.begin(), custom_breakpoints.end());
+    std::sort(custom.begin(), custom.end());
 
-    // Collect fusion values: junction bins where interval[k].end == interval[k+1].start.
-    // These are existing BFB fold-back points; breakpoints landing there are forbidden.
-    std::vector<int> bps;
-    for (size_t k = 0; k + 1 < seq.size(); ++k) {
-        if (seq[k].end == seq[k + 1].start) bps.push_back(seq[k].end);
-    }
-
-    auto is_forbidden = [&](int bp) -> bool {
-        if (bp == L) return true;
-        for (size_t i = 0; i < bps.size(); ++i) if (bp == bps[i]) return true;
-        return false;
-    };
-
-    int bp_idx      = L; // start forbidden so loop executes
-    int attempts    = 0;
-    const int MAX_A = 10;
-
-    while (is_forbidden(bp_idx) && attempts < MAX_A) {
-        ++attempts;
-        if (support == "uniform") {
-            // sample from 1..(2*L) — mirrors R: sample(1:(2*L), 1)
-            bp_idx = (int)(R::unif_rand() * (double)(2 * L)) + 1;
-            if (bp_idx > 2 * L) bp_idx = 2 * L;
-        } else if (support == "beta") {
-            if (ISNA(alpha) || ISNA(beta_param))
-                Rcpp::stop("For beta distribution both alpha and beta must be provided");
-            double tau = R::rbeta(alpha, beta_param);
-            bp_idx = std::max(1, (int)std::round(tau * 2.0 * L));
-        } else if (support == "custom") {
-            // Custom breakpoints involve undefined R code in the original — defer to R
-            Rcpp::stop("support='custom' is not implemented in the C++ path; "
-                       "call sim_bfb_left_and_right_sequences() directly from R");
-        } else {
-            Rcpp::stop("Unsupported distribution type. Use 'uniform', 'beta', or 'custom'.");
-        }
-    }
-
-    if (attempts >= MAX_A && is_forbidden(bp_idx)) {
-        Rcpp::warning("BFB breakpoint selection failed after %d attempts "
-                      "(sequence may be too fragmented). Returning unchanged sequence.",
-                      MAX_A);
+    Sequence l_seq, r_seq;
+    if (!bfb_cycle(seq, support, alpha, beta_param, custom, l_seq, r_seq)) {
+        Rcpp::warning("BFB breakpoint selection failed (no valid breakpoint). "
+                      "Returning unchanged sequence.");
         return List::create(Named("l_seq") = seq_list, Named("r_seq") = seq_list);
     }
-
-    // Fuse → cut → reverse right half
-    Sequence fused = fuse_sequence_impl(seq);
-    Sequence left_seq, right_seq;
-    cut_sequence_impl(fused, bp_idx, left_seq, right_seq);
-    Sequence r_rev = reverse_sequence_impl(right_seq);
-
-    // Random 50/50 swap (mirrors R: if (runif(1) > .5) swap)
-    bool do_swap = (R::unif_rand() > 0.5);
     return List::create(
-        Named("l_seq") = sequence_to_rlist(do_swap ? r_rev   : left_seq),
-        Named("r_seq") = sequence_to_rlist(do_swap ? left_seq : r_rev)
+        Named("l_seq") = sequence_to_rlist(l_seq),
+        Named("r_seq") = sequence_to_rlist(r_seq)
     );
 }
 
@@ -521,6 +557,7 @@ struct SimP {
     int    hotspot_bin;
     std::string breakpoint_support;
     double bp_alpha, bp_beta;
+    std::vector<int> custom_bps;   // sorted; used when breakpoint_support == "custom"
     int    bfb_allele_idx;
     int    n_alleles;
     std::vector<std::string> allele_names;
@@ -587,38 +624,12 @@ static int sample_one_w(const std::vector<double>& probs) {
 // Internal BFB for Phase 4 (operates on Sequence directly)
 static void sim_bfb_internal(const Sequence& seq, const SimP& p,
                               Sequence& l_out, Sequence& r_out) {
-    int L = seq_length_impl(seq);
-    std::vector<int> bps;
-    for (size_t k = 0; k + 1 < seq.size(); ++k)
-        if (seq[k].end == seq[k + 1].start) bps.push_back(seq[k].end);
-
-    auto forbidden = [&](int bp) {
-        if (bp == L) return true;
-        for (int b : bps) if (bp == b) return true;
-        return false;
-    };
-
-    int bp_idx = L, att = 0;
-    while (forbidden(bp_idx) && att < 10) {
-        ++att;
-        if (p.breakpoint_support == "uniform") {
-            bp_idx = (int)(R::unif_rand() * (double)(2 * L)) + 1;
-            if (bp_idx > 2 * L) bp_idx = 2 * L;
-        } else if (p.breakpoint_support == "beta") {
-            double tau = R::rbeta(p.bp_alpha, p.bp_beta);
-            bp_idx = std::max(1, (int)std::round(tau * 2.0 * L));
-        } else {
-            Rcpp::stop("support='custom' not supported in C++ sim loop; use support='uniform' or 'beta'");
-        }
-    }
-    if (att >= 10 && forbidden(bp_idx)) {
+    // With custom breakpoints, a lineage that has lost every eligible bin
+    // simply cannot undergo BFB any more: leave it unchanged, silently.
+    if (!bfb_cycle(seq, p.breakpoint_support, p.bp_alpha, p.bp_beta,
+                   p.custom_bps, l_out, r_out) &&
+        p.breakpoint_support != "custom")
         Rcpp::warning("BFB breakpoint selection failed; returning unchanged sequence.");
-        l_out = seq; r_out = seq; return;
-    }
-    Sequence fused = fuse_sequence_impl(seq);
-    cut_sequence_impl(fused, bp_idx, l_out, r_out);
-    r_out = reverse_sequence_impl(r_out);
-    if (R::unif_rand() > 0.5) std::swap(l_out, r_out);
 }
 
 // Apply a single regular event (amp/del/normal) to alleles in-place
@@ -849,6 +860,13 @@ static SimP extract_simp(const Rcpp::List& sim_state, double lambda, double rate
     p.bp_beta  = (Rf_isNull(beta_sexp)  || ISNAN(Rf_asReal(beta_sexp)))
                  ? NA_REAL : as<double>(beta_sexp);
 
+    SEXP cbp_sexp = ip["custom_breakpoints"];
+    if (!Rf_isNull(cbp_sexp)) {
+        IntegerVector cbp = as<IntegerVector>(cbp_sexp);
+        p.custom_bps.assign(cbp.begin(), cbp.end());
+        std::sort(p.custom_bps.begin(), p.custom_bps.end());
+    }
+
     p.allele_names = as<std::vector<std::string>>(ip["chr_alleles"]);
     p.n_alleles    = (int)p.allele_names.size();
 
@@ -986,7 +1004,7 @@ List bridge_sim_loop_cpp(List sim_state_r, double lambda, double rate) {
             if (!cell.alive || cell.generation != entry.generation) continue;
 
             t_cur = entry.time;
-            if (t_cur >= p.max_time) { found = false; break; }
+            if (t_cur >= p.max_time) { t_cur = p.max_time; found = false; break; }
             found = true;
 
             // Birth vs death decision

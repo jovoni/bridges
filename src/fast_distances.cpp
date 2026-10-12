@@ -15,15 +15,15 @@ inline int sgn(double v) {
 }
 
 //' Greedy block-adjustment distance (no history)
- //'
- //' See \code{find_greedy_distance_with_steps_fast()} for the user-facing wrapper.
- //'
- //' @param a NumericVector.
- //' @param b NumericVector.
- //' @param target_val Numeric scalar, default 2.0.
- //' @return A list; see R wrapper documentation for fields.
- //' @noRd
- // [[Rcpp::export]]
+//'
+//' See \code{find_greedy_distance_with_steps_fast()} for the user-facing wrapper.
+//'
+//' @param a NumericVector.
+//' @param b NumericVector.
+//' @param target_val Numeric scalar, default 2.0.
+//' @return A list; see R wrapper documentation for fields.
+//' @noRd
+// [[Rcpp::export]]
  List greedy_distance_cpp(NumericVector a,
                           NumericVector b,
                           double target_val = 2.0) {
@@ -105,16 +105,16 @@ inline int sgn(double v) {
   );
  }
 
- //' Greedy A-contiguous distance (no history)
- //'
- //' See \code{find_greedy_distance_A_contig_fast()} for the user-facing wrapper.
- //'
- //' @param a NumericVector.
- //' @param b NumericVector.
- //' @param penalty Numeric scalar, default 0.0.
- //' @return A list; see R wrapper documentation for fields.
- //' @noRd
- // [[Rcpp::export]]
+//' Greedy A-contiguous distance (no history)
+//'
+//' See \code{find_greedy_distance_A_contig_fast()} for the user-facing wrapper.
+//'
+//' @param a NumericVector.
+//' @param b NumericVector.
+//' @param penalty Numeric scalar, default 0.0.
+//' @return A list; see R wrapper documentation for fields.
+//' @noRd
+// [[Rcpp::export]]
  List greedy_bfb_distance_cpp(NumericVector a,
                        NumericVector b,
                        double penalty = 0.0) {

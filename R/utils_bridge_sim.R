@@ -110,6 +110,17 @@ initialize_from_sequences <- function(sequences, input_parameters) {
     state$cell_next_event_times      <- c(state$cell_next_event_times,
                                           stats::rexp(1, combined_rate))
     state$hotspot_counts             <- c(state$hotspot_counts, as.integer(hc))
+
+    # Record each founder as a child of "root" so the lineage (and the tree
+    # built from it) is connected.
+    idx <- state$h_n + 1L
+    state$h_n <- idx
+    state$h_cell_id[idx]    <- cid
+    state$h_parent_id[idx]  <- "root"
+    state$h_bfb_event[idx]  <- FALSE
+    state$h_wgd_event[idx]  <- FALSE
+    state$h_cn_event[idx]   <- "none"
+    state$h_chr_allele[idx] <- NA_character_
   }
 
   state
@@ -357,19 +368,16 @@ prepare_results <- function(state, return_phylo = TRUE) {
 #' Simulate Breakage-Fusion-Bridge (BFB) cycle for both daughters
 #'
 #' Generates the left and right daughter sequences resulting from one
-#' BFB cycle applied to \code{sequence}. For \code{support = "uniform"}
-#' or \code{"beta"}, delegates to the C++ engine (\code{sim_bfb_cpp});
-#' for \code{support = "custom"} (a fixed set of candidate breakpoint
-#' positions), uses a pure-R fallback, since the C++ main-loop engine
-#' does not support custom breakpoints.
+#' BFB cycle applied to \code{sequence}, via the C++ engine
+#' (\code{sim_bfb_cpp}).
 #'
 #' @param sequence Interval-encoded chromosome sequence to break.
 #' @param support Breakpoint distribution: \code{"uniform"},
 #'   \code{"beta"}, or \code{"custom"}.
 #' @param alpha,beta Beta-distribution shape parameters, used when
 #'   \code{support = "beta"}.
-#' @param custom_breakpoints Integer vector of candidate breakpoint
-#'   positions, required when \code{support = "custom"}.
+#' @param custom_breakpoints Integer vector of bin indices eligible as
+#'   breakpoints, required when \code{support = "custom"}.
 #'
 #' @return A list with \code{l_seq} and \code{r_seq}, the two daughter
 #'   sequences.
@@ -382,42 +390,16 @@ sim_bfb_left_and_right_sequences <- function(
     beta = NULL,
     custom_breakpoints = NULL
 ) {
-  if (support == "custom") {
-    # C++ path doesn't support custom breakpoints — keep pure-R fallback.
-    if (is.null(custom_breakpoints) || length(custom_breakpoints) == 0)
-      stop("For custom distribution, custom_breakpoints must be provided and non-empty")
-    L   <- get_seq_length(sequence)
-    bps <- integer(0L)
-    n_iv <- length(sequence)
-    if (n_iv >= 2L)
-      for (k in seq_len(n_iv - 1L))
-        if (sequence[[k]]$end == sequence[[k + 1L]]$start)
-          bps <- c(bps, sequence[[k]]$end)
-    vec <- seq2vec(sequence)
-    bp_idx <- L; attempts <- 0L
-    while (bp_idx %in% c(L, bps) && attempts < 10L) {
-      attempts <- attempts + 1L
-      valid_indices <- which(vec %in% custom_breakpoints)
-      if (length(valid_indices) == 0) stop("None of the custom breakpoints are present in the sequence")
-      bp_idx <- sample(vec[sample(valid_indices, 1L)], 1L)
-    }
-    if (attempts >= 10L && bp_idx %in% c(L, bps)) {
-      warning("BFB breakpoint selection failed after 10 attempts. Returning unchanged sequence.")
-      return(list(l_seq = sequence, r_seq = sequence))
-    }
-    cut_seqs <- cut_sequence_cpp(fuse_sequence_cpp(sequence), bp_idx)
-    l_seq <- cut_seqs$left_seq
-    r_seq <- reverse_sequence_cpp(cut_seqs$right_seq)
-    if (stats::runif(1) > .5) list(l_seq = l_seq, r_seq = r_seq)
-    else                       list(l_seq = r_seq, r_seq = l_seq)
-  } else {
-    sim_bfb_cpp(
-      seq_list   = sequence,
-      support    = support,
-      alpha      = if (is.null(alpha)) NA_real_ else alpha,
-      beta_param = if (is.null(beta))  NA_real_ else beta
-    )
+  if (support == "custom" && length(custom_breakpoints) == 0) {
+    stop("For custom distribution, custom_breakpoints must be provided and non-empty")
   }
+  sim_bfb_cpp(
+    seq_list           = sequence,
+    support            = support,
+    alpha              = if (is.null(alpha)) NA_real_ else alpha,
+    beta_param         = if (is.null(beta))  NA_real_ else beta,
+    custom_breakpoints = as.integer(if (is.null(custom_breakpoints)) integer(0) else custom_breakpoints)
+  )
 }
 
 get_hotspot_copies <- function(cell, hotspot) {
@@ -440,52 +422,15 @@ compute_selection_multiplier <- function(hotspot_count, selection_type, saturati
   as.numeric(hotspot_count > 1)
 }
 
-# cell_history_to_newick <- function(cell_history) {
-#   # Check there is a root and rename it
-#   root_name = cell_history$cell_id[is.na(cell_history$parent_id)]
-#   cell_history$cell_id[cell_history$cell_id == root_name] = "root"
-#   cell_history$parent_id[cell_history$parent_id == root_name] = "root"
-#
-#   # Helper function to recursively build the tree
-#   build_tree <- function(node) {
-#     # Find children of the current node
-#     node_data <- cell_history %>%
-#       dplyr::filter(.data$cell_id == node) %>%
-#       dplyr::select(.data$bfb_event)
-#
-#     # Find children of the current node
-#     children <- cell_history %>% dplyr::filter(.data$parent_id == node) %>% dplyr::pull(.data$cell_id)
-#
-#     if (length(children) == 0) {
-#       # If no children, return the node itself with BFB annotation
-#       return(node)
-#     } else {
-#       # Recursively build subtrees for each child
-#       subtree <- paste(sapply(children, build_tree), collapse = ",")
-#
-#       # Add BFB annotation to the current node
-#       return(paste0("(", subtree, ")", node))
-#     }
-#   }
-#
-#   # Identify the root node (cells with no parent)
-#   root <- cell_history %>%
-#     dplyr::filter(is.na(.data$parent_id)) %>%
-#     dplyr::pull(.data$cell_id)
-#
-#   if (length(root) != 1) {
-#     stop("Error: There must be exactly one root node.")
-#   }
-#
-#   # Build the tree starting from the root
-#   newick_tree <- paste0(build_tree(root), ";")
-#
-#   return(newick_tree)
-# }
-
-
 validate_bridge_sim_params <- function(
   initial_cells,
+  chr_seq_lengths,
+  lambda,
+  rate,
+  wgd_available,
+  wgd_probability,
+  subsample,
+  custom_breakpoints,
   chromosomes,
   bin_length,
   birth_rate,
@@ -568,6 +513,31 @@ validate_bridge_sim_params <- function(
 
   if (!is.numeric(negative_selection_rate)) {
     stop("negative_selection_rate must be numeric")
+  }
+
+  # lambda / rate: event count and event-length parameters
+  if (!is.numeric(lambda) || length(lambda) != 1 || lambda < 0) {
+    stop("lambda must be a single non-negative number")
+  }
+  if (!is.numeric(rate) || length(rate) != 1 || rate <= 0) {
+    stop("rate must be a single positive number")
+  }
+
+  # WGD parameters
+  if (!is.numeric(wgd_available) || length(wgd_available) != 1 ||
+      wgd_available < 0 || wgd_available != round(wgd_available)) {
+    stop("wgd_available must be a single non-negative integer")
+  }
+  if (!is.numeric(wgd_probability) || length(wgd_probability) != 1 ||
+      wgd_probability < 0 || wgd_probability > 1) {
+    stop("wgd_probability must be a single number in [0, 1]")
+  }
+
+  # subsample: NULL or positive integer
+  if (!is.null(subsample) &&
+      (!is.numeric(subsample) || length(subsample) != 1 ||
+       subsample < 1 || subsample != round(subsample))) {
+    stop("subsample must be NULL or a single positive integer")
   }
 
   # max_time: positive number
@@ -692,6 +662,10 @@ validate_bridge_sim_params <- function(
     }
   }
 
+  if (breakpoint_support == "custom" && length(custom_breakpoints) == 0) {
+    stop("custom_breakpoints must be a non-empty integer vector when breakpoint_support is 'custom'")
+  }
+
   # --- Beta Distribution Parameter Validation ---
 
   if (breakpoint_support == "beta") {
@@ -730,6 +704,15 @@ validate_bridge_sim_params <- function(
     ))
   }
 
+  # Warn if the hotspot lies beyond the end of its chromosome: selection
+  # would then silently never act.
+  if (hotspot$pos > chr_seq_lengths[[hotspot_chr]]) {
+    warning(sprintf(
+      "hotspot$pos (%s) is beyond the last bin of chromosome %s (%d bins at this bin_length); selection will have no effect",
+      hotspot$pos, hotspot_chr, as.integer(chr_seq_lengths[[hotspot_chr]])
+    ))
+  }
+
   # Warn if birth_rate is much smaller than death_rate
   if (birth_rate > 0 && death_rate > birth_rate * 10) {
     warning(
@@ -749,77 +732,8 @@ validate_bridge_sim_params <- function(
 }
 
 
-subsample_sim <- function(sim_result, f_subsample = 1) {
-  if (f_subsample < 0 || f_subsample > 1) {
-    stop("f_subsample must be between 0 and 1")
-  }
-
-  if (f_subsample == 1) {
-    return(sim_result)
-  }
-
-  # Get original alive cell IDs
-  original_cell_ids <- names(sim_result$cells)
-
-  # Subsample cells
-  n_subsample <- as.integer(f_subsample * length(original_cell_ids))
-  if (n_subsample == 0) {
-    stop("Subsampling fraction too small - results in 0 cells")
-  }
-
-  sampled_cell_ids <- sample(original_cell_ids, n_subsample)
-
-  # Create subsampled cells
-  subsampled_cells <- sim_result$cells[sampled_cell_ids]
-
-  # Filter cell history to remove non-sampled alive cells
-  alive_cells_not_sampled <- sim_result$cell_history %>%
-    dplyr::filter(.data$is_alive, !.data$cell_id %in% sampled_cell_ids) %>%
-    dplyr::pull(.data$cell_id)
-
-  subsampled_cell_history <- sim_result$cell_history %>%
-    dplyr::filter(!.data$cell_id %in% alive_cells_not_sampled)
-
-  # Rebuild tree from filtered history only when the original had one.
-  # When return_phylo = FALSE was passed to bridge_sim, sim_result$tree is NULL
-  # and we skip this expensive step entirely.
-  if (!is.null(sim_result$tree)) {
-    subsampled_tree <- build_phylo_from_lineage(subsampled_cell_history)
-    subsampled_tree <- ape::keep.tip(subsampled_tree, sampled_cell_ids)
-  } else {
-    subsampled_tree <- NULL
-  }
-
-  # Create new CNA data for subsampled cells
-  chr_seq_lengths <- sim_result$input_parameters$chr_seq_lengths
-  bin_length <- sim_result$input_parameters$bin_length
-  subsampled_cna_data <- sequences_to_cndata(
-    subsampled_cells,
-    chr_seq_lengths,
-    bin_length
-  )
-
-  # Return subsampled result
-  subsampled_result <- list(
-    cells            = subsampled_cells,
-    cell_history     = subsampled_cell_history,
-    tree             = subsampled_tree,
-    cna_data         = subsampled_cna_data,
-    elapsed_time     = sim_result$elapsed_time,
-    input_parameters = sim_result$input_parameters
-  )
-
-  return(subsampled_result)
-}
-
 sequences_to_cndata <- function(sequences, chr_seq_lengths, bin_length) {
   # Pre-compute total rows needed
-  are_null = lapply(sequences, function(s) {
-    is.null(s)
-  }) %>% unlist()
-
-
-
   total_rows <- sum(unlist(lapply(sequences, function(seqs) {
     sum(chr_seq_lengths[sapply(names(seqs), function(x) strsplit(x, ":")[[1]][1])])
   })))
@@ -928,27 +842,13 @@ build_phylo_from_lineage <- function(cell_history) {
   cell_to_node[terminal_cells] <- 1:n_tips
   cell_to_node[internal_cells] <- (n_tips + 1):(n_tips + n_internal)
 
-  # Build the edge matrix
-  # Each row represents an edge: [parent_node, child_node]
-  edges <- data.frame(
-    parent = character(0),
-    child = character(0),
-    stringsAsFactors = FALSE
+  # Build the edge matrix: one row per (parent, child) pair
+  has_parent <- !is.na(cell_history$parent_id)
+  edge_matrix <- cbind(
+    unname(cell_to_node[cell_history$parent_id[has_parent]]),
+    unname(cell_to_node[cell_history$cell_id[has_parent]])
   )
-
-  for (i in 1:nrow(cell_history)) {
-    child <- cell_history$cell_id[i]
-    parent <- cell_history$parent_id[i]
-
-    if (!is.na(parent)) {
-      edges <- rbind(edges, data.frame(parent = parent, child = child, stringsAsFactors = FALSE))
-    }
-  }
-
-  # Convert to node numbers
-  edge_matrix <- matrix(0, nrow = nrow(edges), ncol = 2)
-  edge_matrix[, 1] <- cell_to_node[edges$parent]  # parent nodes
-  edge_matrix[, 2] <- cell_to_node[edges$child]   # child nodes
+  storage.mode(edge_matrix) <- "integer"
 
   # Create edge lengths (all set to 1 for simplicity, can be modified)
   edge_lengths <- rep(1, nrow(edge_matrix))
@@ -956,16 +856,12 @@ build_phylo_from_lineage <- function(cell_history) {
   # Create tip labels
   tip_labels <- terminal_cells
 
-  # Find root node number
-  root_node <- cell_to_node["root"]
-
   # Create the phylo object
   phylo_tree <- list(
     edge = edge_matrix,
     edge.length = edge_lengths,
     tip.label = tip_labels,
-    Nnode = n_internal,
-    root.edge = NULL
+    Nnode = n_internal
   )
 
   class(phylo_tree) <- "phylo"

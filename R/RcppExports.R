@@ -2,12 +2,27 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #' Greedy block-adjustment distance (no history)
-NULL
-
+#'
+#' See \code{find_greedy_distance_with_steps_fast()} for the user-facing wrapper.
+#'
+#' @param a NumericVector.
+#' @param b NumericVector.
+#' @param target_val Numeric scalar, default 2.0.
+#' @return A list; see R wrapper documentation for fields.
+#' @noRd
 greedy_distance_cpp <- function(a, b, target_val = 2.0) {
     .Call(`_bridges_greedy_distance_cpp`, a, b, target_val)
 }
 
+#' Greedy A-contiguous distance (no history)
+#'
+#' See \code{find_greedy_distance_A_contig_fast()} for the user-facing wrapper.
+#'
+#' @param a NumericVector.
+#' @param b NumericVector.
+#' @param penalty Numeric scalar, default 0.0.
+#' @return A list; see R wrapper documentation for fields.
+#' @noRd
 greedy_bfb_distance_cpp <- function(a, b, penalty = 0.0) {
     .Call(`_bridges_greedy_bfb_distance_cpp`, a, b, penalty)
 }
@@ -104,17 +119,19 @@ sim_wgd_cpp <- function(seq_list) {
 #' Simulate BFB left and right daughter sequences
 #'
 #' Implements the fuse-cut-reverse BFB cycle with configurable breakpoint
-#' selection (uniform or beta distribution).
+#' selection (uniform, beta, or a custom set of bins).
 #'
 #' @param seq_list R list of intervals
-#' @param support Breakpoint distribution: \code{"uniform"} or \code{"beta"}
-#'   (\code{"custom"} falls back to the R implementation)
+#' @param support Breakpoint distribution: \code{"uniform"}, \code{"beta"} or
+#'   \code{"custom"}
 #' @param alpha Beta distribution shape parameter (ignored unless support="beta")
 #' @param beta_param Beta distribution shape parameter (ignored unless support="beta")
+#' @param custom_breakpoints Integer vector of bin indices eligible as breakpoints
+#'   (used only when support="custom")
 #' @return Named list with \code{l_seq} and \code{r_seq} (each an R interval list)
 #' @keywords internal
-sim_bfb_cpp <- function(seq_list, support = "uniform", alpha = NA_real_, beta_param = NA_real_) {
-    .Call(`_bridges_sim_bfb_cpp`, seq_list, support, alpha, beta_param)
+sim_bfb_cpp <- function(seq_list, support = "uniform", alpha = NA_real_, beta_param = NA_real_, custom_breakpoints = integer()) {
+    .Call(`_bridges_sim_bfb_cpp`, seq_list, support, alpha, beta_param, custom_breakpoints)
 }
 
 #' Run the Gillespie simulation loop in C++

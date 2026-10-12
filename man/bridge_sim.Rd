@@ -2,8 +2,7 @@
 % Please edit documentation in R/bridge_sim.R
 \name{bridge_sim}
 \alias{bridge_sim}
-\title{Gillespie Simulation for Break-Fusion-Bridge (BFB) Processes
-Modified to support diploid chromosomes (alleles A and B)}
+\title{Simulate single-cell copy-number evolution with breakage-fusion-bridge cycles}
 \usage{
 bridge_sim(
   initial_cells = 1,
@@ -40,99 +39,100 @@ bridge_sim(
 )
 }
 \arguments{
-\item{initial_cells}{Numeric. Number of cells at the start of simulation. Default: 1}
+\item{initial_cells}{Positive integer. Number of founder cells. Ignored
+when \code{initial_sequences} is supplied. Default: 1}
 
-\item{initial_sequences}{Optional list of pre-evolved chromosome sequences to
-seed the simulation from (e.g. the \code{cells} output of a previous
-\code{bridge_sim()} call, for serial-passage-style workflows). If
-supplied, \code{initial_cells} is derived from its length instead of
-used directly.}
+\item{initial_sequences}{Optional list of pre-evolved cell sequences to
+seed the simulation from (the \code{cells} element of a previous
+\code{bridge_sim()} result), e.g. for serial-passage workflows. When
+supplied, the number of founders is \code{length(initial_sequences)}.}
 
-\item{chromosomes}{Character vector. Chromosomes to model (e.g., c("1", "2", "X")). Default: c(1:22, "X", "Y")}
+\item{chromosomes}{Character vector of chromosomes to model
+(any of \code{1:22}, \code{"X"}, \code{"Y"}). Default: \code{c(1:22, "X", "Y")}}
 
-\item{genome}{Character. Genome build used to look up chromosome lengths
-for simulation binning: one of \code{"hg19"} (GRCh37) or \code{"hg38"}
-(GRCh38). See \code{\link{centromeres}}. Default: \code{"hg19"}}
+\item{genome}{Genome build used to look up chromosome lengths: \code{"hg19"}
+or \code{"hg38"}. See \code{\link{centromeres}}. Default: \code{"hg19"}}
 
-\item{bin_length}{Numeric. Length of each genomic bin in base pairs. Default: 5e5}
+\item{bin_length}{Bin size in base pairs. Default: 1e6}
 
-\item{birth_rate}{Numeric. Base rate at which cells replicate per unit time. Default: 0.1}
+\item{birth_rate}{Base per-cell division rate. Default: 0.1}
 
-\item{death_rate}{Numeric. Rate at which cells die per unit time. Default: 0.001}
+\item{death_rate}{Base per-cell death rate. Default: 0.001}
 
-\item{bfb_allele}{Character. Allele which will be affected by BFB events. Defaul : "1:A"}
+\item{bfb_allele}{The allele undergoing BFB, as \code{"chr:allele"}
+(e.g. \code{"8:A"}). Default: \code{"1:A"}}
 
-\item{normal_dup_rate}{Numeric. Rate of normal duplication events. Default: 0.5}
+\item{normal_dup_rate, bfb_prob, amp_rate, del_rate}{Non-negative
+\emph{relative weights} of the four event types (neutral no-op, BFB cycle,
+focal amplification, focal deletion). They are normalised to sum to one,
+so only their ratios matter. Defaults: 0, 0.5, 1, 1}
 
-\item{bfb_prob}{Numeric. Probability of BFB event occurring during replication. Default: 0.01}
+\item{wgd_available}{Non-negative integer. Maximum number of whole-genome
+duplications allowed in the whole simulation. Default: 0}
 
-\item{amp_rate}{Numeric. Rate of amplification events. Default: 0.1}
+\item{wgd_probability}{Probability that a division attempts a WGD (while
+\code{wgd_available > 0}). Default: 0.05}
 
-\item{del_rate}{Numeric. Rate of deletion events. Default: 0.1}
+\item{lambda}{Mean of the Poisson number of genomic events per daughter
+cell. Default: 2}
 
-\item{wgd_available}{Numeric. Number of whole-genome duplication events available. Default: 0}
+\item{rate}{Mean length, in bins, of focal amplifications and deletions
+(lengths are exponentially distributed). Default: 20}
 
-\item{wgd_probability}{Numeric. Probability of whole-genome duplication event occurring. Default: 0.05}
+\item{positive_selection_rate}{Relative birth-rate increase for cells with
+an amplified hotspot (see \code{selection_type}). Default: 0}
 
-\item{lambda}{Rate parameter for Poisson distribution used to sample
-the number of genomic events per daughter cell}
+\item{negative_selection_rate}{Relative death-rate increase for cells with
+an amplified hotspot (see \code{selection_type}). Default: 0}
 
-\item{rate}{Rate parameter used in amplification/deletion simulations.
-Length of event is sample from exponential distribution with parameter 1 / rate.}
+\item{max_time}{Simulation stops when the clock reaches this time.
+Default: 300}
 
-\item{positive_selection_rate}{Numeric. Selection advantage for cells with amplified hotspot. Default: 0}
+\item{max_cells}{Simulation stops when this many cells are alive.
+Default: 256}
 
-\item{negative_selection_rate}{Numeric. Selection disadvantage for cells without amplified hotspot. Default: 0}
+\item{subsample}{\code{NULL} or a positive integer. If set, this many alive
+cells are sampled at random before building the tree and copy-number
+table (faster for large populations). \code{n_alive} still reports the
+pre-subsampling count. Default: \code{NULL}}
 
-\item{max_time}{Numeric. Maximum simulation time. Default: 50}
+\item{first_round_of_bfb}{Logical. If \code{TRUE}, each founder cell
+undergoes one BFB cycle before the simulation starts. Default: \code{TRUE}}
 
-\item{max_cells}{Numeric. Maximum number of cells allowed before simulation stops. Default: 100}
-
-\item{subsample}{Integer or NULL.  If set, this many alive cells are randomly
-sampled \emph{before} \code{prepare_results()} and \code{sequences_to_cndata()}
-are called, so the phylogeny and CNA tibble are built only once on the
-subsampled cells.  The \code{n_alive} field in the return value still records
-the pre-subsample count.  Default: NULL (keep all alive cells).}
-
-\item{first_round_of_bfb}{Logical. Whether to apply BFB to initial cells. Default: TRUE}
-
-\item{return_phylo}{Logical. Whether to build and return the phylogenetic tree.}
+\item{return_phylo}{Logical. Whether to build and return the true lineage
+tree (\code{tree}). Set to \code{FALSE} to skip this step. Default: \code{TRUE}}
 
 \item{return_cna_data}{Logical. Whether to build and return the long-format
-copy-number tibble (\code{cna_data}). Set to FALSE to skip this step
-(e.g. in serial-passage workflows where only intermediate \code{cells}
-sequences are needed until the final passage). Default: TRUE
-Set to FALSE when only CNA data is needed (e.g. ABC or clonal comparison
-workflows) to skip the expensive tree-building step. Default: TRUE}
+copy-number table (\code{cna_data}). Set to \code{FALSE} when only the
+\code{cells} sequences are needed (e.g. intermediate serial passages).
+Default: \code{TRUE}}
 
-\item{breakpoint_support}{Character. Distribution used for breakpoint
-selection ("uniform", "beta", etc.). Default: "beta"}
+\item{breakpoint_support}{Distribution of BFB breakpoints along the fused
+(dicentric) chromosome: \code{"beta"}, \code{"uniform"} or
+\code{"custom"}. Default: \code{"beta"}}
 
-\item{hotspot}{Named list. Hotspot positions for each chromosome allele
-(e.g., list(chr = "1:A", pos = 100), which is default)}
+\item{hotspot}{List with elements \code{chr} (\code{"chr:allele"}) and
+\code{pos} (bin index) defining the bin whose copy number drives
+selection. Its chromosome must be in \code{chromosomes}.
+Default: \code{list(chr = "1:A", pos = 100)}}
 
-\item{alpha}{Numeric. First parameter for beta distribution if used for
-breakpoint selection. Default: 10}
+\item{alpha, beta}{Shape parameters of the beta breakpoint distribution
+(\code{breakpoint_support = "beta"}). Default: 10, 10}
 
-\item{beta}{Numeric. Second parameter for beta distribution if used for
-breakpoint selection. Default: 10}
+\item{custom_breakpoints}{Integer vector of bin indices eligible as BFB
+breakpoints when \code{breakpoint_support = "custom"}; at each BFB cycle
+the cut is drawn uniformly among the positions of the fused chromosome
+carrying one of these bins. A cell whose BFB allele no longer carries
+any of these bins cannot undergo further BFB cycles. Default: \code{NULL}}
 
-\item{custom_breakpoints}{Integer vector of bin indices to use as the breakpoint
-position distribution when \code{breakpoint_support = "custom"}.  Each draw
-during the simulation is sampled uniformly from this vector.  Ignored for
-other breakpoint support modes.  Default: NULL}
+\item{selection_type}{How hotspot copy number \eqn{n} maps to the selection
+multiplier \eqn{s} applied to \code{positive_selection_rate} and
+\code{negative_selection_rate}: \code{"constant"} (\eqn{s = 1} if
+\eqn{n > 1}, else 0), \code{"linear"} (\eqn{s = n - 1}) or
+\code{"saturation"} (\eqn{s = (n-1)/((n-1) + K)}). Default: \code{"constant"}}
 
-\item{selection_type}{Character. How hotspot copy number translates into a
-birth/death rate multiplier: \code{"constant"} (any gain above baseline
-copy number 1 gives the same fixed advantage), \code{"linear"}
-(advantage scales as \code{hotspot_count - 1}, unbounded), or
-\code{"saturation"} (advantage is \code{(n-1)/((n-1)+saturation_K)},
-approaching 1 as copy number grows and reaching half-max at
-\code{hotspot_count = saturation_K + 1}). Default: \code{"constant"}.}
-
-\item{saturation_K}{Numeric. Saturation constant for
-\code{selection_type = "saturation"} (see above). Ignored for other
-\code{selection_type} values. Default: 10}
+\item{saturation_K}{Saturation constant \eqn{K} for
+\code{selection_type = "saturation"}. Default: 10}
 }
 \value{
 A named list containing:
@@ -148,40 +148,42 @@ number of cells alive at simulation end.}
 \item{cna_data}{Long-format tibble of copy number profiles with columns
 \code{cell_id}, \code{chr}, \code{start}, \code{end}, \code{CN}, \code{A},
 \code{B}.}
-\item{elapsed_time}{Numeric.  Simulation clock value at stop — proportional
-to evolutionary depth.}
+\item{elapsed_time}{Numeric. Simulation clock value at stop (at most
+\code{max_time}).}
 \item{n_alive}{Integer.  Number of alive cells before any subsampling.
 Equals \code{length(cells)} unless \code{subsample} was set.}
 \item{input_parameters}{List of all input parameters used.}
 }
 }
 \description{
-Simulates the evolution of cells undergoing Break-Fusion-Bridge cycles using
-a continuous-time Gillespie algorithm. This function models cell birth and death
-processes with the possibility of BFB events occurring during replication.
-Cells with amplified hotspots have an increased birth rate.
-Now supports modeling both alleles (A and B) of each chromosome.
+Simulates a growing population of diploid cells (alleles A and B for every
+chromosome) using a continuous-time Gillespie birth-death process. At each
+division, each daughter receives a Poisson(\code{lambda}) number of genomic
+events drawn from: breakage-fusion-bridge (BFB) cycles on \code{bfb_allele},
+focal amplifications, focal deletions, neutral "no-op" events and,
+optionally, whole-genome duplication (WGD). Cells carrying extra copies of
+a \code{hotspot} bin can be given a birth (and/or death) rate advantage.
 }
 \examples{
-\dontrun{
-# Minimal simulation: chromosome 8, BFB on allele A, 128 cells
+set.seed(1)
+# BFB on chromosome 8, allele A; the selection hotspot must lie on a
+# simulated chromosome too
 sim <- bridge_sim(
   chromosomes = "8",
   bfb_allele  = "8:A",
-  max_cells   = 128,
-  lambda      = 2
+  hotspot     = list(chr = "8:A", pos = 100),
+  max_cells   = 32
 )
 head(sim$cna_data)
-cat("Elapsed time:", sim$elapsed_time, "\n")
+sim$tree
 
-# Simulate 1000 cells but only post-process 100 (faster)
+# Grow 200 cells but only post-process 50 of them (faster)
 sim2 <- bridge_sim(
-  chromosomes = "1",
-  max_cells   = 1000,
-  subsample   = 100,
+  chromosomes  = "1",
+  max_cells    = 200,
+  subsample    = 50,
   return_phylo = FALSE
 )
-cat("Alive:", sim2$n_alive, "  Sequenced:", length(sim2$cells), "\n")
-}
+c(alive = sim2$n_alive, sampled = length(sim2$cells))
 
 }

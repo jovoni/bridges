@@ -8,24 +8,28 @@ sim_bfb_cpp(
   seq_list,
   support = "uniform",
   alpha = NA_real_,
-  beta_param = NA_real_
+  beta_param = NA_real_,
+  custom_breakpoints = integer()
 )
 }
 \arguments{
 \item{seq_list}{R list of intervals}
 
-\item{support}{Breakpoint distribution: \code{"uniform"} or \code{"beta"}
-(\code{"custom"} falls back to the R implementation)}
+\item{support}{Breakpoint distribution: \code{"uniform"}, \code{"beta"} or
+\code{"custom"}}
 
 \item{alpha}{Beta distribution shape parameter (ignored unless support="beta")}
 
 \item{beta_param}{Beta distribution shape parameter (ignored unless support="beta")}
+
+\item{custom_breakpoints}{Integer vector of bin indices eligible as breakpoints
+(used only when support="custom")}
 }
 \value{
 Named list with \code{l_seq} and \code{r_seq} (each an R interval list)
 }
 \description{
 Implements the fuse-cut-reverse BFB cycle with configurable breakpoint
-selection (uniform or beta distribution).
+selection (uniform, beta, or a custom set of bins).
 }
 \keyword{internal}

@@ -54,24 +54,50 @@ test_that("bridge_sim errors clearly on an invalid genome", {
   )
 })
 
-test_that("bridge_sim works with custom breakpoint_support (exercises get_seq_length)", {
-  # sim_bfb_left_and_right_sequences's "custom" branch calls
-  # get_seq_length() directly rather than going through the C++ engine --
-  # a real gap surfaced by R CMD check's static analysis during the
-  # bfbgill extraction (get_seq_length was one of two duplicate
-  # definitions in the original bridges package; only one was live).
-  #
-  # NOTE: the C++ main-loop engine explicitly rejects support="custom"
-  # ("use support='uniform' or 'beta'") -- custom breakpoints are only
-  # supported for the one-time initialization BFB event
-  # (first_round_of_bfb = TRUE, the default), so bfb_prob must be 0 here
-  # to keep the main loop from attempting another (unsupported) custom
-  # BFB event later in the simulation.
+test_that("bridge_sim supports custom breakpoints throughout the simulation", {
   set.seed(3)
-  sim <- bridge_sim(initial_cells = 1, chromosomes = c("1"), bfb_prob = 0,
-                     amp_rate = 0.2, del_rate = 0.1, max_cells = 20, lambda = 2,
-                     first_round_of_bfb = TRUE,
-                     breakpoint_support = "custom", custom_breakpoints = c(50, 150, 250))
+  sim <- bridge_sim(initial_cells = 1, chromosomes = c("1"), bfb_prob = 1,
+                     amp_rate = 0, del_rate = 0, max_cells = 20, lambda = 2,
+                     breakpoint_support = "custom", custom_breakpoints = c(50, 150, 200))
   expect_true(is.data.frame(sim$cna_data))
-  expect_gt(nrow(sim$cna_data), 0)
+  expect_gt(sum(sim$cell_history$cn_event != "none"), 2)
+
+  # On an unaltered chromosome (1..249, fused length 498) the cut must fall
+  # right after a custom bin v: at position v on the forward half (shorter
+  # daughter v bins) or at 499 - v on the reversed half (shorter daughter v - 1).
+  seq0 <- bridges:::vec2seq(1:249)
+  for (i in 1:20) {
+    d <- bridges:::sim_bfb_left_and_right_sequences(
+      seq0, support = "custom", custom_breakpoints = c(50, 150, 200))
+    lens <- sort(c(bridges:::get_seq_length(d$l_seq), bridges:::get_seq_length(d$r_seq)))
+    expect_true(lens[1] %in% c(50, 150, 200, 49, 149, 199))
+  }
+})
+
+test_that("bridge_sim seeded from initial_sequences returns a valid tree", {
+  set.seed(7)
+  s0 <- bridge_sim(chromosomes = "1", max_cells = 10, return_phylo = FALSE)
+  expect_no_warning(
+    s1 <- bridge_sim(initial_sequences = s0$cells, chromosomes = "1", max_cells = 20)
+  )
+  expect_setequal(s1$tree$tip.label, names(s1$cells))
+})
+
+test_that("bridge_sim never reports an elapsed time beyond max_time", {
+  set.seed(9)
+  s <- bridge_sim(chromosomes = "1", max_cells = 1e4, max_time = 5, birth_rate = 1,
+                  return_phylo = FALSE, return_cna_data = FALSE)
+  expect_lte(s$elapsed_time, 5)
+})
+
+test_that("bridge_sim validates lambda, rate, subsample and hotspot position", {
+  expect_error(bridge_sim(chromosomes = "1", lambda = -1), "lambda")
+  expect_error(bridge_sim(chromosomes = "1", rate = 0), "rate")
+  expect_error(bridge_sim(chromosomes = "1", subsample = 0), "subsample")
+  expect_error(bridge_sim(chromosomes = "1", breakpoint_support = "custom"), "custom_breakpoints")
+  expect_warning(
+    bridge_sim(chromosomes = "21", bfb_allele = "21:A",
+               hotspot = list(chr = "21:A", pos = 500), max_cells = 4),
+    "beyond the last bin"
+  )
 })

@@ -140,8 +140,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // sim_bfb_cpp
-List sim_bfb_cpp(List seq_list, std::string support, double alpha, double beta_param);
-RcppExport SEXP _bridges_sim_bfb_cpp(SEXP seq_listSEXP, SEXP supportSEXP, SEXP alphaSEXP, SEXP beta_paramSEXP) {
+List sim_bfb_cpp(List seq_list, std::string support, double alpha, double beta_param, IntegerVector custom_breakpoints);
+RcppExport SEXP _bridges_sim_bfb_cpp(SEXP seq_listSEXP, SEXP supportSEXP, SEXP alphaSEXP, SEXP beta_paramSEXP, SEXP custom_breakpointsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -149,7 +149,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< std::string >::type support(supportSEXP);
     Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
     Rcpp::traits::input_parameter< double >::type beta_param(beta_paramSEXP);
-    rcpp_result_gen = Rcpp::wrap(sim_bfb_cpp(seq_list, support, alpha, beta_param));
+    Rcpp::traits::input_parameter< IntegerVector >::type custom_breakpoints(custom_breakpointsSEXP);
+    rcpp_result_gen = Rcpp::wrap(sim_bfb_cpp(seq_list, support, alpha, beta_param, custom_breakpoints));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -179,7 +180,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_bridges_vec2seq_cpp", (DL_FUNC) &_bridges_vec2seq_cpp, 1},
     {"_bridges_sim_amp_del_cpp", (DL_FUNC) &_bridges_sim_amp_del_cpp, 3},
     {"_bridges_sim_wgd_cpp", (DL_FUNC) &_bridges_sim_wgd_cpp, 1},
-    {"_bridges_sim_bfb_cpp", (DL_FUNC) &_bridges_sim_bfb_cpp, 4},
+    {"_bridges_sim_bfb_cpp", (DL_FUNC) &_bridges_sim_bfb_cpp, 5},
     {"_bridges_bridge_sim_loop_cpp", (DL_FUNC) &_bridges_bridge_sim_loop_cpp, 3},
     {NULL, NULL, 0}
 };

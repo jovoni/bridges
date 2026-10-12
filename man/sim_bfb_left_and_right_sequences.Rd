@@ -21,8 +21,8 @@ sim_bfb_left_and_right_sequences(
 \item{alpha, beta}{Beta-distribution shape parameters, used when
 \code{support = "beta"}.}
 
-\item{custom_breakpoints}{Integer vector of candidate breakpoint
-positions, required when \code{support = "custom"}.}
+\item{custom_breakpoints}{Integer vector of bin indices eligible as
+breakpoints, required when \code{support = "custom"}.}
 }
 \value{
 A list with \code{l_seq} and \code{r_seq}, the two daughter
@@ -30,10 +30,7 @@ sequences.
 }
 \description{
 Generates the left and right daughter sequences resulting from one
-BFB cycle applied to \code{sequence}. For \code{support = "uniform"}
-or \code{"beta"}, delegates to the C++ engine (\code{sim_bfb_cpp});
-for \code{support = "custom"} (a fixed set of candidate breakpoint
-positions), uses a pure-R fallback, since the C++ main-loop engine
-does not support custom breakpoints.
+BFB cycle applied to \code{sequence}, via the C++ engine
+(\code{sim_bfb_cpp}).
 }
 \keyword{internal}
