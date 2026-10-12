@@ -17,7 +17,7 @@ split_chr_arms(
 columns.}
 
 \item{genome}{genome build to use for centromere positions: one of
-\code{"hg19"} (GRCh37) or \code{"hg38"} (GRCh38). Required -- see
+\code{"hg19"} (GRCh37) or \code{"hg38"} (GRCh38). Required, see
 \code{\link{centromeres}}.}
 
 \item{chr_col, start_col, end_col}{column names in \code{cna_data}.}
@@ -31,7 +31,7 @@ Adds an \code{arm} column (\code{"p"}/\code{"q"}) based on each row's
 position relative to the centromere. This matters for BFB
 count-vector extraction: genomic coordinates increase from the
 p-arm's own telomere, through the centromere, to the q-arm's own
-telomere -- so ascending coordinate order is already
+telomere, so ascending coordinate order is already
 telomere-to-centromere for the p-arm, but is centromere-to-telomere
 (backwards) for the q-arm. Only the q-arm needs reversing to bring
 both into the telomere-to-centromere convention \code{bfbtools}
@@ -42,7 +42,7 @@ per arm once you supply a \code{genome}.
 \details{
 Centromere positions come from the \code{\link{centromeres}} dataset
 bundled with this package (real hg19/hg38 coordinates for chromosomes
-1-22, X, Y) -- there is no manual-override or fallback-heuristic path,
+1-22, X, Y), there is no manual-override or fallback-heuristic path,
 so arm-splitting is always based on real genomic coordinates for a
 real genome build.
 }

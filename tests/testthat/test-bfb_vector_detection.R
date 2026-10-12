@@ -41,7 +41,7 @@ test_that("split_chr_arms labels p/q correctly using real hg19 centromere positi
 
 test_that("split_chr_arms: hg19 and hg38 give different arm assignments", {
   # hg19 chr1 centromere midpoint ~123,035,434; hg38 chr1 centromere
-  # midpoint ~123,479,592 -- a row in between falls on opposite arms.
+  # midpoint ~123,479,592, a row in between falls on opposite arms.
   in_between <- data.frame(chr = "1", start = 123200000, end = 123200100)
 
   hg19_out <- split_chr_arms(in_between, genome = "hg19")

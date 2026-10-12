@@ -95,10 +95,10 @@ prepare_row_annotations <- function(annotations, ordered_cell_ids) {
       annotation_values[[col_name]] <- values
 
       if (all(values >= 0 & values <= 1, na.rm = TRUE)) {
-        # Looks like proportions/probabilities - use white to red
+        # Looks like proportions/probabilities. Use white to red
         annotation_colors[[col_name]] <- circlize::colorRamp2(c(0, 1), c("white", "red"))
       } else {
-        # General continuous data - use blue-white-red
+        # General continuous data. Use blue-white-red
         value_range <- range(values, na.rm = TRUE)
         annotation_colors[[col_name]] <- circlize::colorRamp2(
           c(value_range[1], mean(value_range), value_range[2]),
@@ -505,7 +505,7 @@ plot_heatmap <- function(data,
     # Get color scheme
     color_scheme <- get_colors("CN")
 
-    # Create heatmap - only add annotations to the first heatmap
+    # Create heatmap, only add annotations to the first heatmap
     heatmap_obj <- ComplexHeatmap::Heatmap(
       matrix_data$matrix,
       name = feature_name,

@@ -13,18 +13,18 @@
 #' list of count-vectors (one per cell/allele/whatever grouping you
 #' have), runs \code{bfbtools::admits_bfb()} on each, and
 #' \code{bfbtools::nearest_bfb()} for the ones that don't admit BFB
-#' exactly -- exploiting exact-duplicate profiles across entries (very
+#' exactly, exploiting exact-duplicate profiles across entries (very
 #' common for related cells in a simulated lineage) so each distinct
 #' count-vector is only ever computed once, however many entries share
 #' it.
 #'
 #' TRIVIAL-VECTOR FILTER: "does this count-vector admit a BFB schedule"
 #' is technically true even for a schedule with *zero* duplication
-#' cycles -- the untouched baseline chromosome \code{x0 = (1,2,...,k)} is
+#' cycles, the untouched baseline chromosome \code{x0 = (1,2,...,k)} is
 #' itself a (trivial) BFB schedule. So any count-vector where every
 #' segment sits at copy number 1 (e.g. a flat region interrupted by a
 #' plain deletion, with no amplification anywhere) will "admit BFB"
-#' without representing anything BFB-like biologically -- BFB is
+#' without representing anything BFB-like biologically, BFB is
 #' fundamentally an amplification mechanism, and every real cycle is an
 #' inverted *duplication*, which necessarily pushes at least one
 #' segment above copy number 1. \code{min_max_count} (default 2)
@@ -78,7 +78,7 @@ bfb_detect_vectors <- function(vec_list, model = c("poisson", "none"), min_weigh
       }
     }, error = function(e) {
       warning("bfb_detect_vectors: skipping vector [", paste(v, collapse = ","),
-              "] -- ", conditionMessage(e), call. = FALSE)
+              "], ", conditionMessage(e), call. = FALSE)
       list(admits_bfb = NA, bfb_distance = NA_real_, nearest_weight = NA_real_)
     })
     cache[[key]] <- entry
@@ -113,7 +113,7 @@ bfb_detect_vectors <- function(vec_list, model = c("poisson", "none"), min_weigh
 #' position relative to the centromere. This matters for BFB
 #' count-vector extraction: genomic coordinates increase from the
 #' p-arm's own telomere, through the centromere, to the q-arm's own
-#' telomere -- so ascending coordinate order is already
+#' telomere, so ascending coordinate order is already
 #' telomere-to-centromere for the p-arm, but is centromere-to-telomere
 #' (backwards) for the q-arm. Only the q-arm needs reversing to bring
 #' both into the telomere-to-centromere convention \code{bfbtools}
@@ -123,14 +123,14 @@ bfb_detect_vectors <- function(vec_list, model = c("poisson", "none"), min_weigh
 #'
 #' Centromere positions come from the \code{\link{centromeres}} dataset
 #' bundled with this package (real hg19/hg38 coordinates for chromosomes
-#' 1-22, X, Y) -- there is no manual-override or fallback-heuristic path,
+#' 1-22, X, Y), there is no manual-override or fallback-heuristic path,
 #' so arm-splitting is always based on real genomic coordinates for a
 #' real genome build.
 #'
 #' @param cna_data a copy-number tibble with (at least) chr/start/end
 #'   columns.
 #' @param genome genome build to use for centromere positions: one of
-#'   \code{"hg19"} (GRCh37) or \code{"hg38"} (GRCh38). Required -- see
+#'   \code{"hg19"} (GRCh37) or \code{"hg38"} (GRCh38). Required, see
 #'   \code{\link{centromeres}}.
 #' @param chr_col,start_col,end_col column names in \code{cna_data}.
 #' @return \code{cna_data} with an added \code{arm} column (\code{"p"}
@@ -175,7 +175,7 @@ split_chr_arms <- function(cna_data, genome, chr_col = "chr",
 #'   q-arm and needs reversing (\code{reverse = TRUE}) to match
 #'   \code{bfbtools}'s expected convention. Defaults to \code{TRUE}
 #'   (matching this function's original whole-chromosome behavior) when
-#'   arm information isn't available -- see the \code{genome}
+#'   arm information isn't available, see the \code{genome}
 #'   argument on \code{\link{bfb_detect_batch}} to enable proper
 #'   per-arm handling instead of relying on this default.
 #' @noRd
@@ -203,14 +203,14 @@ split_chr_arms <- function(cna_data, genome, chr_col = "chr",
 #' positions for that genome build, from the bundled
 #' \code{\link{centromeres}} dataset), and each arm is extracted and
 #' detected \emph{separately}, with the correct reversal direction
-#' applied automatically per arm (p: no reversal, q: reversed -- see
+#' applied automatically per arm (p: no reversal, q: reversed, see
 #' \code{\link{split_chr_arms}}'s documentation for why). The output
 #' then has one row per (cell_id, chr, arm, allele) instead of one row
 #' per (cell_id, chr, allele), with an added \code{arm} column.
 #'
 #' If \code{genome} is left \code{NULL} (the default), the entire
 #' chromosome is extracted as a single unit with \code{reverse = TRUE}
-#' -- this matches this function's original behavior, but note that
+#', this matches this function's original behavior, but note that
 #' this is only correct if your data's coordinate convention actually
 #' warrants reversing the whole chromosome (e.g. if it only ever
 #' represents a single arm to begin with). \strong{If your simulations
@@ -239,7 +239,7 @@ split_chr_arms <- function(cna_data, genome, chr_col = "chr",
 #' @param model,min_weight,min_max_count passed to
 #'   \code{\link{bfb_detect_vectors}} (see that function for the
 #'   trivial-vector filter rationale).
-#' @return a tibble with one row per (cell_id, chr, allele) -- or per
+#' @return a tibble with one row per (cell_id, chr, allele), or per
 #'   (cell_id, chr, arm, allele) if \code{genome} is supplied:
 #'   n_segments, max_count, admits_bfb, bfb_distance, nearest_weight,
 #'   n_unique (per group). Arms with no bins in \code{cna_data} (e.g. the

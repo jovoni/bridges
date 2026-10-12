@@ -716,14 +716,14 @@ validate_bridge_sim_params <- function(
   # Warn if birth_rate is much smaller than death_rate
   if (birth_rate > 0 && death_rate > birth_rate * 10) {
     warning(
-      "death_rate is much larger than birth_rate - population may quickly go extinct"
+      "death_rate is much larger than birth_rate and population may quickly go extinct"
     )
   }
 
   # Warn if max_cells is very large
   if (max_cells > 10000) {
     warning(
-      "max_cells is very large - simulation may be slow or use excessive memory"
+      "max_cells is very large and simulation may be slow or use excessive memory"
     )
   }
 
@@ -869,7 +869,7 @@ build_phylo_from_lineage <- function(cell_history) {
   # Validate the tree structure
   if (!is.null(phylo_tree)) {
     tryCatch({
-      # Basic validation - check if tree is valid
+      # Basic validation to check if tree is valid
       checkValidPhylo(phylo_tree)
     }, error = function(e) {
       warning("Created tree may have structural issues: ", e$message)

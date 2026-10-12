@@ -34,7 +34,7 @@ reference:
   - fit
 - title: BFB detection
   desc: >
-    Two complementary methods -- see the "bfb-detection" article.
+    Two complementary methods. See the "bfb-detection" article.
   contents:
   - detect_bfb_branches
   - bfb_detect_batch

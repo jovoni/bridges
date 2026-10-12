@@ -1,6 +1,6 @@
 # NOTE: this file originally also contained a duplicate definition of
 # get_seq_length() (a slow pure-R loop, shadowed by whichever file
-# happened to load second -- see get_seq_length.R, which has the live,
+# happened to load second, see get_seq_length.R, which has the live,
 # C++-backed version). That duplicate has been removed here as a bug
 # fix; get_seq_length() (used by sim_bfb_left_and_right_sequences's
 # custom-breakpoint path) lives only in get_seq_length.R now.

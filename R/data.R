@@ -15,7 +15,7 @@
 #'   \item{chr_length}{Total chromosome length in bp.}
 #'   \item{centromere_start,centromere_end}{1-based bounds of the centromeric
 #'     region.}
-#'   \item{centromere_mid}{Midpoint of the centromeric region -- the value
+#'   \item{centromere_mid}{Midpoint of the centromeric region: the value
 #'     \code{split_chr_arms()} thresholds on.}
 #'   \item{p_arm_start,p_arm_end,q_arm_start,q_arm_end}{Arm boundaries.}
 #' }

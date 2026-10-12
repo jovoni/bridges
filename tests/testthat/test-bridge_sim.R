@@ -64,7 +64,7 @@ test_that("bridge_sim supports custom breakpoints throughout the simulation", {
 
   # On an unaltered chromosome (1..249, fused length 498) the cut must fall
   # right after a custom bin v: at position v on the forward half (shorter
-  # daughter v bins) or at 499 - v on the reversed half (shorter daughter v - 1).
+  # daughter v bins) or at 499, v on the reversed half (shorter daughter v - 1).
   seq0 <- bridges:::vec2seq(1:249)
   for (i in 1:20) {
     d <- bridges:::sim_bfb_left_and_right_sequences(

@@ -12,16 +12,13 @@ Simulates single-cell copy-number evolution under a continuous-time Gillespie pr
 Useful links:
 \itemize{
   \item \url{https://jovoni.github.io/bridges/}
+  \item \url{https://github.com/jovoni/bridges}
+  \item Report bugs at \url{https://github.com/jovoni/bridges/issues}
 }
 
 }
 \author{
 \strong{Maintainer}: Giovanni Santacatterina \email{first.last@example.com}
-
-Authors:
-\itemize{
-  \item Giovanni Santacatterina \email{first.last@example.com}
-}
 
 }
 \keyword{internal}

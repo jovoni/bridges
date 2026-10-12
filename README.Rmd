@@ -74,34 +74,31 @@ the simulator and on inference and BFB detection.
 
 ## Two independent BFB detection methods
 
-- `detect_bfb_branches()` -- works on a *fitted tree* (`fit()`'s
+- `detect_bfb_branches()`: works on a *fitted tree* (`fit()`'s
   output): for each branch, asks whether the copy-number transition
   looks BFB-like (non-contiguous) via a binomial test.
-- `bfb_detect_batch()` / `bfb_detect_vectors()` -- work directly on
+- `bfb_detect_batch()` / `bfb_detect_vectors()`: work directly on
   *raw per-cell profiles*, no tree required, using the exact BFB
   combinatorics in `bfbtools`. Includes chromosome-arm-aware handling
   (`split_chr_arms()`) for real genomic data spanning both arms of a
   chromosome.
 
-Neither supersedes the other -- see `vignette("bfb-detection")` for
+Neither supersedes the other. See `vignette("bfb-detection")` for
 when to use which.
 
 ## Part of a two-package family
 
-- **`bridges`** (this package) -- simulation, fitting, detection glue, and plotting. MIT licensed.
-- [**`bfbtools`**](https://github.com/jovoni/bfbtools) -- the core linear-time BFB detection algorithms. GPL-3 licensed; kept as a separate package for exactly that reason (see below).
+- **`bridges`** (this package): simulation, fitting, detection glue, and plotting. MIT licensed.
+- [**`bfbtools`**](https://github.com/jovoni/bfbtools): the core linear-time BFB detection algorithms. GPL-3 licensed; kept as a separate package for exactly that reason (see below).
 
 ## Why is `bfbtools` a separate dependency instead of being bundled in?
 
 `bfbtools`'s core algorithm is a port of GPL-3 licensed reference code.
 GPL is viral for *merged source*: folding that code into this package
-would force all of `bridges` (including code that owes nothing to it)
-to become GPL-3 too. A normal package *dependency* -- what `Remotes:`
-and `Imports:` set up here -- does not have that effect; only merging
-source does. This is why the two packages exist separately even though
+would force all of `bridges` (including code that has nothing to do with it)
+to become GPL-3 too. This is why the two packages exist separately even though
 they're developed and released together.
 
 ## License
 
-MIT. Depends on `bfbtools` (GPL-3) -- a normal cross-package
-dependency that does not change this package's own license.
+MIT. Depends on `bfbtools` (GPL-3).

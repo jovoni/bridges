@@ -35,7 +35,7 @@ single-chromosome handling even if such a column exists.}
 trivial-vector filter rationale).}
 }
 \value{
-a tibble with one row per (cell_id, chr, allele) -- or per
+a tibble with one row per (cell_id, chr, allele), or per
 (cell_id, chr, arm, allele) if \code{genome} is supplied:
 n_segments, max_count, admits_bfb, bfb_distance, nearest_weight,
 n_unique (per group). Arms with no bins in \code{cna_data} (e.g. the
@@ -55,14 +55,14 @@ q-arm via \code{\link{split_chr_arms}} (using real centromere
 positions for that genome build, from the bundled
 \code{\link{centromeres}} dataset), and each arm is extracted and
 detected \emph{separately}, with the correct reversal direction
-applied automatically per arm (p: no reversal, q: reversed -- see
+applied automatically per arm (p: no reversal, q: reversed, see
 \code{\link{split_chr_arms}}'s documentation for why). The output
 then has one row per (cell_id, chr, arm, allele) instead of one row
 per (cell_id, chr, allele), with an added \code{arm} column.
 
 If \code{genome} is left \code{NULL} (the default), the entire
 chromosome is extracted as a single unit with \code{reverse = TRUE}
--- this matches this function's original behavior, but note that
+, this matches this function's original behavior, but note that
 this is only correct if your data's coordinate convention actually
 warrants reversing the whole chromosome (e.g. if it only ever
 represents a single arm to begin with). \strong{If your simulations

@@ -7,7 +7,7 @@
 # C++ versions (greedy_distance_cpp / greedy_bfb_distance_cpp,
 # src/fast_distances.cpp) instead. These R versions remain selectable
 # via fit(g_dist_func = "G", ...) etc. mostly as a historical/debugging
-# reference -- if you're not intentionally choosing one of these by
+# reference, if you're not intentionally choosing one of these by
 # name, you're not using them. Slated for removal once we're confident
 # they're no longer needed for validation.
 # ============================================================

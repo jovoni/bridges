@@ -7,7 +7,7 @@
 #
 # Run manually with `Rscript data-raw/centromeres.R` from the package
 # root. Not run automatically at R CMD build/check time (network
-# access is forbidden during checks) -- its only output artifact is
+# access is forbidden during checks), its only output artifact is
 # the checked-in data/centromeres.rda.
 #
 # Sources (downloaded 2026-07-22):
@@ -16,7 +16,7 @@
 #   hg38 centromeres : https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/centromeres.txt.gz
 #                       (hg38 moved centromere annotation out of gap.txt.gz and
 #                       into its own table, with multiple contig fragments per
-#                       chromosome -- aggregated below into one outer span each)
+#                       chromosome,aggregated below into one outer span each)
 #   hg19 chrom sizes : https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.chrom.sizes
 #   hg38 chrom sizes : https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.chrom.sizes
 #
@@ -106,7 +106,7 @@ centromeres <- bind_rows(
   arrange(genome, factor(chr, levels = MAIN_CHRS)) %>%
   as.data.frame()
 
-# Sanity checks before freezing -- fail loudly, not silently.
+# Sanity checks before freezing, fail loudly, not silently.
 stopifnot(
   all(MAIN_CHRS %in% centromeres$chr[centromeres$genome == "hg19"]),
   all(MAIN_CHRS %in% centromeres$chr[centromeres$genome == "hg38"]),

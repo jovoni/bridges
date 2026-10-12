@@ -62,7 +62,7 @@ tibble_to_matrix <- function(data_chr, value_column = "CN") {
   data_chr[, row_idx := match(cell_id, unique_cells)]
   data_chr[, col_idx := match(bin_name, bin_names)]
 
-  # Vectorized assignment - much faster than cbind indexing
+  # Vectorized assignment, much faster than cbind indexing
   valid_rows <- !is.na(data_chr$row_idx) & !is.na(data_chr$col_idx)
   if (any(valid_rows)) {
     indices <- (data_chr$col_idx[valid_rows] - 1L) * length(unique_cells) +
@@ -95,7 +95,7 @@ jitter_fix <- function(X, k = 2) {
   y_column_names <- colnames(X)[2:n_cols]
   colnames(y) <- y_column_names
 
-  # Step 2: Create priority queue - same as original
+  # Step 2: Create priority queue
   column_queue <- sort(colMeans(y), decreasing = TRUE)
 
   # Step 3: Optimized neighbor processing but same logic
@@ -131,7 +131,7 @@ jitter_fix <- function(X, k = 2) {
     breakpoints <- which(y[i, ] != 0)
 
     if (length(breakpoints) == 0) {
-      # No breakpoints - smooth entire row
+      # No breakpoints, smooth entire row
       X_smoothed[i, ] <- mean(X[i, ])
     } else {
       # Same segment logic as original

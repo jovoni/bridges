@@ -32,7 +32,7 @@ Core batch logic, decoupled from any particular simulator: given a
 list of count-vectors (one per cell/allele/whatever grouping you
 have), runs \code{bfbtools::admits_bfb()} on each, and
 \code{bfbtools::nearest_bfb()} for the ones that don't admit BFB
-exactly -- exploiting exact-duplicate profiles across entries (very
+exactly, exploiting exact-duplicate profiles across entries (very
 common for related cells in a simulated lineage) so each distinct
 count-vector is only ever computed once, however many entries share
 it.
@@ -40,11 +40,11 @@ it.
 \details{
 TRIVIAL-VECTOR FILTER: "does this count-vector admit a BFB schedule"
 is technically true even for a schedule with \emph{zero} duplication
-cycles -- the untouched baseline chromosome \code{x0 = (1,2,...,k)} is
+cycles, the untouched baseline chromosome \code{x0 = (1,2,...,k)} is
 itself a (trivial) BFB schedule. So any count-vector where every
 segment sits at copy number 1 (e.g. a flat region interrupted by a
 plain deletion, with no amplification anywhere) will "admit BFB"
-without representing anything BFB-like biologically -- BFB is
+without representing anything BFB-like biologically, BFB is
 fundamentally an amplification mechanism, and every real cycle is an
 inverted \emph{duplication}, which necessarily pushes at least one
 segment above copy number 1. \code{min_max_count} (default 2)

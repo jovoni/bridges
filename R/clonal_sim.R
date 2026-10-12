@@ -27,7 +27,7 @@
 #'   event, mimicking a clone that initiated from a single BFB.
 #' @param selection_type How hotspot copy number translates into a
 #'   selection advantage: \code{"constant"} (any gain gives the same
-#'   fixed advantage), \code{"linear"}, or \code{"saturation"} -- passed
+#'   fixed advantage), \code{"linear"}, or \code{"saturation"}, passed
 #'   straight through to \code{bridge_sim()}. Default:
 #'   \code{"constant"}.
 #' @param saturation_K Saturation constant used when
