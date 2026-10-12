@@ -60,11 +60,14 @@ passage listed in \code{passages_to_keep}, summary statistics are computed
 immediately and the CNA matrix is discarded.
 }
 \details{
-The return format mirrors \code{compare_clonal_params()}: one row per
-\code{(passage, replicate)} with one column per summary statistic.
+The result has one row per \code{(passage, replicate)} with one column per
+summary statistic (see \code{\link{summarise_clone}}). If a passage fails
+(e.g. the population goes extinct), that row is marked \code{failed = TRUE}
+and the replicate stops.
 
 Each replicate runs all \code{K} passages sequentially.  Replicates are
-run in parallel when \code{n_cores > 1}.
+run in parallel when \code{n_cores > 1} (forked processes via
+\code{parallel::mclapply}; not available on Windows).
 }
 \examples{
 \dontrun{

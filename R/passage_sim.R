@@ -16,11 +16,14 @@
 #' passage listed in \code{passages_to_keep}, summary statistics are computed
 #' immediately and the CNA matrix is discarded.
 #'
-#' The return format mirrors \code{compare_clonal_params()}: one row per
-#' \code{(passage, replicate)} with one column per summary statistic.
+#' The result has one row per \code{(passage, replicate)} with one column per
+#' summary statistic (see \code{\link{summarise_clone}}). If a passage fails
+#' (e.g. the population goes extinct), that row is marked \code{failed = TRUE}
+#' and the replicate stops.
 #'
 #' Each replicate runs all \code{K} passages sequentially.  Replicates are
-#' run in parallel when \code{n_cores > 1}.
+#' run in parallel when \code{n_cores > 1} (forked processes via
+#' \code{parallel::mclapply}; not available on Windows).
 #'
 #' @param params          Parameter list from \code{clonal_params()}.
 #' @param chromosome      Chromosome to simulate (character, e.g. \code{"8"}).
@@ -94,8 +97,6 @@ simulate_serial_passages <- function(
   )
   rep_counter  <- 0L
   pass_counter <- 0L
-  pb_lock <- if (n_cores > 1L) parallel::makeCluster(0L) else NULL  # unused; note below
-  #
 
   run_one_replicate <- function(rep_idx) {
     current_seqs <- NULL
@@ -130,7 +131,8 @@ simulate_serial_passages <- function(
           return_phylo            = FALSE,
           return_cna_data         = need_cna,
           hotspot                 = list(chr = chr_allele, pos = hotspot_pos),
-          selection_type          = params$selection_type
+          selection_type          = params$selection_type,
+          saturation_K            = params$saturation_K %||% 10
         ),
         error = function(e) NULL
       )

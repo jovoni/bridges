@@ -35,3 +35,7 @@ maximum copy number, and the mean number of breakpoints per cell.
 Used internally by \code{simulate_serial_passages()} to summarize
 each passage.
 }
+\examples{
+m <- rbind(cell_1 = c(1, 1, 3, 3, 1), cell_2 = c(1, 2, 2, 1, 1))
+summarise_clone(m, hotspot_col = 3)
+}

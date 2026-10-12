@@ -15,7 +15,8 @@ clonal_params(
   lambda = 2,
   rate = 20,
   first_round_of_bfb = TRUE,
-  selection_type = "constant"
+  selection_type = "constant",
+  saturation_K = 10
 )
 }
 \arguments{
@@ -38,8 +39,8 @@ have gained a copy at \code{hotspot_pos}.  0 = neutral.}
 \item{lambda}{Mean number of genomic events per daughter cell per
 division (Poisson).}
 
-\item{rate}{Scale of focal amp/del events: segment length is
-drawn from Exp(1/rate).}
+\item{rate}{Mean length, in bins, of focal amplifications and
+deletions (exponentially distributed).}
 
 \item{first_round_of_bfb}{If TRUE the founding cell already carries one BFB
 event, mimicking a clone that initiated from a single BFB.}
@@ -49,14 +50,16 @@ selection advantage: \code{"constant"} (any gain gives the same
 fixed advantage), \code{"linear"}, or \code{"saturation"} -- passed
 straight through to \code{bridge_sim()}. Default:
 \code{"constant"}.}
+
+\item{saturation_K}{Saturation constant used when
+\code{selection_type = "saturation"}. Default: 10.}
 }
 \value{
 Named list of simulation parameters.
 }
 \description{
 Returns a complete parameter list with sensible defaults. Any argument can
-be overridden.  Pass the result to \code{run_clonal_replicates()} or
-\code{compare_clonal_params()}.
+be overridden. Pass the result to \code{\link{simulate_serial_passages}}.
 }
 \examples{
 # Default parameters (BFB-driven, neutral selection)

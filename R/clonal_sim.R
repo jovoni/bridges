@@ -1,39 +1,14 @@
-# NOTE: this file originally also contained simulate_clone(),
-# run_clonal_replicates(), compare_clonal_params(), compute_observed_stats(),
-# and plot_clonal_comparison() -- the multi-replicate/multi-condition
-# parameter-comparison layer. Per project decision, that layer has been
-# cut (not carried into this restructuring) since it wasn't part of the
-# prioritized bridge_sim + simulate_serial_passages workflow. clonal_params()
-# and summarise_clone() are kept because simulate_serial_passages() (in
-# passage_sim.R) depends on them directly.
-
-# ---- (kept: lines 1-120 of original clonal_sim.R) ----
-
-# ── Clonal simulation study ───────────────────────────────────────────────────
-#
-# Tools for studying how BFB and selection shape the copy number distribution
-# of an evolving clone. The core workflow is:
-#
-#   1.  Define one or more parameter sets (BFB rate, selection coefficients, …).
-#   2.  Call run_clonal_replicates() to grow N independent clones, stopping at
-#       max_cells or max_time (whichever fires first), then sample sample_cells
-#       cells using subsample_sim().
-#   3.  Call compare_clonal_params() to sweep over multiple parameter sets and get
-#       a tidy data frame ready for plotting.
-#   4.  Call plot_clonal_comparison() to visualise how summary statistics differ
-#       across conditions.
+# Parameter constructor and summary statistics used by
+# simulate_serial_passages() (see passage_sim.R).
 #
 # hotspot_pos is the 1-based bin index of the genomic position of interest
-# (e.g. the bin most likely to be amplified by BFB).  It corresponds directly
+# (e.g. the bin most likely to be amplified by BFB). It corresponds directly
 # to the `pos` field inside bridge_sim's `hotspot` argument.
-
-# ── Default parameter constructor ─────────────────────────────────────────────
 
 #' Build a parameter list for clonal simulations
 #'
 #' Returns a complete parameter list with sensible defaults. Any argument can
-#' be overridden.  Pass the result to \code{run_clonal_replicates()} or
-#' \code{compare_clonal_params()}.
+#' be overridden. Pass the result to \code{\link{simulate_serial_passages}}.
 #'
 #' @param bfb_prob            Relative probability of a BFB event per division.
 #' @param amp_rate            Relative probability of a focal amplification.
@@ -46,8 +21,8 @@
 #' @param death_rate          Base cell death rate.
 #' @param lambda              Mean number of genomic events per daughter cell per
 #'   division (Poisson).
-#' @param rate                Scale of focal amp/del events: segment length is
-#'   drawn from Exp(1/rate).
+#' @param rate                Mean length, in bins, of focal amplifications and
+#'   deletions (exponentially distributed).
 #' @param first_round_of_bfb  If TRUE the founding cell already carries one BFB
 #'   event, mimicking a clone that initiated from a single BFB.
 #' @param selection_type How hotspot copy number translates into a
@@ -55,6 +30,8 @@
 #'   fixed advantage), \code{"linear"}, or \code{"saturation"} -- passed
 #'   straight through to \code{bridge_sim()}. Default:
 #'   \code{"constant"}.
+#' @param saturation_K Saturation constant used when
+#'   \code{selection_type = "saturation"}. Default: 10.
 #'
 #' @return Named list of simulation parameters.
 #'
@@ -77,7 +54,8 @@ clonal_params = function(
   lambda                   = 2,
   rate                     = 20,
   first_round_of_bfb       = TRUE,
-  selection_type           = "constant"
+  selection_type           = "constant",
+  saturation_K             = 10
 ) {
   list(
     bfb_prob                = bfb_prob,
@@ -90,12 +68,11 @@ clonal_params = function(
     lambda                  = lambda,
     rate                    = rate,
     first_round_of_bfb      = first_round_of_bfb,
-    selection_type          = selection_type
+    selection_type          = selection_type,
+    saturation_K            = saturation_K
   )
 }
 
-
-# ── Single replicate ──────────────────────────────────────────────────────────
 
 #' Summarize a copy-number matrix into scalar statistics
 #'
@@ -121,9 +98,10 @@ clonal_params = function(
 #'   \code{hotspot_cn_var}, \code{max_cn_global}, \code{mean_breakpoints},
 #'   \code{n_alive}, \code{n_cells}. All \code{NA} (with \code{n_cells = 0})
 #'   if \code{cna_matrix} is empty.
+#' @examples
+#' m <- rbind(cell_1 = c(1, 1, 3, 3, 1), cell_2 = c(1, 2, 2, 1, 1))
+#' summarise_clone(m, hotspot_col = 3)
 #' @export
-
-# ---- (kept: lines 210-239 of original clonal_sim.R) ----
 summarise_clone = function(cna_matrix, hotspot_col, base_value = 1, n_alive = NA) {
   if (nrow(cna_matrix) == 0 || ncol(cna_matrix) == 0) {
     return(c(
