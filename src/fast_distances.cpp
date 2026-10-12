@@ -41,14 +41,14 @@ inline int sgn(double v) {
   int best_step = 0;        // number of steps taken when best ancestor was seen (0 = at start)
 
   int cost = 0;             // total number of steps
+  double cur_dist = best_dist;  // distance of `current` to target, kept up to date
+  int head = 0;
 
   while (true) {
-    // find first differing position
-    int head = -1;
-    for (int i = 0; i < n; ++i) {
-      if (x[i] != 0) { head = i; break; }
-    }
-    if (head < 0) break; // done
+    // find first differing position. Positions before `head` are already
+    // zero and are never modified again, so the scan resumes from there.
+    while (head < n && x[head] == 0) ++head;
+    if (head >= n) break; // done
 
     // contiguous block with same sign
     int sign_val = (x[head] > 0.0) ? 1 : -1;
@@ -69,15 +69,16 @@ inline int sgn(double v) {
     // apply
     const double delta = (sign_val < 0) ? step : -step; // x<0 => add; x>0 => subtract
     for (int i = head; i <= end; ++i) {
+      cur_dist -= std::abs(current[i] - target_val);
       current[i] += delta;
+      cur_dist += std::abs(current[i] - target_val);
       x[i] = current[i] - b[i];
     }
 
     ++cost;
 
     // update best ancestor if strictly better (which.min picks first minimum)
-    double d = 0.0;
-    for (int i = 0; i < n; ++i) d += std::abs(current[i] - target_val);
+    double d = cur_dist;
     if (d < best_dist) {
       best_dist = d;
       best_ancestor = clone(current);
@@ -127,13 +128,12 @@ inline int sgn(double v) {
 
    double cost = 0.0;
 
-   // loop until all differences are even (or zero)
+   // loop until all differences are even (or zero). Positions before `head`
+   // are even and are never modified again, so the scan resumes from there.
+   int head = 0;
    while (true) {
-     int head = -1;
-     for (int i = 0; i < n; ++i) {
-       if (is_odd(x[i])) { head = i; break; }
-     }
-     if (head < 0) break; // all even -> done
+     while (head < n && !is_odd(x[head])) ++head;
+     if (head >= n) break; // all even -> done
 
      int sign_val = sgn(x[head]);
      int end = head;
