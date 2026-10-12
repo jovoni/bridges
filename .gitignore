@@ -12,3 +12,4 @@ src/*.dll
 .DS_Store
 /doc/
 /Meta/
+/dev/data/

@@ -56,7 +56,8 @@ static double bfb_cost(const double* a, const double* b, int n, std::vector<doub
 static double wgd_path_cost(const double* a, const double* target, const double* b,
                             int n, double f, std::vector<double>& cur,
                             std::vector<double>& diff, std::vector<double>& fx,
-                            std::vector<double>& buf) {
+                            std::vector<double>& buf,
+                            std::vector<double>* best_x = nullptr, int* best_steps = nullptr) {
   for (int i = 0; i < n; ++i) { cur[i] = a[i]; diff[i] = a[i] - target[i]; }
   auto eval = [&](int steps) {
     for (int i = 0; i < n; ++i) fx[i] = f * cur[i];
@@ -64,6 +65,7 @@ static double wgd_path_cost(const double* a, const double* target, const double*
   };
   int steps = 0, head = 0;
   double best = eval(0);
+  if (best_x) { *best_x = cur; *best_steps = 0; }
   while (true) {
     while (head < n && diff[head] == 0) ++head;
     if (head >= n) break;
@@ -75,7 +77,11 @@ static double wgd_path_cost(const double* a, const double* target, const double*
     for (int i = head; i <= end; ++i) { cur[i] += delta; diff[i] += delta; }
     ++steps;
     if (steps >= best) break;  // remaining states cannot beat the best
-    best = std::min(best, eval(steps));
+    double c = eval(steps);
+    if (c < best) {
+      best = c;
+      if (best_x) { *best_x = cur; *best_steps = steps; }
+    }
   }
   return best;
 }
@@ -90,6 +96,25 @@ static double wgd_cost_impl(const double* a, const double* b, int n, double f,
   for (int i = 0; i < n; ++i) { double c = std::ceil(b[i] / f); if (c != t[i]) same = false; t[i] = c; }
   if (!same) best = std::min(best, wgd_path_cost(a, t.data(), b, n, f, cur, diff, fx, buf));
   return best;
+}
+
+// Best ancestor for W(a -> b, f): returns cost, x, steps (events a -> x) and
+// events after the doubling (f * x -> b).
+// [[Rcpp::export]]
+List wgd_ancestor(NumericVector a, NumericVector b, double f) {
+  int n = a.size();
+  std::vector<double> t(n), cur(n), diff(n), fx(n), buf(n), x1, x2;
+  int s1 = 0, s2 = 0;
+  for (int i = 0; i < n; ++i) t[i] = std::floor(b[i] / f);
+  double c1 = wgd_path_cost(a.begin(), t.data(), b.begin(), n, f, cur, diff, fx, buf, &x1, &s1);
+  for (int i = 0; i < n; ++i) t[i] = std::ceil(b[i] / f);
+  double c2 = wgd_path_cost(a.begin(), t.data(), b.begin(), n, f, cur, diff, fx, buf, &x2, &s2);
+  bool first = c1 <= c2;
+  double cost = first ? c1 : c2;
+  return List::create(_["cost"] = cost,
+                      _["x"] = NumericVector((first ? x1 : x2).begin(), (first ? x1 : x2).end()),
+                      _["steps"] = first ? s1 : s2,
+                      _["after"] = cost - (first ? s1 : s2));
 }
 
 // [[Rcpp::export]]
