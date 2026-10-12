@@ -22,3 +22,30 @@
   boundaries, and chromosome lengths for chromosomes 1-22, X, Y under both
   hg19 (GRCh37) and hg38 (GRCh38), sourced from UCSC Genome Browser tracks.
   See `?centromeres` and `data-raw/centromeres.R`.
+
+## Bug fixes
+
+* `breakpoint_support = "custom"` now works throughout the simulation (it
+  previously errored as soon as a BFB event occurred after the founding
+  one), and the cut now falls right after one of `custom_breakpoints`
+  (previously `sample()` on a length-1 vector drew a random value in
+  `1:x`, and a bin value was used as a position).
+* `bridge_sim(initial_sequences = ...)` with `return_phylo = TRUE` now
+  returns a valid tree (founder cells were missing from the lineage).
+* `bridge_sim()` no longer reports an `elapsed_time` beyond `max_time`.
+* `simulate_serial_passages(n_cores > 1)` no longer errors, and
+  `clonal_params()` gains `saturation_K`, which is passed through.
+* `fit()` no longer warns about infinite distances on every call (the
+  diagonal was Inf by construction), rejects misspelled `g_dist_func` /
+  `b_dist_func` names up front, and gains `verbose`.
+* Internal `tibble_to_matrix()` no longer adds columns to a caller's
+  `data.table` by reference.
+* `bfb_detect_batch(genome = ...)` no longer errors when a chromosome arm
+  has no bins (e.g. acrocentric p-arms).
+* `plot_chr_all_heatmap()`: the average-CN and gain/loss annotations are
+  now shown together, restricted to the plotted chromosome, and use a
+  baseline of 2 for `"CN"`.
+* `plot_bfb_signature()` gives a clear error when no node is BFB-like.
+* `bridge_sim()` now validates `lambda`, `rate`, `wgd_*`, `subsample` and
+  `custom_breakpoints`, and warns when `hotspot$pos` lies beyond its
+  chromosome. Documented defaults now match the actual defaults.
