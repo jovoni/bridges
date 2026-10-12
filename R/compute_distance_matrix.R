@@ -121,6 +121,23 @@ compute_avg_distances = function(
 #   cat('result = main(data, g_dist_func = "G_with_steps", b_dist_func = "A_each")\n')
 # }
 
+# Pairwise distances for one cells x segments matrix in a single C++ call
+# (distance_matrices_cpp()), computed once per pair of distinct profiles.
+# Gives the same values as compute_distance_matrix() with
+# greedy_distance_cpp (G) and greedy_bfb_distance_cpp (B):
+#   $min    = pmin(G, B), or G if use_bfb = FALSE
+#   $greedy = G, $bfb = B    (only when keep_parts = TRUE)
+# Diagonals are Inf.
+fast_distance_matrices = function(input_X, use_bfb = TRUE, penalty = 0, keep_parts = FALSE) {
+  storage.mode(input_X) = "double"
+  res = distance_matrices_cpp(input_X, use_bfb, penalty, keep_parts)
+  cells = rownames(input_X)
+  for (k in c("min", "greedy", "bfb")) {
+    if (!is.null(res[[k]])) dimnames(res[[k]]) = list(cells, cells)
+  }
+  res
+}
+
 compute_distance_matrix = function(input_X, dist_func, ...) {
   sequences = lapply(rownames(input_X), function(r) {
     input_X[r, ]

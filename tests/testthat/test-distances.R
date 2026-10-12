@@ -32,3 +32,40 @@ test_that("greedy_bfb_distance_cpp matches the pure-R reference implementation",
     }
   }
 })
+
+# Cells x segments matrix with many repeated profiles, as in real data
+random_cn_matrix <- function(n_cells, n_seg, n_distinct) {
+  profiles <- t(replicate(n_distinct, random_cn_pair(n_seg)$a))
+  X <- profiles[sample(n_distinct, n_cells, replace = TRUE), , drop = FALSE]
+  rownames(X) <- paste0("cell_", seq_len(n_cells))
+  X
+}
+
+test_that("fast_distance_matrices matches the per-pair computation", {
+  set.seed(13)
+  for (k in 1:30) {
+    X <- random_cn_matrix(n_cells = sample(2:40, 1), n_seg = sample(1:30, 1),
+                          n_distinct = sample(1:15, 1))
+    pen <- sample(c(0, 1.5, -1), 1)
+    G <- bridges:::compute_distance_matrix(X, bridges:::greedy_distance_cpp, target_val = 1)
+    B <- bridges:::compute_distance_matrix(X, bridges:::greedy_bfb_distance_cpp, penalty = pen)
+
+    fast <- bridges:::fast_distance_matrices(X, use_bfb = TRUE, penalty = pen, keep_parts = TRUE)
+    expect_identical(fast$greedy, G)
+    expect_identical(fast$bfb, B)
+    expect_identical(fast$min, pmin(G, B))
+    expect_equal(fast$n_unique, nrow(unique(X)))
+
+    greedy_only <- bridges:::fast_distance_matrices(X, use_bfb = FALSE)
+    expect_identical(greedy_only$min, G)
+    expect_null(greedy_only$greedy)
+    expect_null(greedy_only$bfb)
+  }
+})
+
+test_that("fast_distance_matrices handles all-identical rows and a single segment", {
+  X <- matrix(c(2, 2, 2), ncol = 1, dimnames = list(c("a", "b", "c"), NULL))
+  fast <- bridges:::fast_distance_matrices(X)
+  expect_equal(fast$n_unique, 1L)
+  expect_equal(unname(fast$min), matrix(c(Inf, 0, 0, 0, Inf, 0, 0, 0, Inf), 3))
+})

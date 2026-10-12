@@ -36,6 +36,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// distance_matrices_cpp
+List distance_matrices_cpp(NumericMatrix X, bool use_bfb, double penalty, bool keep_parts);
+RcppExport SEXP _bridges_distance_matrices_cpp(SEXP XSEXP, SEXP use_bfbSEXP, SEXP penaltySEXP, SEXP keep_partsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type X(XSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_bfb(use_bfbSEXP);
+    Rcpp::traits::input_parameter< double >::type penalty(penaltySEXP);
+    Rcpp::traits::input_parameter< bool >::type keep_parts(keep_partsSEXP);
+    rcpp_result_gen = Rcpp::wrap(distance_matrices_cpp(X, use_bfb, penalty, keep_parts));
+    return rcpp_result_gen;
+END_RCPP
+}
 // seq_length_cpp
 int seq_length_cpp(List seq_list);
 RcppExport SEXP _bridges_seq_length_cpp(SEXP seq_listSEXP) {
@@ -171,6 +185,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_bridges_greedy_distance_cpp", (DL_FUNC) &_bridges_greedy_distance_cpp, 3},
     {"_bridges_greedy_bfb_distance_cpp", (DL_FUNC) &_bridges_greedy_bfb_distance_cpp, 3},
+    {"_bridges_distance_matrices_cpp", (DL_FUNC) &_bridges_distance_matrices_cpp, 4},
     {"_bridges_seq_length_cpp", (DL_FUNC) &_bridges_seq_length_cpp, 1},
     {"_bridges_reverse_sequence_cpp", (DL_FUNC) &_bridges_reverse_sequence_cpp, 1},
     {"_bridges_fuse_sequence_cpp", (DL_FUNC) &_bridges_fuse_sequence_cpp, 1},

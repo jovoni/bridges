@@ -27,6 +27,28 @@ greedy_bfb_distance_cpp <- function(a, b, penalty = 0.0) {
     .Call(`_bridges_greedy_bfb_distance_cpp`, a, b, penalty)
 }
 
+#' Pairwise greedy and BFB distance matrices for one cells x segments matrix
+#'
+#' Computes, for every pair of rows of \code{X}, the cost of
+#' \code{greedy_distance_cpp()} (G) and, if \code{use_bfb}, of
+#' \code{greedy_bfb_distance_cpp()} (B), and their element-wise minimum.
+#' Identical rows are detected first and distances are computed once per
+#' pair of distinct rows. Diagonals are set to \code{Inf}, as in
+#' \code{compute_distance_matrix()}.
+#'
+#' @param X Numeric matrix, cells x segments.
+#' @param use_bfb Whether to compute the BFB distance; if \code{FALSE},
+#'   \code{min} equals the greedy distance.
+#' @param penalty Penalty added to every BFB cost.
+#' @param keep_parts Whether to also return the full G and B matrices.
+#' @return A list with \code{min}, \code{greedy} and \code{bfb} (the last two
+#'   \code{NULL} unless \code{keep_parts}), and \code{n_unique}, the number of
+#'   distinct rows.
+#' @noRd
+distance_matrices_cpp <- function(X, use_bfb, penalty = 0.0, keep_parts = FALSE) {
+    .Call(`_bridges_distance_matrices_cpp`, X, use_bfb, penalty, keep_parts)
+}
+
 #' Compute length of an interval-encoded sequence
 #'
 #' @param seq_list R list of intervals (each a named list with start, end, direction)
