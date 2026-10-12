@@ -54,9 +54,9 @@ When a cell divides, each daughter independently draws a Poisson number of genom
 | BFB cycle      | `bfb_prob`       | Breakage-Fusion-Bridge on the target allele |
 | Amplification  | `amp_rate`       | Focal copy gain on a random chromosome |
 | Deletion       | `del_rate`       | Focal copy loss on a random chromosome |
-| Normal dup     | `normal_dup_rate`| Whole-chromosome duplication (rarely used) |
+| Neutral        | `normal_dup_rate`| No change (dilutes the other event types; default 0) |
 
-The weights are automatically normalized to sum to 1. For amplification and deletion events, the length of the affected segment is drawn from `Exp(1 / rate)` (in bins).
+The weights are automatically normalized to sum to 1. For amplification and deletion events, the length of the affected segment is exponentially distributed with mean `rate` (in bins).
 
 ```{r sim-basic}
 # A chromosome 1 simulation with moderate BFB and amplification
@@ -104,19 +104,17 @@ The breakpoint position within a BFB event is drawn from `breakpoint_support`:
 
 | Value       | Behaviour                                                |
 |-------------|------------------------------------------------------------|
-| `"uniform"` | Uniform across the chromosome (default)                  |
-| `"beta"`    | Beta distribution; requires `alpha` and `beta` params    |
-| `"custom"`  | Sample from a user-supplied integer vector `custom_breakpoints` |
+| `"beta"`    | Beta distribution (default); shape set by `alpha` and `beta` |
+| `"uniform"` | Uniform along the fused (dicentric) chromosome           |
+| `"custom"`  | Only right after one of the bins in `custom_breakpoints` |
 
-`"custom"` mode only applies to the founding cell's initial BFB event (`first_round_of_bfb`, below) -- the main simulation loop (implemented in C++ for speed) supports `"uniform"` and `"beta"` only. If you need custom breakpoints, combine `breakpoint_support = "custom"` with `bfb_prob = 0` so no further BFB events are attempted after the founding one:
+With `"custom"`, every BFB cycle cuts right after one of the listed bins; a cell whose BFB allele no longer carries any of them cannot undergo further BFB cycles:
 
 ```{r custom-breakpoints}
 x_custom <- bridge_sim(
   chromosomes = "1",
   bfb_allele  = "1:A",
   max_cells   = 50,
-  bfb_prob    = 0,                      # no further BFB after the founding event
-  first_round_of_bfb = TRUE,
   breakpoint_support = "custom",
   custom_breakpoints = c(50, 150, 250)
 )

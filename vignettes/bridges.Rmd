@@ -59,7 +59,7 @@ All main functions expect a data frame with one row per cell-chromosome-bin comb
 - `bfb_allele` — which chromosome:allele undergoes BFB (e.g. `"8:A"`).
 - `max_cells` — stop when this many cells are alive (evolutionary depth).
 - `lambda` — mean number of genomic events per cell division.
-- `bfb_prob`, `amp_rate`, `del_rate` — relative probabilities of each event type.
+- `bfb_prob`, `amp_rate`, `del_rate` — relative weights of each event type (normalised to sum to one).
 
 ```{r simulate}
 library(bridges)

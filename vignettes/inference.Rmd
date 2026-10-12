@@ -99,14 +99,15 @@ names(res)
 
 ## 3  Greedy (G) distance
 
-The **Greedy distance** between two cells is the minimum number of integer copy-number steps needed to transform one CN profile into the other, computed independently for each chromosome and allele. It treats every bin independently, so a single event moving a large contiguous segment is counted the same as many independent changes.
+The **Greedy distance** between two cells counts the gain/loss events needed to turn one CN profile into the other, computed independently for each chromosome and allele. Each step changes a whole contiguous block of bins in the same direction, so one large segmental change costs one event rather than one per bin.
 
-Available G functions (inspect with `names(G_DISTS)`):
+Available G functions (`g_dist_func`):
 
 | Name            | Description                                         |
 |-----------------|--------------------------------------------------------|
-| `"greedy_fast"` | Per-bin absolute difference (default, fast)         |
-| `"greedy_avg"`  | Averaged over alleles before summing                |
+| `"greedy_fast"` | C++ implementation (default)                        |
+| `"greedy"`      | Pure-R reference implementation of the same algorithm |
+| `"G"`           | Pure-R variant that changes copy number by one unit per step |
 
 ```r
 # Greedy-only run (disable BFB modelling entirely)
@@ -121,15 +122,16 @@ This is useful for ablation studies or when allele-specific data is unavailable.
 
 The **BFB distance** adds a penalty for CN changes that are *non-contiguous* across genomic bins -- the hallmark of BFB amplification, where a fold-back creates a mirror-image pattern rather than a simple contiguous change. Combining G and B distances makes the final distance matrix sensitive to BFB-like evolutionary paths.
 
-Available B functions (inspect with `names(B_DISTS)`):
+Available B functions (`b_dist_func`):
 
 | Name         | Description                                       |
 |--------------|-------------------------------------------------------|
-| `"bfb_fast"` | Contiguity penalty on the difference profile (default) |
-| `"A_contig"` | Allele A contiguity                               |
-| `"B_contig"` | Allele B contiguity                               |
+| `"bfb_fast"` | C++ implementation (default)                      |
+| `"bfb"`      | Pure-R reference implementation of the same algorithm |
+| `"B_contig"` | Variant that extends blocks regardless of sign    |
+| `"avg"`, `"A"` | Earlier variants, kept for comparison           |
 
-`bfb_penalty` scales the contribution of the B distance relative to G. At the default of `0`, the two are combined symmetrically via `find_minimal_distances()`, which takes the element-wise minimum.
+For each pair of cells the final distance is the element-wise minimum of G and B. `bfb_penalty` is added to every B cost, so larger values make the BFB explanation less likely to win.
 
 ```{r b-dist}
 # Increase BFB penalty to make the tree more sensitive to BFB events
@@ -170,7 +172,7 @@ Start with `k_jitter_fix = 0` on simulated data and increase only if real data s
 - **B cost** -- BFB/contiguity distance including the non-contiguous penalty.
 - **delta** = G - B. A positive delta means the BFB model explains the transition *better* than simple edits: the CN change is non-contiguous, consistent with a fold-back event.
 
-Branches where `delta > threshold` are counted as BFB-positive. A one-sided binomial test assesses whether the fraction of BFB-positive branches per chromosome-allele combination is significantly above chance. P-values are corrected with the Benjamini-Hochberg procedure.
+Internal nodes with `delta > 0` (BFB explains the two children better than greedy gains/losses) are counted as BFB-positive. A one-sided binomial test then asks whether the fraction of BFB-positive nodes per chromosome-allele combination exceeds the background rate `threshold`. P-values are corrected with the Benjamini-Hochberg procedure.
 
 ```{r detect-bfb}
 bfb_df <- detect_bfb_branches(res, threshold = 0.005)
@@ -182,13 +184,13 @@ Column interpretation:
 - `mean` -- fraction of branches with BFB signal (between 0 and 1).
 - `N_successes` / `N_trials` -- counts underlying the binomial test.
 - `p.value` / `adj.pval` -- raw and BH-corrected p-values.
-- `threshold` -- the delta threshold used.
+- `threshold` -- the background rate used as the binomial null.
 
 Chromosome 1, allele A should have the highest `mean` because that is where BFB was seeded in our simulation.
 
 ### Tuning `threshold`
 
-Lower threshold -> more sensitive (smaller delta counts as BFB), more false positives. Higher -> more specific. A value of `0.005` works well for simulated data; for noisy real data try `0.01`-`0.05` and inspect the distribution of delta values manually via `res$reconstructions`.
+`threshold` is the fraction of nodes you expect to look BFB-like by chance. Lower values make the test more sensitive and more prone to false positives; higher values make it more conservative. `0.005` works well on simulated data; for noisy real data try `0.01`-`0.05`, and look at the delta values directly in `res$reconstructions`.
 
 ---
 
@@ -227,7 +229,7 @@ plot_heatmap(
 )
 ```
 
-Darker / more saturated branches carry stronger BFB signal on chromosome 1, allele A.
+Branches leaving nodes flagged as BFB-like (`delta > 0`) on chromosome 1, allele A are drawn in the second colour of `tree_colors`. Passing `fit = res, chr = "1", allele = "A"` instead also marks those nodes with points.
 
 **Other useful options:**
 
