@@ -1,4 +1,4 @@
-url: https://<github-user-or-org>.github.io/bridges/
+url: https://jovoni.github.io/bridges/
 
 template:
   bootstrap: 5
@@ -45,6 +45,9 @@ reference:
   - simulate_serial_passages
   - clonal_params
   - summarise_clone
+- title: Data
+  contents:
+  - centromeres
 - title: Visualization
   contents:
   - plot_heatmap

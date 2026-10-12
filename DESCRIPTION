@@ -52,7 +52,8 @@ Remotes:
     jovoni/bfbtools
 Config/testthat/edition: 3
 VignetteBuilder: knitr
-URL: https://jovoni.github.io/bridges/
+URL: https://jovoni.github.io/bridges/, https://github.com/jovoni/bridges
+BugReports: https://github.com/jovoni/bridges/issues
 Depends: 
     R (>= 4.1.0)
 LazyData: true
