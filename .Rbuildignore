@@ -7,3 +7,8 @@
 ^pkgdown$
 ^\.github$
 ^data-raw$
+^\.claude$
+^\.Rhistory$
+^\.DS_Store$
+^src/.*\.o$
+^src/.*\.so$
