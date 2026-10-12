@@ -1,0 +1,253 @@
+---
+title: "Phylogenetic inference and BFB detection"
+author:
+- name: Giovanni Santacatterina
+date: "`r BiocStyle::doc_date()`"
+package: "`r BiocStyle::pkg_ver('bridges')`"
+abstract: >
+  This vignette explains how bridges infers a phylogeny from allele-specific
+  single-cell copy-number profiles, and the two ways it detects
+  breakage-fusion-bridge (BFB) signal: on the branches of the inferred tree,
+  and directly on each cell's profile with exact BFB combinatorics.
+output:
+  BiocStyle::html_document:
+    toc_float: true
+vignette: >
+  %\VignetteIndexEntry{Phylogenetic inference and BFB detection}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 10,
+  fig.height = 6,
+  out.width = "100%",
+  message = FALSE
+)
+```
+
+```{r load}
+library(bridges)
+set.seed(42)
+```
+
+# Example data
+
+We simulate 120 cells in which allele A of chromosome 1 undergoes BFB
+cycles; chromosome 2 only acquires focal gains and losses. Real data must
+have the same columns (`cell_id`, `chr`, `start`, `end`, `A`, `B`, `CN`),
+with chromosome names without the `"chr"` prefix and the same bins for all
+cells.
+
+```{r data}
+sim <- bridge_sim(
+    chromosomes = c("1", "2"),
+    bfb_allele = "1:A",
+    max_cells = 500,
+    subsample = 120,
+    lambda = 0.75,
+    bfb_prob = 0.8,
+    amp_rate = 0.1,
+    del_rate = 0.1
+)
+cna_data <- sim$cna_data
+```
+
+# Phylogenetic inference
+
+## The fit() pipeline
+
+`fit()` proceeds as follows:
+
+1. Add a synthetic normal diploid cell, used later to root the tree.
+2. For each chromosome and allele, build a cells-by-bins matrix and merge
+   adjacent bins that never differ between cells.
+3. Compute a greedy (G) and a BFB (B) distance between every pair of cells,
+   and keep the smaller of the two.
+4. Sum the distances over alleles and chromosomes and build a tree with
+   `tree_func` (default `ape::nj`), rooted on the diploid cell, which is
+   then removed.
+5. Reconstruct ancestral profiles bottom-up along the tree, recording at
+   each internal node whether a BFB event or greedy gains and losses better
+   explain its two children.
+
+```{r fit}
+res <- fit(cna_data, chromosomes = c("1", "2"), verbose = FALSE)
+names(res)
+```
+
+`res$tree` is the inferred tree, `res$D` the final distance matrix,
+`res$greedy_Ds` and `res$avg_Ds` the G and B matrices per chromosome and
+allele, and `res$reconstructions` the ancestral reconstructions used below.
+
+## Distances
+
+The **greedy distance** counts the gain and loss events needed to turn one
+profile into the other. Each event changes a contiguous block of bins in
+the same direction, so one large segmental change costs one event.
+
+The **BFB distance** first makes all copy-number differences even with
+greedy steps, then charges one event per remaining run of differing bins,
+plus `bfb_penalty`. The ancestor is the average of the two profiles. This
+matches the inverted duplications created by BFB, which change copy number
+in pairs.
+
+| Argument      | Values                                                          |
+|---------------|-----------------------------------------------------------------|
+| `g_dist_func` | `"greedy_fast"` (C++, default), `"greedy"`, `"G"` (pure R)      |
+| `b_dist_func` | `"bfb_fast"` (C++, default), `"bfb"`, `"B_contig"`, `"avg"`, `"A"`, or `NULL` |
+
+Setting `b_dist_func = NULL` gives a greedy-only analysis, useful as a
+baseline. A larger `bfb_penalty` makes the BFB explanation win less often.
+
+```{r baseline}
+res_greedy <- fit(cna_data, chromosomes = c("1", "2"), b_dist_func = NULL,
+                  verbose = FALSE)
+c(
+    with_bfb = phangorn::RF.dist(sim$tree, res$tree, normalize = TRUE),
+    greedy_only = phangorn::RF.dist(sim$tree, res_greedy$tree, normalize = TRUE)
+)
+```
+
+## Noisy data
+
+Segmentation noise in real data creates small, cell-specific breakpoints.
+With `k_jitter_fix = k`, breakpoints that are within `k` bins of a more
+frequent breakpoint are merged into it, and each segment is replaced by its
+rounded mean copy number.
+
+```{r jitter, eval = FALSE}
+res_smooth <- fit(cna_data, chromosomes = c("1", "2"), k_jitter_fix = 2)
+```
+
+# BFB detection on the tree
+
+At each internal node, the reconstruction compares a greedy cost G and a
+BFB cost B for the node's two children, and records $\delta = G - B$. A
+node with $\delta > 0$ is BFB-like. `detect_bfb_branches()` counts the
+BFB-like nodes for every chromosome and allele and runs a one-sided
+binomial test against the background rate `threshold`, with
+Benjamini-Hochberg adjustment across tests.
+
+```{r branches}
+branches <- detect_bfb_branches(res, threshold = 0.005)
+branches
+```
+
+Allele A of chromosome 1 should have the largest fraction of BFB-like
+nodes.
+
+`plot_heatmap()` colours the branches leaving BFB-like nodes and marks
+those nodes:
+
+```{r heatmap, fig.height = 7}
+plot_heatmap(
+    cna_data,
+    fit = res, chr = "1", allele = "A",
+    chromosomes_to_plot = c("1", "2"),
+    to_plot = c("A", "B"),
+    branch_length = 1,
+    use_raster = FALSE
+)
+```
+
+`plot_bfb_signature()` shows, for each genomic segment, how many BFB-like
+nodes involve it:
+
+```{r signature, fig.height = 4}
+plot_bfb_signature(res, chr_of_interest = "1", allele_of_interest = "A")
+```
+
+# BFB detection in individual cells
+
+## Count-vectors
+
+The second approach needs no tree. A copy-number profile along one
+chromosome arm, read from the telomere towards the centromere, is reduced
+to a count-vector: the copy number of each successive segment, with
+deletions dropped. Whether some series of BFB cycles can produce a given
+count-vector is an exact combinatorial question (Kinsella and Bafna, 2012;
+Zakov, Kinsella and Bafna, 2013), answered by the `bfbtools` package.
+
+`bfb_detect_vectors()` works on a list of count-vectors:
+
+```{r vectors}
+bfb_detect_vectors(list(
+    c(6, 3, 5),
+    c(14, 7, 18, 16, 9, 12),
+    c(1, 1)
+))
+```
+
+- `admits_bfb` is `TRUE` when the vector can be produced by BFB cycles.
+- For vectors that cannot, `bfb_distance` is $-\log$ of the weight of the
+  nearest BFB-compatible vector under a Poisson noise model (0 for an exact
+  match).
+- Every BFB cycle duplicates part of the chromosome, so vectors whose
+  maximum is below `min_max_count` (default 2), like `c(1, 1)`, are
+  reported as `NA` rather than as trivially compatible.
+- Identical vectors are computed only once; `n_unique` reports how many
+  distinct vectors were evaluated.
+
+## From copy-number tables
+
+`bfb_detect_batch()` extracts a count-vector for every cell, chromosome and
+allele of a copy-number table and runs `bfb_detect_vectors()` on all of
+them.
+
+## Chromosome arms
+
+Each chromosome arm has its own telomere, so a BFB pattern is read from
+the end of the arm towards the centromere. In ascending genomic
+coordinates the p-arm already runs telomere to centromere, but the q-arm
+runs the other way. With `genome = "hg19"` or `"hg38"`, rows are assigned
+to arms using the bundled `centromeres` table (`split_chr_arms()`), each arm
+is analysed separately, and q-arms are reversed.
+
+The example below places the same BFB pattern, 6-3-5 from the telomere, on
+both arms of chromosome 1:
+
+```{r arms}
+arm_example <- data.frame(
+    cell_id = "cell_1",
+    chr = "1",
+    start = c(1e6, 2e6, 3e6, 200e6, 201e6, 202e6),
+    end = c(2e6, 3e6, 4e6, 201e6, 202e6, 203e6) - 1,
+    A = c(6, 3, 5, 5, 3, 6)
+)
+bfb_detect_batch(arm_example, alleles = "A", genome = "hg19")
+```
+
+Both arms are compatible with BFB. Read as a single chromosome, the same
+row would be the vector 6-3-5-5-3-6, which mixes the two arms. When data
+cover both arms, always supply `genome`.
+
+On the simulated cells:
+
+```{r batch}
+cells <- bfb_detect_batch(cna_data, alleles = c("A", "B"), genome = "hg19")
+cells <- cells[!is.na(cells$admits_bfb), ]
+aggregate(admits_bfb ~ chr + arm + allele, data = cells, FUN = mean)
+```
+
+The two approaches complement each other: the tree-based test uses the
+relationships between cells, while the per-cell test is exact but looks
+at one profile at a time.
+
+# References
+
+Kinsella M, Bafna V (2012). Combinatorics of the breakage-fusion-bridge
+mechanism. *Journal of Computational Biology* 19(6):662-678.
+
+Zakov S, Kinsella M, Bafna V (2013). An algorithmic approach for
+breakage-fusion-bridge detection in tumor genomes. *PNAS*
+110(14):5546-5551.
+
+# Session information
+
+```{r session-info}
+sessionInfo()
+```

@@ -1,0 +1,235 @@
+---
+title: "Simulating copy-number evolution with BFB cycles"
+author:
+- name: Giovanni Santacatterina
+date: "`r BiocStyle::doc_date()`"
+package: "`r BiocStyle::pkg_ver('bridges')`"
+abstract: >
+  This vignette describes the bridges simulator: the birth-death process,
+  the genomic events applied at each division, breakpoint distributions,
+  whole-genome duplication and selection. It then shows how to simulate
+  serial passages, in which the population repeatedly grows and is
+  subsampled, and how to summarise each passage.
+output:
+  BiocStyle::html_document:
+    toc_float: true
+vignette: >
+  %\VignetteIndexEntry{Simulating copy-number evolution with BFB cycles}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 10,
+  fig.height = 5,
+  out.width = "100%",
+  message = FALSE
+)
+```
+
+```{r load}
+library(bridges)
+set.seed(42)
+```
+
+# The model
+
+`bridge_sim()` simulates a population of diploid cells, with alleles A and
+B for every chromosome. Chromosomes are divided into bins of `bin_length`
+base pairs, using real chromosome lengths for the `genome` build (`"hg19"`
+or `"hg38"`, see `?centromeres`).
+
+## Birth and death
+
+Each cell divides at rate `birth_rate` and dies at rate `death_rate`. The
+simulation is a continuous-time Gillespie process: it stops when
+`max_cells` cells are alive or the clock reaches `max_time`, whichever
+comes first.
+
+## Events at each division
+
+Each daughter cell receives a Poisson(`lambda`) number of events. Each
+event is drawn with the following relative weights, which are normalised
+to sum to one:
+
+| Event         | Weight            | Effect                                       |
+|---------------|-------------------|----------------------------------------------|
+| BFB cycle     | `bfb_prob`        | One BFB cycle on `bfb_allele`                |
+| Amplification | `amp_rate`        | Focal gain on a random allele                |
+| Deletion      | `del_rate`        | Focal loss on a random allele                |
+| Neutral       | `normal_dup_rate` | No change (default weight 0)                 |
+
+Focal gains and losses have exponentially distributed lengths with mean
+`rate` bins.
+
+```{r basic}
+sim <- bridge_sim(
+    chromosomes = "1",
+    bfb_allele = "1:A",
+    max_cells = 200,
+    lambda = 2,
+    bfb_prob = 0.5,
+    amp_rate = 0.3,
+    del_rate = 0.2,
+    birth_rate = 1,
+    death_rate = 0.1
+)
+
+names(sim)
+c(alive = sim$n_alive, time = round(sim$elapsed_time, 2))
+```
+
+The result contains the cell sequences (`cells`), the full birth history
+(`cell_history`), the true lineage tree (`tree`) and the copy-number table
+(`cna_data`). For large populations, `subsample` keeps only a random
+subset of cells before the tree and table are built, which is much faster.
+`return_phylo = FALSE` and `return_cna_data = FALSE` skip those steps
+entirely.
+
+```{r chr-heatmap, fig.height = 6}
+plot_chr_all_heatmap(sim$cna_data, chr = "1", allele = "A", use_raster = FALSE)
+```
+
+The bars above the heatmap show the average copy number per bin and the
+fraction of cells with a gain or a loss.
+
+# BFB cycles
+
+## Breakpoints
+
+In a BFB cycle the allele is fused with its mirror image and the resulting
+dicentric chromosome breaks at a random position. `breakpoint_support`
+sets where it breaks:
+
+| Value       | Breakpoint                                                         |
+|-------------|--------------------------------------------------------------------|
+| `"beta"`    | Beta(`alpha`, `beta`) along the fused chromosome (default)         |
+| `"uniform"` | Uniform along the fused chromosome                                 |
+| `"custom"`  | Right after one of the bins listed in `custom_breakpoints`         |
+
+With `"custom"`, a cell whose BFB allele no longer carries any of the
+listed bins cannot undergo further BFB cycles.
+
+```{r custom}
+sim_custom <- bridge_sim(
+    chromosomes = "1",
+    bfb_allele = "1:A",
+    max_cells = 50,
+    breakpoint_support = "custom",
+    custom_breakpoints = c(50, 150)
+)
+# Number of daughter cells produced by a BFB cycle
+sum(sim_custom$cell_history$bfb_event)
+```
+
+## The founding BFB cycle
+
+With `first_round_of_bfb = TRUE` (the default), each founder cell undergoes
+one BFB cycle before the simulation starts, as for a clone initiated by a
+BFB event. Set it to `FALSE` to start from normal diploid cells.
+
+```{r first-round}
+with_bfb <- bridge_sim(chromosomes = "1", max_cells = 100, first_round_of_bfb = TRUE)
+without_bfb <- bridge_sim(chromosomes = "1", max_cells = 100, first_round_of_bfb = FALSE)
+c(with = max(with_bfb$cna_data$A), without = max(without_bfb$cna_data$A))
+```
+
+# Whole-genome duplication
+
+`wgd_available` is the number of whole-genome duplications allowed in the
+whole simulation, and `wgd_probability` the chance that a division
+attempts one. After a duplication, the normal total copy number is 4
+instead of 2.
+
+```{r wgd}
+sim_wgd <- bridge_sim(
+    chromosomes = "1",
+    max_cells = 100,
+    lambda = 1,
+    wgd_available = 1,
+    wgd_probability = 0.05
+)
+table(sim_wgd$cell_history$wgd_event)
+```
+
+# Selection
+
+The `hotspot` bin, given as `list(chr = "chr:allele", pos = bin)`,
+determines selection. Its copy number $n$ is turned into a multiplier $s$
+according to `selection_type`:
+
+- `"constant"`: $s = 1$ if $n > 1$, otherwise 0 (default);
+- `"linear"`: $s = n - 1$;
+- `"saturation"`: $s = (n - 1) / ((n - 1) + K)$, with $K$ = `saturation_K`.
+
+The birth rate is multiplied by `1 + positive_selection_rate * s` and the
+death rate by `1 + negative_selection_rate * s`.
+
+```{r selection}
+hotspot <- list(chr = "1:A", pos = 100)
+neutral <- bridge_sim(chromosomes = "1", max_cells = 150, hotspot = hotspot,
+                      positive_selection_rate = 0)
+selected <- bridge_sim(chromosomes = "1", max_cells = 150, hotspot = hotspot,
+                       positive_selection_rate = 3)
+
+hotspot_cn <- function(s) {
+    d <- s$cna_data
+    d$A[d$chr == "1" & d$start == (hotspot$pos - 1) * 1e6 + 1]
+}
+c(neutral = mean(hotspot_cn(neutral)), selected = mean(hotspot_cn(selected)))
+```
+
+# Serial passages
+
+In cell culture, a population grows and is then split, so only a fraction
+of the cells seeds the next passage. `simulate_serial_passages()` repeats
+this `K` times: grow to `N` cells, keep `N_sub` at random, and use them as
+the founders of the next passage. Parameters are collected with
+`clonal_params()`.
+
+```{r params}
+params <- clonal_params(positive_selection_rate = 0.25, bfb_prob = 0.95,
+                        lambda = 0.5)
+str(params)
+```
+
+For the passages listed in `passages_to_keep`, the profiles of the sampled
+cells are summarised with `summarise_clone()` and then discarded, so memory
+use does not grow with `K`.
+
+```{r passages}
+passages <- simulate_serial_passages(
+    params = params,
+    chromosome = "1",
+    allele = "A",
+    hotspot_pos = 60,
+    N = 200,
+    N_sub = 30,
+    K = 6,
+    passages_to_keep = c(1, 3, 6),
+    n_replicates = 5
+)
+head(passages)
+```
+
+```{r plot-passages}
+plot_serial_passages(passages)
+```
+
+`summarise_clone()` can also be used directly on any cells-by-bins matrix,
+for example one allele of a simulated chromosome:
+
+```{r summarise}
+chr1 <- sim$cna_data[sim$cna_data$chr == "1", ]
+cn_matrix <- with(chr1, tapply(A, list(cell_id, start), sum))
+summarise_clone(cn_matrix, hotspot_col = 100)
+```
+
+# Session information
+
+```{r session-info}
+sessionInfo()
+```

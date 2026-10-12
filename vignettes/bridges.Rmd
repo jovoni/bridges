@@ -1,192 +1,197 @@
 ---
-title: "Getting Started with bridges"
-output: rmarkdown::html_vignette
+title: "Introduction to bridges"
+author:
+- name: Giovanni Santacatterina
+date: "`r BiocStyle::doc_date()`"
+package: "`r BiocStyle::pkg_ver('bridges')`"
+abstract: >
+  bridges simulates single-cell copy-number evolution under
+  breakage-fusion-bridge (BFB) cycles, infers phylogenies from single-cell
+  copy-number profiles, detects BFB signal on the inferred tree and on
+  individual cells, and plots the results as annotated heatmaps. This
+  vignette walks through the whole workflow on a small simulated data set.
+output:
+  BiocStyle::html_document:
+    toc_float: true
 vignette: >
-  %\VignetteIndexEntry{Getting Started with bridges}
+  %\VignetteIndexEntry{Introduction to bridges}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment  = "#>",
-  fig.align = "center",
-  fig.width  = 12,
-  fig.height = 8,
-  out.width  = "100%",
-  dpi        = 150,
-  warning    = FALSE,
-  message    = FALSE
+  comment = "#>",
+  fig.width = 10,
+  fig.height = 6,
+  out.width = "100%",
+  message = FALSE
 )
 ```
 
-## Overview
+# Introduction
 
-`bridges` is an R package for inferring phylogenetic trees from single-cell copy number alteration (CNA) data, with explicit support for Breakage-Fusion-Bridge (BFB) mutational processes common in cancer. It combines:
+Breakage-fusion-bridge (BFB) cycles start when a chromosome loses a
+telomere. After replication the two sister chromatids fuse at their broken
+ends; the resulting dicentric chromosome is torn apart at mitosis, leaving
+each daughter with a new broken end, and the cycle repeats. Each cycle
+creates an inverted duplication, so repeated cycles produce a typical
+"fold-back" amplification pattern on one allele.
 
-- A **Gillespie simulator** (`bridge_sim`) for generating synthetic CNA data with configurable BFB, amplification, deletion, and whole-genome duplication events.
-- An **inference pipeline** (`fit`) that computes allele-specific distance matrices and builds a neighbor-joining phylogenetic tree, penalizing BFB-like non-contiguous CN changes.
-- Two complementary **BFB detection** methods and **visualization tools**.
+`r Biocpkg("bridges")` provides:
 
-It depends on **`bfbtools`** (a separate package) for the core linear-time BFB count-vector algorithms -- kept separate because `bfbtools` is GPL-3 licensed (a derivative of GPL-3 reference code), while `bridges` itself is MIT.
+- **Simulation**: `bridge_sim()`, a Gillespie birth-death simulator of
+  diploid cells undergoing BFB cycles, focal amplifications and deletions,
+  and whole-genome duplication, optionally under selection.
+  `simulate_serial_passages()` repeats growth and bottlenecks, as in cell
+  culture.
+- **Phylogenetic inference**: `fit()` builds a tree from allele-specific
+  copy-number profiles with a distance that accounts for BFB.
+- **BFB detection**, two complementary approaches:
+  `detect_bfb_branches()` tests the fitted tree for BFB-like branches;
+  `bfb_detect_batch()` tests each cell's profile directly, with no tree,
+  using the exact BFB combinatorics of the `bfbtools` package.
+- **Visualisation**: `plot_heatmap()`, `plot_chr_all_heatmap()`,
+  `plot_bfb_signature()` and `plot_serial_passages()`.
 
-**BFB in brief.** BFB cycles begin when a chromosome loses its telomere protection. During replication the two sister chromatids fuse at their broken ends, forming a dicentric chromosome that is pulled to both poles during mitosis, causing a new break. Repeated cycles amplify the genomic region near the original break, producing a characteristic "fold-back" copy number signature at one allele.
+The other vignettes go into detail:
 
----
+- `vignette("simulation", package = "bridges")`: the simulator and serial
+  passages.
+- `vignette("bfb-detection", package = "bridges")`: phylogenetic inference
+  and both BFB detection methods.
 
-## Input data format
+# Installation
 
-All main functions expect a data frame with one row per cell-chromosome-bin combination:
+Install the package from Bioconductor:
 
-| Column    | Type      | Description                              |
-|-----------|-----------|-------------------------------------------|
-| `cell_id` | character | Unique cell identifier                   |
-| `chr`     | character | Chromosome name (e.g. `"8"`, `"X"`)      |
-| `start`   | integer   | Bin start position (bp)                  |
-| `end`     | integer   | Bin end position (bp)                    |
-| `CN`      | integer   | Total copy number (`A + B`)              |
-| `A`       | integer   | Copy number of allele A (haploid)        |
-| `B`       | integer   | Copy number of allele B (haploid)        |
+```{r install-bioc, eval = FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager")
+}
+BiocManager::install("bridges")
+```
 
----
+The development version, and its `bfbtools` dependency, can be installed
+from GitHub:
 
-## Step 1 — Simulate copy number evolution
+```{r install-github, eval = FALSE}
+BiocManager::install(c("jovoni/bfbtools", "jovoni/bridges"))
+```
 
-`bridge_sim` runs a continuous-time Gillespie simulation. Key parameters:
+```{r load}
+library(bridges)
+```
 
-- `chromosomes` — which chromosomes to model.
-- `bfb_allele` — which chromosome:allele undergoes BFB (e.g. `"8:A"`).
-- `max_cells` — stop when this many cells are alive (evolutionary depth).
-- `lambda` — mean number of genomic events per cell division.
-- `bfb_prob`, `amp_rate`, `del_rate` — relative weights of each event type (normalised to sum to one).
+# Input data
+
+All analysis and plotting functions take a long table with one row per
+cell and genomic bin:
+
+| Column    | Description                                         |
+|-----------|-----------------------------------------------------|
+| `cell_id` | Cell identifier                                     |
+| `chr`     | Chromosome, without `"chr"` prefix (`"1"`, `"X"`)   |
+| `start`   | Bin start (bp)                                      |
+| `end`     | Bin end (bp)                                        |
+| `A`, `B`  | Copy number of each allele (1 in a normal cell)     |
+| `CN`      | Total copy number, `A + B`                          |
+
+Bins must be the same for all cells. Simulated data from `bridge_sim()` is
+already in this format.
+
+# A complete workflow
+
+## Simulate
+
+We simulate a population in which allele A of chromosome 8 undergoes BFB
+cycles. Chromosomes 1 and 2 only acquire focal gains and losses. Cells
+with extra copies of bin 100 of chromosome 8 (the `hotspot`) divide faster.
 
 ```{r simulate}
-library(bridges)
-library(ggplot2)
-library(dplyr)
-
 set.seed(42)
 sim <- bridge_sim(
-  chromosomes = c(1:8),
-  bfb_allele  = "8:A",
-  max_cells   = 5000,
-  lambda      = 2,
-  subsample   = 500,
-  bfb_prob    = 0.85,
-  amp_rate    = 0.2,
-  del_rate    = 0.1,
-  first_round_of_bfb = TRUE,
-  hotspot = list(chr = "8:A", pos = 100)
+    chromosomes = c("1", "2", "8"),
+    bfb_allele = "8:A",
+    hotspot = list(chr = "8:A", pos = 100),
+    positive_selection_rate = 1,
+    max_cells = 1000,
+    subsample = 150,
+    lambda = 1,
+    bfb_prob = 0.6,
+    amp_rate = 0.2,
+    del_rate = 0.2
 )
 
-# sim$cna_data is a long-format tibble ready for fit() and plotting
 head(sim$cna_data)
+sim$tree
 ```
 
-The return value also includes `sim$tree` (ground-truth phylogeny), `sim$elapsed_time` (simulation clock), and `sim$n_alive`.
+`sim$cna_data` holds the copy-number profiles of the 150 sampled cells and
+`sim$tree` their true lineage tree.
 
-See `vignette("simulator")` for the full simulation deep-dive (BFB mechanics, WGD, selection), and `vignette("passages-and-clones", package = "bridges")` for serial-passage and clonal-summary workflows built on top of it.
-
----
-
-## Step 2 — Fit the phylogeny
-
-`fit` (in `bridges`) preprocesses the CNA data, computes per-chromosome Greedy (G) and BFB/contiguity (B) distance matrices, merges them, and builds a neighbor-joining tree.
+## Infer the phylogeny
 
 ```{r fit}
-res <- fit(
-  data    = sim$cna_data,
-  alleles = c("A", "B")
-)
+res <- fit(sim$cna_data, chromosomes = c("1", "2", "8"), verbose = FALSE)
+res$tree
 ```
 
-The result contains `res$tree`, `res$D` (final distance matrix), and `res$reconstructions` (ancestral CN states used for branch-based BFB detection). See `vignette("inference")` for the full pipeline deep-dive.
+The normalised Robinson-Foulds distance compares the inferred tree with the
+true one (0 means identical topologies):
 
----
-
-## Step 3 — Compare inferred vs true tree
-
-Robinson-Foulds distance measures topological dissimilarity between two trees. A value of 0 means identical topology; 1 means maximally different.
-
-```{r compare-trees}
-library(phangorn)
-
-rf <- phangorn::RF.dist(sim$tree, res$tree, normalize = TRUE)
-cat("Normalized RF distance:", round(rf, 3), "\n")
+```{r rf}
+phangorn::RF.dist(sim$tree, res$tree, normalize = TRUE)
 ```
 
----
+## Plot profiles along the tree
 
-## Step 4 — Visualize CN profiles with the phylogeny
+`plot_heatmap()` draws one heatmap per copy-number column, with the tree on
+the left. When given the fit, it also marks the internal nodes whose
+children are best explained by a BFB event on the chosen chromosome and
+allele.
 
-`plot_heatmap` combines a ComplexHeatmap of allele-specific CN profiles with the phylogenetic tree.
-
-```{r plot-true-tree, fig.height=7}
-# Ground-truth tree
+```{r heatmap, fig.height = 7}
 plot_heatmap(
-  sim$cna_data,
-  tree                = sim$tree,
-  chromosomes_to_plot = as.character(1:8),
-  to_plot             = c("CN", "A", "B"),
-  ladderize           = TRUE,
-  branch_length       = 1,
-  use_raster          = FALSE
+    sim$cna_data,
+    fit = res, chr = "8", allele = "A",
+    chromosomes_to_plot = c("1", "2", "8"),
+    to_plot = c("A", "B"),
+    branch_length = 1,
+    use_raster = FALSE
 )
 ```
 
-```{r plot-inferred-tree, fig.height=7}
-# Inferred tree
-plot_heatmap(
-  sim$cna_data,
-  tree                = res$tree,
-  chromosomes_to_plot = as.character(1:8),
-  to_plot             = c("CN", "A", "B"),
-  ladderize           = TRUE,
-  branch_length       = 1,
-  use_raster          = FALSE
-)
+## Detect BFB on the tree
+
+`detect_bfb_branches()` tests, for every chromosome and allele, whether more
+internal nodes look BFB-like than expected by chance:
+
+```{r detect-branches}
+detect_bfb_branches(res)
 ```
 
----
+Allele A of chromosome 8 should stand out with a small adjusted p-value.
 
-## Step 5 — Detect BFB signatures (two complementary methods)
+## Detect BFB in individual cells
 
-`bridges` provides two independent ways to look for BFB signal, answering different questions:
+`bfb_detect_batch()` needs no tree. For each cell, chromosome arm and
+allele, it asks whether the copy-number profile can be produced by some
+series of BFB cycles. Supplying `genome` makes it read each chromosome arm
+from telomere to centromere (see the `bfb-detection` vignette).
 
-1. **`detect_bfb_branches()`** works on the *fitted tree* from Step 2 — for each branch, it asks "does the copy-number transition along this branch look BFB-like (non-contiguous), rather than a simple contiguous edit?" via a binomial test across all branches per chromosome/allele.
-2. **`bfb_detect_batch()`** works directly on the *raw per-cell profiles* in `sim$cna_data` — no tree or fit required — and asks "does this cell's copy-number profile admit a BFB schedule at all?", using the exact combinatorial algorithms in `bfbtools`. See `vignette("batch-detection")` for the full treatment, including how to handle chromosome arms separately.
+```{r detect-cells}
+cells <- bfb_detect_batch(sim$cna_data, alleles = c("A", "B"), genome = "hg19")
+head(cells)
 
-```{r detect-bfb}
-bfb_df <- detect_bfb_branches(res, threshold = 0.005)
-head(bfb_df)
+# Fraction of informative profiles compatible with BFB
+cells <- cells[!is.na(cells$admits_bfb), ]
+aggregate(admits_bfb ~ chr + arm + allele, data = cells, FUN = mean)
 ```
 
-```{r plot-bfb-bar, fig.height=4}
-bfb_df %>%
-  mutate(chr = factor(chr, levels = c(1:22, "X", "Y"))) %>%
-  ggplot(aes(x = chr, y = mean, fill = allele)) +
-  geom_col(position = "dodge") +
-  geom_hline(yintercept = 0.1, linetype = "dashed", colour = "grey40") +
-  scale_fill_manual(values = c(A = "#E64B35", B = "#4DBBD5")) +
-  theme_bw() +
-  lims(y = c(0, 1)) +
-  labs(x = "Chromosome", y = "BFB-positive branch fraction", fill = "Allele",
-       title = "BFB signal per chromosome")
+# Session information
+
+```{r session-info}
+sessionInfo()
 ```
-
-Chromosome 8, allele A should show the strongest signal because that is where BFB events were seeded. Use `plot_bfb_signature` for a segment-level view:
-
-```{r plot-bfb-sig, fig.height=4}
-plot_bfb_signature(res, chr_of_interest = "8", allele_of_interest = "A")
-```
-
----
-
-## Next steps
-
-- **Simulator deep-dive** (BFB mechanics, selection, whole-genome duplication): `vignette("simulator")`.
-- **Serial passages and clonal summaries**: `vignette("passages-and-clones")`.
-- **Inference deep-dive** (distance metrics, jitter correction, tree-based BFB detection internals, advanced visualization): `vignette("inference")`.
-- **Batch/profile-based BFB detection** (no tree required, arm-aware): `vignette("batch-detection")`.
-- **The core BFB algorithms on their own** (plain count-vectors, no simulation or fitting involved): `vignette("bfbtools-algorithms", package = "bfbtools")`.

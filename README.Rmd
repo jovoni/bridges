@@ -69,9 +69,8 @@ detect_bfb_branches(res, threshold = 0.005)
 ```
 
 See `vignette("bridges")` for the full end-to-end walkthrough, and
-`vignette("simulator")` / `vignette("inference")` /
-`vignette("batch-detection")` / `vignette("passages-and-clones")` for
-deep dives into each part of the pipeline.
+`vignette("simulation")` and `vignette("bfb-detection")` for details on
+the simulator and on inference and BFB detection.
 
 ## Two independent BFB detection methods
 
@@ -84,7 +83,7 @@ deep dives into each part of the pipeline.
   (`split_chr_arms()`) for real genomic data spanning both arms of a
   chromosome.
 
-Neither supersedes the other -- see `vignette("batch-detection")` for
+Neither supersedes the other -- see `vignette("bfb-detection")` for
 when to use which.
 
 ## Part of a two-package family

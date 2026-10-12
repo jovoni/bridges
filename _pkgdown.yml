@@ -20,12 +20,10 @@ articles:
 - title: Get started
   contents:
   - bridges
-- title: Deep dives
+- title: In depth
   contents:
-  - simulator
-  - inference
-  - batch-detection
-  - passages-and-clones
+  - simulation
+  - bfb-detection
 
 reference:
 - title: Simulation
@@ -36,8 +34,7 @@ reference:
   - fit
 - title: BFB detection
   desc: >
-    Two independent methods -- see the "batch-detection" article for
-    why both exist.
+    Two complementary methods -- see the "bfb-detection" article.
   contents:
   - detect_bfb_branches
   - bfb_detect_batch
