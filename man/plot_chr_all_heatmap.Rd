@@ -21,14 +21,15 @@ bin positions, and a value column specified by \code{allele}.}
 
 \item{chr}{Chromosome to plot (e.g., \code{"1"}, \code{"X"}).}
 
-\item{allele}{Column name in \code{cna_data} containing the copy number values to be plotted (e.g., \code{"CN"}, \code{"cn_a"}).}
+\item{allele}{Column name in \code{cna_data} containing the copy number values to be plotted: \code{"CN"}, \code{"A"} or \code{"B"}.}
 
 \item{order_heatmap}{Logical, whether to order the heatmap rows by the number of bins matching a reference value
 (2 for total CN, 1 for alleles).}
 
 \item{add_avg_CN_profile}{Logical, whether to add a barplot annotation showing the average CN profile across cells.}
 
-\item{add_gain_loss_profile}{Logical, whether to add gain/loss annotation bars (proportion of cells with gain/loss).}
+\item{add_gain_loss_profile}{Logical, whether to add gain/loss annotation bars (proportion of cells
+above/below the baseline: 2 for \code{"CN"}, 1 for a single allele).}
 
 \item{use_raster}{Logical, whether to rasterize the heatmap for faster rendering in large datasets.}
 

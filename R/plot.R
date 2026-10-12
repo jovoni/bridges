@@ -216,14 +216,14 @@ prepare_heatmap_matrix <- function(data, chromosomes_to_plot, feature_name, orde
       bin_idx = dplyr::row_number(),
       chr_bin = paste(.data$chr, .data$bin_idx, sep = "_")
     ) %>%
-    dplyr::select(.data$cell_id, .data$chr_bin, .data$chr, !!rlang::sym(feature_name)) %>%
-    dplyr::ungroup()
+    dplyr::ungroup() %>%
+    dplyr::select("cell_id", "chr_bin", "chr", dplyr::all_of(feature_name))
 
   # Create matrix
   mat_data <- processed_data %>%
-    dplyr::select(.data$cell_id, .data$chr_bin, !!rlang::sym(feature_name)) %>%
+    dplyr::select("cell_id", "chr_bin", dplyr::all_of(feature_name)) %>%
     tidyr::pivot_wider(
-      names_from = .data$chr_bin,
+      names_from = "chr_bin",
       values_from = !!rlang::sym(feature_name),
       values_fill = NA
     ) %>%

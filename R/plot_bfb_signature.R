@@ -32,14 +32,23 @@
 plot_bfb_signature = function(res, chr_of_interest, allele_of_interest) {
   rec = res$reconstructions[[chr_of_interest]][[allele_of_interest]]
 
+  if (is.null(rec)) {
+    stop("No reconstruction for chr '", chr_of_interest, "', allele '",
+         allele_of_interest, "' in `res`.", call. = FALSE)
+  }
+
   deltas = rec$deltas %>% unlist()
   bfb_nodes = names(deltas[deltas > 0])
-  bfb_signature = lapply(1:length(bfb_nodes), function(j) {
+  if (length(bfb_nodes) == 0) {
+    stop("No BFB-like nodes (delta > 0) for chr '", chr_of_interest,
+         "', allele '", allele_of_interest, "'; nothing to plot.", call. = FALSE)
+  }
+  bfb_signature = lapply(seq_along(bfb_nodes), function(j) {
     rec$merged_profiles[[bfb_nodes[j]]]$left - rec$merged_profiles[[bfb_nodes[j]]]$right
   }) %>% do.call(rbind, .)
 
 
-  bfb_signature_df = lapply(1:ncol(bfb_signature), function(segment_idx) {
+  bfb_signature_df = lapply(seq_len(ncol(bfb_signature)), function(segment_idx) {
     # Dataframe of Signature
     start_end = unlist(strsplit(colnames(bfb_signature)[segment_idx], ":"))
     start = as.numeric(start_end[1])
@@ -54,7 +63,7 @@ plot_bfb_signature = function(res, chr_of_interest, allele_of_interest) {
     dplyr::mutate(bfb_value = as.numeric(.data$bfb_value != 0)) %>%
     dplyr::group_by(.data$segment) %>%
     dplyr::mutate(bfb_value = sum(.data$bfb_value)) %>%
-    dplyr::select(.data$bfb_value, .data$start, .data$end, .data$width) %>%
+    dplyr::select("segment", "bfb_value", "start", "end", "width") %>%
     dplyr::distinct() %>%
     dplyr::mutate(segment_center = .data$start + .data$width / 2) %>%
     ggplot2::ggplot(ggplot2::aes(x = .data$segment_center, y = .data$bfb_value, fill = .data$bfb_value, width = .data$width)) +
