@@ -79,9 +79,11 @@ res <- fit(cna_data, chromosomes = c("1", "2"), verbose = FALSE)
 names(res)
 ```
 
-`res$tree` is the inferred tree, `res$D` the final distance matrix,
-`res$greedy_Ds` and `res$avg_Ds` the G and B matrices per chromosome and
-allele, and `res$reconstructions` the ancestral reconstructions used below.
+`res$tree` is the inferred tree, `res$D` the final distance matrix and
+`res$reconstructions` the ancestral reconstructions used below. With
+`keep_matrices = TRUE`, `res$greedy_Ds` and `res$avg_Ds` also hold the G and
+B matrices for every chromosome and allele; they are not kept by default
+because they take a lot of memory for large data sets.
 
 ## Distances
 

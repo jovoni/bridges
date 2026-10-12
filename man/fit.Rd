@@ -14,6 +14,7 @@ fit(
   fillna = 0,
   g_dist_func = "greedy_fast",
   b_dist_func = "bfb_fast",
+  keep_matrices = FALSE,
   verbose = TRUE,
   ...
 )
@@ -53,6 +54,12 @@ matrix (default: \code{ape::nj}).}
 or \code{"B_contig"}. \strong{Set to \code{NULL} to disable the BFB stage}
 and run a greedy-only analysis.}
 
+\item{keep_matrices}{Logical; also return the per-chromosome, per-allele
+greedy and BFB distance matrices (\code{greedy_Ds}, \code{avg_Ds}).
+These take \eqn{2 \times} (chromosomes \eqn{\times} alleles) matrices of
+size cells \eqn{\times} cells, so they are not kept by default.
+Default: \code{FALSE}.}
+
 \item{verbose}{Logical; print progress messages. Default: \code{TRUE}.}
 
 \item{...}{Currently unused.}
@@ -64,7 +71,9 @@ A list with:
 \item \code{all_input_Xs} — Processed input data
 \item \code{D} — Final distance matrix
 \item \code{greedy_Ds} — Per-chromosome/allele greedy distance matrices
-\item \code{avg_Ds} — Per-chromosome/allele balanced (G vs B) distance matrices;
+(\code{NULL} unless \code{keep_matrices = TRUE})
+\item \code{avg_Ds} — Per-chromosome/allele BFB distance matrices
+(\code{NULL} unless \code{keep_matrices = TRUE});
 \strong{if \code{b_dist_func = NULL}, then \code{avg_Ds} equals \code{greedy_Ds}}
 \item \code{g_dist_func} — Name of the G distance function used
 \item \code{b_dist_func} — Name of the B distance function used (or \code{NULL})
@@ -93,6 +102,12 @@ In the \code{NULL} case, \code{bfb_penalty} is ignored.
 \item Merging to minimal distances and optional allele summation
 \item Tree construction via \code{tree_func}
 }
+
+With the default distance functions, all pairwise distances for a
+chromosome and allele are computed in a single C++ call, once per pair of
+distinct copy-number profiles, and only their sum over chromosomes and
+alleles is kept. The pure-R alternatives are computed pair by pair and
+are much slower; they are kept as references.
 
 Using \code{b_dist_func = NULL} is useful for ablation studies, speed-ups, or when
 BFB modelling is not desired; results reduce to the greedy metric.

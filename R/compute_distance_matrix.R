@@ -138,6 +138,45 @@ fast_distance_matrices = function(input_X, use_bfb = TRUE, penalty = 0, keep_par
   res
 }
 
+# Total distance matrix for fit()'s default distances ("greedy_fast" and
+# "bfb_fast" or NULL): sum over chromosomes and alleles of pmin(G, B),
+# accumulated one chromosome/allele at a time so that only the total is
+# kept in memory. Per-chromosome G and B matrices are returned only when
+# keep_matrices = TRUE, in the same layout as compute_greedy_distances() /
+# compute_avg_distances(). Rows are aligned by cell name across chromosomes.
+compute_fast_distances = function(all_input_Xs, chromosomes, alleles,
+                                  bfb_penalty = 0, use_bfb = TRUE,
+                                  keep_matrices = FALSE) {
+  alleles = alleles[alleles %in% names(all_input_Xs[[1]])]
+  chromosomes = chromosomes[chromosomes %in% names(all_input_Xs)]
+
+  cells = rownames(all_input_Xs[[chromosomes[1]]][[alleles[1]]])
+  D = matrix(0, length(cells), length(cells), dimnames = list(cells, cells))
+  greedy_Ds = avg_Ds = NULL
+  n_unique = list()
+
+  for (chromosome in chromosomes) {
+    for (allele in alleles) {
+      X = all_input_Xs[[chromosome]][[allele]]
+      if (!setequal(rownames(X), cells) || nrow(X) != length(cells)) {
+        stop("Chromosome ", chromosome, ", allele ", allele,
+             " does not contain the same cells as the other chromosomes.", call. = FALSE)
+      }
+      X = X[cells, , drop = FALSE]
+      m = fast_distance_matrices(X, use_bfb = use_bfb, penalty = bfb_penalty,
+                                 keep_parts = keep_matrices)
+      D = D + m$min
+      n_unique[[chromosome]][[allele]] = m$n_unique
+      if (keep_matrices) {
+        greedy_Ds[[chromosome]][[allele]] = m$greedy
+        avg_Ds[[chromosome]][[allele]] = if (use_bfb) m$bfb else m$greedy
+      }
+    }
+  }
+
+  list(D = D, greedy_Ds = greedy_Ds, avg_Ds = avg_Ds, n_unique = n_unique)
+}
+
 compute_distance_matrix = function(input_X, dist_func, ...) {
   sequences = lapply(rownames(input_X), function(r) {
     input_X[r, ]

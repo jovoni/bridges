@@ -18,6 +18,14 @@
 
 ## New features
 
+* `fit()` is much faster with the default distances (`"greedy_fast"`,
+  `"bfb_fast"`): all pairwise distances of a chromosome and allele are
+  computed in one C++ call, once per pair of distinct copy-number profiles.
+  On 1,000 cells x 22 chromosomes the distance step drops from about 6
+  minutes to about 1 second; results are unchanged.
+* `fit()` gains `keep_matrices` (default `FALSE`). The per-chromosome
+  `greedy_Ds` and `avg_Ds` matrices are now only returned when it is `TRUE`.
+
 * New bundled dataset `centromeres`: real centromere positions, arm
   boundaries, and chromosome lengths for chromosomes 1-22, X, Y under both
   hg19 (GRCh37) and hg38 (GRCh38), sourced from UCSC Genome Browser tracks.
