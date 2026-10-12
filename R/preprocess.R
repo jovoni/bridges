@@ -34,9 +34,12 @@ tibble_to_matrix <- function(data_chr, value_column = "CN") {
     stop("value_column must be one of 'A', 'B', or 'CN'")
   }
 
-  # Use data.table for much faster operations
-  if (!inherits(data_chr, "data.table")) {
-    data_chr <- data.table::as.data.table(data_chr)
+  # Work on a copy: the := assignments below would otherwise add columns to a
+  # caller's data.table by reference.
+  data_chr <- if (inherits(data_chr, "data.table")) {
+    data.table::copy(data_chr)
+  } else {
+    data.table::as.data.table(data_chr)
   }
 
   # Get unique values more efficiently

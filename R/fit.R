@@ -24,12 +24,15 @@
 #' @param tree_func Function used to build the tree from the final distance
 #'   matrix (default: \code{ape::nj}).
 #' @param fillna Value to fill \code{NA} entries in pre-processing (default: \code{0}).
-#' @param g_dist_func Name of the greedy (G) distance function. Must be one of
-#'   \code{names(G_DISTS)} (default: \code{"greedy_fast"}).
-#' @param b_dist_func Name of the BFB (B) distance function. Must be one of
-#'   \code{names(B_DISTS)}. \strong{Set to \code{NULL} to disable the BFB stage}
-#'   and run a greedy-only analysis (default: \code{"bfb_fast"}).
-#' @param ... Additional arguments passed to downstream helpers.
+#' @param g_dist_func Name of the greedy (G) distance function: one of
+#'   \code{"greedy_fast"} (C++, default), \code{"greedy"} or \code{"G"}
+#'   (pure-R reference implementations).
+#' @param b_dist_func Name of the BFB (B) distance function: one of
+#'   \code{"bfb_fast"} (C++, default), \code{"bfb"}, \code{"avg"}, \code{"A"}
+#'   or \code{"B_contig"}. \strong{Set to \code{NULL} to disable the BFB stage}
+#'   and run a greedy-only analysis.
+#' @param verbose Logical; print progress messages. Default: \code{TRUE}.
+#' @param ... Currently unused.
 #'
 #' @return A list with:
 #' \itemize{
@@ -61,7 +64,6 @@
 #'   \item Tree construction via \code{tree_func}
 #' }
 #'
-#' Available functions can be inspected with \code{names(G_DISTS)} and \code{names(B_DISTS)}.
 #' Using \code{b_dist_func = NULL} is useful for ablation studies, speed-ups, or when
 #' BFB modelling is not desired; results reduce to the greedy metric.
 #'
@@ -92,33 +94,42 @@ fit = function(data,
                fillna = 0,
                g_dist_func = "greedy_fast",
                b_dist_func = "bfb_fast",
+               verbose = TRUE,
                ...) {
+  say = function(...) if (isTRUE(verbose)) message(...)
+
+  # Fail early on misspelled distance names
+  get_g_dist(g_dist_func)
+  if (!is.null(b_dist_func)) get_b_dist(b_dist_func)
 
   data = dplyr::bind_rows(data, create_diploid_data(data))
-  message("Pre-processing input...")
+  say("Pre-processing input...")
   all_input_Xs = process_input_data(data, chromosomes, alleles, k_jitter_fix, fillna)
 
-  message(paste("Computing G matrices using", g_dist_func, "..."))
+  say("Computing G matrices using ", g_dist_func, "...")
   greedy_Ds = compute_greedy_distances(all_input_Xs, chromosomes, alleles, g_dist_func)
 
   if (is.null(b_dist_func)) {
     avg_Ds = greedy_Ds
   } else {
-    message(paste("Computing B matrices using", b_dist_func, "..."))
+    say("Computing B matrices using ", b_dist_func, "...")
     avg_Ds = compute_avg_distances(all_input_Xs, chromosomes, alleles, bfb_penalty, b_dist_func)
   }
 
-  message("Computing final D matrix...")
+  say("Computing final D matrix...")
   min_Ds = find_minimal_distances(greedy_Ds, avg_Ds)
   min_Ds = sum_across_alleles(min_Ds, alleles)
   D = Reduce("+", min_Ds)
   if (is.list(D)) D = D[[1]]
+  # The diagonal is Inf by construction (see compute_distance_matrix());
+  # only off-diagonal infinities indicate a problem.
+  diag(D) = 0
   if (any(is.infinite(D))) {
     warning("Infinite distances detected; replacing with max finite distance. Check input data for pathological cell pairs.")
     D[is.infinite(D)] = max(D[is.finite(D)], na.rm = TRUE)
   }
 
-  message("Building tree...")
+  say("Building tree...")
   tree = tree_func(D)
   tree = ape::root(tree, outgroup = "diploid", resolve.root = TRUE)
   tree = ape::drop.tip(tree, "diploid")
@@ -131,10 +142,10 @@ fit = function(data,
     avg_Ds = avg_Ds,
     g_dist_func = g_dist_func,
     b_dist_func = b_dist_func,
-    reconstructions = list()  # new field
+    reconstructions = list()
   )
 
-  message("Reconstruct events...")
+  say("Reconstructing events...")
   recon = compute_reconstructions(fit = res, chromosomes = chromosomes, alleles = alleles)
   res$reconstructions = recon$reconstructions
   res$tree$edge.length = recon$edge.length

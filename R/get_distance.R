@@ -14,6 +14,11 @@ get_b_dist = function(b_dist_func) {
     "B_contig" = find_greedy_distance_B_contig,
     "bfb_fast" = greedy_bfb_distance_cpp
   )
+  if (!is.character(b_dist_func) || length(b_dist_func) != 1 ||
+      !b_dist_func %in% names(B_DISTS)) {
+    stop("Unknown b_dist_func '", paste(b_dist_func, collapse = ", "),
+         "'. Available: ", paste(names(B_DISTS), collapse = ", "), call. = FALSE)
+  }
   B_DISTS[[b_dist_func]]
 }
 
@@ -23,5 +28,10 @@ get_g_dist = function(g_dist_func) {
     "greedy" = find_greedy_distance_with_steps,
     "greedy_fast" = greedy_distance_cpp
   )
+  if (!is.character(g_dist_func) || length(g_dist_func) != 1 ||
+      !g_dist_func %in% names(G_DISTS)) {
+    stop("Unknown g_dist_func '", paste(g_dist_func, collapse = ", "),
+         "'. Available: ", paste(names(G_DISTS), collapse = ", "), call. = FALSE)
+  }
   G_DISTS[[g_dist_func]]
 }

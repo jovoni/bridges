@@ -14,6 +14,7 @@ fit(
   fillna = 0,
   g_dist_func = "greedy_fast",
   b_dist_func = "bfb_fast",
+  verbose = TRUE,
   ...
 )
 }
@@ -43,14 +44,18 @@ matrix (default: \code{ape::nj}).}
 
 \item{fillna}{Value to fill \code{NA} entries in pre-processing (default: \code{0}).}
 
-\item{g_dist_func}{Name of the greedy (G) distance function. Must be one of
-\code{names(G_DISTS)} (default: \code{"greedy_fast"}).}
+\item{g_dist_func}{Name of the greedy (G) distance function: one of
+\code{"greedy_fast"} (C++, default), \code{"greedy"} or \code{"G"}
+(pure-R reference implementations).}
 
-\item{b_dist_func}{Name of the BFB (B) distance function. Must be one of
-\code{names(B_DISTS)}. \strong{Set to \code{NULL} to disable the BFB stage}
-and run a greedy-only analysis (default: \code{"bfb_fast"}).}
+\item{b_dist_func}{Name of the BFB (B) distance function: one of
+\code{"bfb_fast"} (C++, default), \code{"bfb"}, \code{"avg"}, \code{"A"}
+or \code{"B_contig"}. \strong{Set to \code{NULL} to disable the BFB stage}
+and run a greedy-only analysis.}
 
-\item{...}{Additional arguments passed to downstream helpers.}
+\item{verbose}{Logical; print progress messages. Default: \code{TRUE}.}
+
+\item{...}{Currently unused.}
 }
 \value{
 A list with:
@@ -89,7 +94,6 @@ In the \code{NULL} case, \code{bfb_penalty} is ignored.
 \item Tree construction via \code{tree_func}
 }
 
-Available functions can be inspected with \code{names(G_DISTS)} and \code{names(B_DISTS)}.
 Using \code{b_dist_func = NULL} is useful for ablation studies, speed-ups, or when
 BFB modelling is not desired; results reduce to the greedy metric.
 }
