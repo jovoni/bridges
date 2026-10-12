@@ -23,7 +23,11 @@ plot_heatmap(
   allele_for_coloring = NULL,
   tree_colors = c("black", "goldenrod"),
   node_size = 1,
-  tip_size = 0
+  tip_size = 0,
+  fit = NULL,
+  chr = NULL,
+  allele = NULL,
+  bfb_node_color = "goldenrod"
 )
 }
 \arguments{
@@ -78,10 +82,27 @@ when reconstruction data is provided. Optional parameter.}
 \item{tree_colors}{Vector of colors for tree branch coloring. Default:
 c("black", "goldenrod"). First color for one state, second for another.}
 
-\item{node_size}{Size of internal nodes in the tree. Default: 1.}
+\item{node_size}{Size of internal nodes in the tree. Default: 1. Also
+controls the size of the likely-BFB node markers added when \code{fit} is
+supplied.}
 
 \item{tip_size}{Size of tip nodes in the tree visualization. Default: 0
 (tips not displayed).}
+
+\item{fit}{A \code{bridges} fit object (as returned by \code{\link[=fit]{fit()}}). When supplied,
+the tree defaults to \code{fit$tree} and the ancestral-state reconstruction for
+\code{chr}/\code{allele} is taken from \code{fit$reconstructions} (recomputed with
+\code{reconstruct_tree()} if absent). Enables likely-BFB node annotation on the
+tree. Optional parameter.}
+
+\item{chr}{Chromosome identifier selecting which reconstruction signal to
+annotate. Required when \code{fit} is supplied.}
+
+\item{allele}{Allele (\code{"A"}, \code{"B"} or \code{"CN"}) selecting which reconstruction
+signal to annotate. Required when \code{fit} is supplied.}
+
+\item{bfb_node_color}{Colour of the points drawn on internal nodes flagged
+as likely BFB (\code{delta > 0}) when \code{fit} is supplied. Default: "goldenrod".}
 }
 \value{
 A ComplexHeatmap object that can be displayed or further customized.
@@ -125,6 +146,10 @@ plot_heatmap(sim$cna_data, tree = res$tree,
              reconstruction         = res$reconstructions,
              chr_for_coloring       = "8",
              allele_for_coloring    = "A")
+
+# Same, but pass the fit directly and also mark likely-BFB nodes
+plot_heatmap(sim$cna_data, fit = res, chr = "8", allele = "A",
+             to_plot = c("A", "B"))
 }
 
 }

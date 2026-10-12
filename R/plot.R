@@ -329,9 +329,22 @@ create_tree_annotation <- function(tree_ggplot, tree_width, n_cells) {
 #'   when reconstruction data is provided. Optional parameter.
 #' @param tree_colors Vector of colors for tree branch coloring. Default:
 #'   c("black", "goldenrod"). First color for one state, second for another.
-#' @param node_size Size of internal nodes in the tree. Default: 1.
+#' @param node_size Size of internal nodes in the tree. Default: 1. Also
+#'   controls the size of the likely-BFB node markers added when `fit` is
+#'   supplied.
 #' @param tip_size Size of tip nodes in the tree visualization. Default: 0
 #'   (tips not displayed).
+#' @param fit A `bridges` fit object (as returned by [fit()]). When supplied,
+#'   the tree defaults to `fit$tree` and the ancestral-state reconstruction for
+#'   `chr`/`allele` is taken from `fit$reconstructions` (recomputed with
+#'   `reconstruct_tree()` if absent). Enables likely-BFB node annotation on the
+#'   tree. Optional parameter.
+#' @param chr Chromosome identifier selecting which reconstruction signal to
+#'   annotate. Required when `fit` is supplied.
+#' @param allele Allele (`"A"`, `"B"` or `"CN"`) selecting which reconstruction
+#'   signal to annotate. Required when `fit` is supplied.
+#' @param bfb_node_color Colour of the points drawn on internal nodes flagged
+#'   as likely BFB (`delta > 0`) when `fit` is supplied. Default: "goldenrod".
 #'
 #' @return A ComplexHeatmap object that can be displayed or further customized.
 #'   The object contains the combined heatmap(s) and optional tree annotation.
@@ -368,6 +381,10 @@ create_tree_annotation <- function(tree_ggplot, tree_width, n_cells) {
 #'              reconstruction         = res$reconstructions,
 #'              chr_for_coloring       = "8",
 #'              allele_for_coloring    = "A")
+#'
+#' # Same, but pass the fit directly and also mark likely-BFB nodes
+#' plot_heatmap(sim$cna_data, fit = res, chr = "8", allele = "A",
+#'              to_plot = c("A", "B"))
 #' }
 #'
 #' @export
@@ -390,7 +407,33 @@ plot_heatmap <- function(data,
                          allele_for_coloring = NULL,
                          tree_colors = c("black", "goldenrod"),
                          node_size = 1,
-                         tip_size = 0) {
+                         tip_size = 0,
+                         # BFB node annotation from a fit object
+                         fit = NULL,
+                         chr = NULL,
+                         allele = NULL,
+                         bfb_node_color = "goldenrod") {
+
+  # If a fit is supplied, derive tree + reconstruction from it and turn on
+  # likely-BFB node annotation. Feeds the existing colored-tree path below.
+  annotate_bfb_nodes <- FALSE
+  if (!is.null(fit)) {
+    if (is.null(chr) || is.null(allele)) {
+      stop("When `fit` is supplied, both `chr` and `allele` must be given.")
+    }
+    if (is.null(tree)) tree <- fit$tree
+    recon_ca <- fit$reconstructions[[as.character(chr)]][[as.character(allele)]]
+    if (is.null(recon_ca) || !("deltas" %in% names(recon_ca))) {
+      recon_ca <- reconstruct_tree(fit, as.character(chr), as.character(allele))
+    }
+    reconstruction <- stats::setNames(
+      list(stats::setNames(list(recon_ca), as.character(allele))),
+      as.character(chr)
+    )
+    chr_for_coloring <- as.character(chr)
+    allele_for_coloring <- as.character(allele)
+    annotate_bfb_nodes <- TRUE
+  }
 
   # Validate inputs
   validate_heatmap_inputs(data, tree, chromosomes_to_plot, to_plot)
@@ -420,7 +463,9 @@ plot_heatmap <- function(data,
         distance_matrix = distance_matrix,
         colors = tree_colors,
         node_size = node_size,
-        tip_size = tip_size
+        tip_size = tip_size,
+        annotate_bfb_nodes = annotate_bfb_nodes,
+        bfb_node_color = bfb_node_color
       )
     } else {
       # Use regular tree processing
@@ -514,7 +559,9 @@ process_tree_with_coloring <- function(tree,
                                        reorder_tree = FALSE,
                                        distance_matrix = NULL,
                                        colors = c("black", "goldenrod"),
-                                       node_size = 3, tip_size = 2) {
+                                       node_size = 3, tip_size = 2,
+                                       annotate_bfb_nodes = FALSE,
+                                       bfb_node_color = "goldenrod") {
 
   # First apply basic tree processing
   if (!is.null(branch_length) && !is.null(tree$edge.length)) {
@@ -593,6 +640,22 @@ process_tree_with_coloring <- function(tree,
     ggplot2::theme(legend.position = "none") +
     ggplot2::coord_cartesian(expand = FALSE) +
     ggplot2::ylim(0.5, length(tree$tip.label) + 0.5)
+
+  # Mark internal nodes flagged as likely BFB (delta > 0). Filter the layout
+  # data directly (ggtree's aes(subset=) goes through aes_string and mangles the
+  # quoted level); `color` is a fixed argument and `inherit.aes = FALSE` keeps it
+  # off the edge colour scale.
+  if (annotate_bfb_nodes) {
+    bfb_layer_data <- p$data[!p$data$isTip & p$data$decision == "Likely BFB", , drop = FALSE]
+    if (nrow(bfb_layer_data) > 0) {
+      p <- p + ggplot2::geom_point(
+        data = bfb_layer_data,
+        ggplot2::aes(x = .data$x, y = .data$y),
+        size = node_size, color = bfb_node_color, alpha = 1,
+        inherit.aes = FALSE
+      )
+    }
+  }
 
   return(list(tree = tree, ggplot = p))
 }
