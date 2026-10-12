@@ -53,3 +53,6 @@ exceed it are treated as uninformative (NA results), the same
 bucket as length <= 1 or NA-containing vectors. Set to 1 to disable
 this filter and restore the raw (weaker) admits-BFB semantics.
 }
+\examples{
+bfb_detect_vectors(list(c(6, 3, 5), c(14, 7, 18, 16, 9, 12), c(1, 1)))
+}

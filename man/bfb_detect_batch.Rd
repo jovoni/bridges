@@ -18,9 +18,8 @@ bfb_detect_batch(
 \item{cna_data}{a copy-number tibble, e.g. \code{sim$cna_data} from a
 \code{bridge_sim()} result.}
 
-\item{alleles}{character vector of allele labels to process, matching
-the \code{value_column} argument to
-\code{tibble_to_matrix()} (default \code{c("A", "B")}).}
+\item{alleles}{character vector of copy-number columns to process: any of
+\code{"A"}, \code{"B"}, \code{"CN"} (default \code{c("A", "B")}).}
 
 \item{chr_col}{name of the chromosome column in \code{cna_data}, if
 present (default \code{"chr"}); set to \code{NULL} to force
@@ -39,7 +38,8 @@ trivial-vector filter rationale).}
 a tibble with one row per (cell_id, chr, allele) -- or per
 (cell_id, chr, arm, allele) if \code{genome} is supplied:
 n_segments, max_count, admits_bfb, bfb_distance, nearest_weight,
-n_unique (per group).
+n_unique (per group). Arms with no bins in \code{cna_data} (e.g. the
+p-arm of an acrocentric chromosome) are omitted.
 }
 \description{
 Extracts per-cell, per-allele (and per-chromosome, if \code{cna_data}
@@ -70,26 +70,18 @@ or data can contain material from both arms of a chromosome, you
 should supply \code{genome} rather than relying on this default} --
 see \code{\link{split_chr_arms}}.
 
-ASSUMPTIONS (please verify against your actual bridges output and
-adjust arguments as needed -- I don't have the bridges package
-available to test this wrapper directly against real data, unlike
-\code{bfb_detect_vectors()} above, which is fully tested against
-bfbtools; I have verified the logic below end-to-end, including the
-arm-splitting/reversal logic, against a minimal stand-in for
-\code{tibble_to_matrix()} with the assumed interface, but not against
-the real bridges implementation):
-\itemize{
-\item \code{cna_data} is compatible with
-\code{tibble_to_matrix(cna_data, value_column = allele)}
-for each allele in \code{alleles}, returning a matrix with one row
-per cell and \code{rownames()} giving cell IDs, and with columns
-ordered by ascending \code{start}/\code{end} (this is what the
-real \code{tibble_to_matrix} does, confirmed from its
-source).
-\item If \code{cna_data} contains data for more than one
-chromosome, there is a column (named by \code{chr_col}, default
-\code{"chr"}) identifying it. If no such column is found,
-\code{cna_data} is treated as a single chromosome's worth of
-data.
+INPUT FORMAT: \code{cna_data} is a long table with one row per
+cell and bin and columns \code{cell_id}, \code{start}, \code{end}, one
+column per entry of \code{alleles}, and optionally a chromosome column
+(\code{chr_col}). Bins are ordered by ascending \code{start} within each
+chromosome. If no chromosome column is found, \code{cna_data} is treated as
+a single chromosome.
 }
+\examples{
+cna <- data.frame(
+  cell_id = "cell_1", chr = "1",
+  start = c(1, 11, 21), end = c(10, 20, 30),
+  A = c(5, 3, 6), B = 1
+)
+bfb_detect_batch(cna, alleles = "A")
 }

@@ -119,3 +119,12 @@ test_that("bfb_detect_batch: genome argument works for both hg19 and hg38", {
   expect_equal(nrow(hg38_result), 2)
   expect_setequal(hg38_result$arm, c("p", "q"))
 })
+
+test_that("bfb_detect_batch skips arms with no bins (e.g. acrocentric p-arm)", {
+  skip_if_not_installed("bfbtools")
+  q_only <- data.frame(cell_id = "c1", chr = "13", start = c(5e7, 5.1e7, 5.2e7),
+                       end = c(5.1e7, 5.2e7, 5.3e7) - 1, A = c(5, 3, 6))
+  out <- bfb_detect_batch(q_only, alleles = "A", genome = "hg19")
+  expect_equal(out$arm, "q")
+  expect_true(out$admits_bfb)
+})

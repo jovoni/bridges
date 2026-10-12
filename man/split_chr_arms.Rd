@@ -46,3 +46,7 @@ bundled with this package (real hg19/hg38 coordinates for chromosomes
 so arm-splitting is always based on real genomic coordinates for a
 real genome build.
 }
+\examples{
+cna <- data.frame(chr = "1", start = c(1e6, 2e8), end = c(2e6, 2.01e8))
+split_chr_arms(cna, genome = "hg38")
+}

@@ -1,33 +1,9 @@
-# ============================================================
-# bfb_detect_batch.R
-#
-# Glue code between `bridges` simulation output and `bfbtools`
-# detection. Deliberately kept OUTSIDE both packages: bfbtools stays a
-# clean, sim-agnostic BFB detection library; bridges stays a clean
-# simulator. This file is the (small, easy-to-audit) bridge between the
-# two -- drop it into your analysis scripts, or fold it into `bridges`
-# itself as a detection helper, whichever fits your project better.
-#
-# Three functions:
-#   - bfb_detect_vectors(vec_list, ...)  : core batch logic over a plain
-#     list of count-vectors. Sim-agnostic, fully tested below against
-#     bfbtools directly.
-#   - split_chr_arms(cna_data, ...)       : adds a p/q arm label to a
-#     cna_data tibble, needed because ascending genomic coordinate is
-#     telomere-to-centromere on the p-arm but centromere-to-telomere on
-#     the q-arm -- only one of the two needs reversing before BFB
-#     count-vector extraction.
-#   - bfb_detect_batch(cna_data, ...)     : the bridges-facing wrapper,
-#     extracting count-vectors from a cna_data tibble (e.g.
-#     sim$cna_data from a bridge_sim() result) and calling
-#     bfb_detect_vectors(). The chr/allele-splitting and dedup logic is
-#     tested below end-to-end against a minimal stand-in for
-#     tibble_to_matrix() with the assumed interface -- but
-#     NOT against the real bridges implementation (not available in
-#     this environment). See the "Assumptions" note on bfb_detect_batch
-#     and please sanity-check column names against your actual
-#     bridge_sim() output.
-# ============================================================
+# Tree-free BFB detection: run the exact BFB combinatorics from 'bfbtools'
+# on per-cell copy-number count-vectors.
+#   - bfb_detect_vectors(): core logic over a plain list of count-vectors.
+#   - split_chr_arms():     label rows of a cna_data table with p/q arm.
+#   - bfb_detect_batch():   extract count-vectors from a cna_data table and
+#                           call bfb_detect_vectors().
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
@@ -67,6 +43,8 @@
 #'   max_count, admits_bfb, bfb_distance (= -log(weight); 0 if
 #'   admits_bfb is TRUE), nearest_weight, and n_unique (diagnostic: how
 #'   many distinct count-vectors were actually computed).
+#' @examples
+#' bfb_detect_vectors(list(c(6, 3, 5), c(14, 7, 18, 16, 9, 12), c(1, 1)))
 #' @export
 bfb_detect_vectors <- function(vec_list, model = c("poisson", "none"), min_weight = 1e-6,
                                 min_max_count = 2) {
@@ -157,6 +135,9 @@ bfb_detect_vectors <- function(vec_list, model = c("poisson", "none"), min_weigh
 #' @param chr_col,start_col,end_col column names in \code{cna_data}.
 #' @return \code{cna_data} with an added \code{arm} column (\code{"p"}
 #'   or \code{"q"}).
+#' @examples
+#' cna <- data.frame(chr = "1", start = c(1e6, 2e8), end = c(2e6, 2.01e8))
+#' split_chr_arms(cna, genome = "hg38")
 #' @export
 split_chr_arms <- function(cna_data, genome, chr_col = "chr",
                             start_col = "start", end_col = "end") {
@@ -237,34 +218,17 @@ split_chr_arms <- function(cna_data, genome, chr_col = "chr",
 #' should supply \code{genome} rather than relying on this default} --
 #' see \code{\link{split_chr_arms}}.
 #'
-#' ASSUMPTIONS (please verify against your actual bridges output and
-#' adjust arguments as needed -- I don't have the bridges package
-#' available to test this wrapper directly against real data, unlike
-#' \code{bfb_detect_vectors()} above, which is fully tested against
-#' bfbtools; I have verified the logic below end-to-end, including the
-#' arm-splitting/reversal logic, against a minimal stand-in for
-#' \code{tibble_to_matrix()} with the assumed interface, but not against
-#' the real bridges implementation):
-#' \itemize{
-#'   \item \code{cna_data} is compatible with
-#'     \code{tibble_to_matrix(cna_data, value_column = allele)}
-#'     for each allele in \code{alleles}, returning a matrix with one row
-#'     per cell and \code{rownames()} giving cell IDs, and with columns
-#'     ordered by ascending \code{start}/\code{end} (this is what the
-#'     real \code{tibble_to_matrix} does, confirmed from its
-#'     source).
-#'   \item If \code{cna_data} contains data for more than one
-#'     chromosome, there is a column (named by \code{chr_col}, default
-#'     \code{"chr"}) identifying it. If no such column is found,
-#'     \code{cna_data} is treated as a single chromosome's worth of
-#'     data.
-#' }
+#' INPUT FORMAT: \code{cna_data} is a long table with one row per
+#' cell and bin and columns \code{cell_id}, \code{start}, \code{end}, one
+#' column per entry of \code{alleles}, and optionally a chromosome column
+#' (\code{chr_col}). Bins are ordered by ascending \code{start} within each
+#' chromosome. If no chromosome column is found, \code{cna_data} is treated as
+#' a single chromosome.
 #'
 #' @param cna_data a copy-number tibble, e.g. \code{sim$cna_data} from a
 #'   \code{bridge_sim()} result.
-#' @param alleles character vector of allele labels to process, matching
-#'   the \code{value_column} argument to
-#'   \code{tibble_to_matrix()} (default \code{c("A", "B")}).
+#' @param alleles character vector of copy-number columns to process: any of
+#'   \code{"A"}, \code{"B"}, \code{"CN"} (default \code{c("A", "B")}).
 #' @param chr_col name of the chromosome column in \code{cna_data}, if
 #'   present (default \code{"chr"}); set to \code{NULL} to force
 #'   single-chromosome handling even if such a column exists.
@@ -278,7 +242,15 @@ split_chr_arms <- function(cna_data, genome, chr_col = "chr",
 #' @return a tibble with one row per (cell_id, chr, allele) -- or per
 #'   (cell_id, chr, arm, allele) if \code{genome} is supplied:
 #'   n_segments, max_count, admits_bfb, bfb_distance, nearest_weight,
-#'   n_unique (per group).
+#'   n_unique (per group). Arms with no bins in \code{cna_data} (e.g. the
+#'   p-arm of an acrocentric chromosome) are omitted.
+#' @examples
+#' cna <- data.frame(
+#'   cell_id = "cell_1", chr = "1",
+#'   start = c(1, 11, 21), end = c(10, 20, 30),
+#'   A = c(5, 3, 6), B = 1
+#' )
+#' bfb_detect_batch(cna, alleles = "A")
 #' @export
 bfb_detect_batch <- function(cna_data, alleles = c("A", "B"), chr_col = "chr",
                               genome = NULL,
@@ -307,14 +279,14 @@ bfb_detect_batch <- function(cna_data, alleles = c("A", "B"), chr_col = "chr",
 
     for (arm in arms) {
       cna_sub <- if (arm_aware) cna_chr[cna_chr$arm == arm, ] else cna_chr
+      if (nrow(cna_sub) == 0) next
       reverse_this <- if (arm_aware) (arm == "q") else TRUE  # see .extract_count_vector docs
 
       for (allele in alleles) {
         mat <- tibble_to_matrix(cna_sub, value_column = allele)
         cell_ids <- rownames(mat)
         if (is.null(cell_ids)) {
-          stop("tibble_to_matrix() returned a matrix with no rownames -- ",
-               "can't recover cell_id. See the Assumptions note in ?bfb_detect_batch.",
+          stop("Could not recover cell_id from cna_data; is the cell_id column present?",
                call. = FALSE)
         }
 

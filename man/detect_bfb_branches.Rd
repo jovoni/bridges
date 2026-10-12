@@ -2,69 +2,51 @@
 % Please edit documentation in R/bfb_mapping_and_detection.R
 \name{detect_bfb_branches}
 \alias{detect_bfb_branches}
-\title{Detect BFB Signal on Phylogenetic Tree Branches (tree/branch-based)}
+\title{Test for BFB signal along the branches of an inferred phylogeny}
 \usage{
 detect_bfb_branches(fit, threshold = 0.005)
 }
 \arguments{
-\item{fit}{A fitted model object containing:
-\itemize{
-\item all_input_Xs: List of chromosome data with allele information
-\item b_dist_func: B distance function
-\item g_dist_func: G distance function
-\item tree: Phylogenetic tree structure
-}}
+\item{fit}{A result of \code{\link{fit}}.}
 
-\item{threshold}{Numeric threshold for binomial test probability (default: 0.005)}
+\item{threshold}{Background probability that a branch looks BFB-like by
+chance; the null proportion of the one-sided binomial test.
+Default: 0.005}
 }
 \value{
 A data frame with one row per chromosome-allele combination and
 columns:
 \describe{
-\item{mean}{Fraction of phylogenetic branches where BFB-like events are
-detected (binomial proportion estimate).}
-\item{N_trials}{Total number of internal branches tested.}
-\item{N_successes}{Number of branches flagged as BFB-like.}
+\item{mean}{Fraction of internal nodes flagged as BFB-like.}
+\item{N_trials}{Number of internal nodes tested.}
+\item{N_successes}{Number of internal nodes flagged as BFB-like.}
 \item{chr}{Chromosome identifier.}
-\item{allele}{Allele (\code{"A"} or \code{"B"}).}
-\item{p.value}{Raw p-value from the one-sided binomial test.}
+\item{allele}{Allele.}
+\item{p.value}{One-sided binomial test p-value.}
 \item{adj.pval}{Benjamini-Hochberg adjusted p-value across all
 chromosome-allele combinations.}
-\item{threshold}{The \code{threshold} value used.}
+\item{threshold}{The \code{threshold} used.}
 }
 }
 \description{
-NOTE ON NAMING: this is one of two independent BFB-detection
-mechanisms in this package, and they answer different questions.
-This one (\code{detect_bfb_branches}) works on a \emph{fitted tree}
-(the output of \code{fit()}) and asks "does this branch of my
-inferred phylogeny show a BFB-like signature", via ancestral
-reconstruction and a binomial test on the greedy-vs-BFB cost delta
-per branch. The other, \code{\link{bfb_detect_batch}} (and its
-single-vector core, \code{\link{bfb_detect_vectors}}), works
-directly on raw per-cell copy-number profiles -- no tree or fit
-required -- and asks "does this cell's raw profile admit a BFB
-schedule at all", using the exact BFB combinatorics from
-\code{bfbtools}. Neither supersedes the other.
+For every chromosome and allele in a \code{\link{fit}} result, counts the
+internal nodes of the tree whose children are better explained by a BFB
+event than by greedy gain/loss steps, and tests whether that count is
+larger than expected under a background rate \code{threshold}.
 }
 \details{
-This function performs binomial tests across all chromosomes and alleles to detect
-breakpoint-free branches in a phylogenetic tree reconstruction. It uses pseudo-cell
-analysis to identify branches where copy number changes occur without breakpoints.
+This is one of two complementary BFB-detection approaches in the package.
+\code{detect_bfb_branches()} works on a fitted tree; \code{\link{bfb_detect_batch}}
+works directly on each cell's copy-number profile, with no tree needed,
+and asks whether that profile is compatible with any BFB schedule.
 
-The function implements a \emph{pseudo-cell test} for BFB signatures.  For
-each internal branch in the phylogenetic tree, a pseudo-cell is constructed
-from the ancestral CN profiles flanking that branch (computed via
-\code{compute_reconstructions()}).  A delta value is derived as the difference
-between the greedy cost (G) and the BFB/contiguity cost (B) for that branch:
-high delta indicates that BFB-like non-contiguous amplification explains the
-CN change better than simple edit steps.
-
-Branches with \code{delta > threshold} are counted as successes.  A one-sided
-binomial test is applied per chromosome-allele combination to assess whether
-the fraction of BFB-positive branches is significantly above chance.
-P-values are corrected for multiple testing using the Benjamini-Hochberg
-procedure (\code{stats::p.adjust(method = "BH")}), yielding \code{adj.pval}.
+During \code{fit()}, ancestral profiles are reconstructed bottom-up along
+the tree. At each internal node, the two children are compared with a
+greedy gain/loss cost G and a BFB cost B; \eqn{\delta = G - B}. A node with
+\eqn{\delta > 0} is counted as BFB-like. For each chromosome-allele, the
+number of BFB-like nodes is tested against
+\code{binom.test(k, N, p = threshold, alternative = "greater")}, and
+p-values are adjusted with \code{stats::p.adjust(method = "BH")}.
 }
 \examples{
 \dontrun{
