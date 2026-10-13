@@ -5,6 +5,10 @@
 #' event than by greedy gain/loss steps, and tests whether that count is
 #' larger than expected under a background rate \code{threshold}.
 #'
+#' This test counts BFB-like nodes over the whole tree, so BFB confined to a
+#' part of the tree can be diluted; \code{\link{detect_bfb_clades}} scans every
+#' clade instead.
+#'
 #' This is one of two complementary BFB-detection approaches in the package.
 #' \code{detect_bfb_branches()} works on a fitted tree; \code{\link{bfb_detect_batch}}
 #' works directly on each cell's copy-number profile, with no tree needed,

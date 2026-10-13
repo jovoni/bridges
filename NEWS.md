@@ -18,6 +18,13 @@
 
 ## New features
 
+* New `detect_bfb_clades()`: a tree-aware BFB test. Every clade of the
+  inferred tree is a candidate; the number of BFB-like nodes in the clade is
+  compared with the background rate, and the best clade is corrected for
+  scanning many clades by simulation. BFB confined to a subpopulation is no
+  longer diluted by the rest of the tree. No clones or clades need to be
+  given.
+
 * `fit()` can model whole-genome duplication (WGD) with `wgd = TRUE`. The
   distance between two cells becomes the cheaper of "no WGD" (the usual
   G/B distance) and "one cell is the other's lineage doubled once or twice,

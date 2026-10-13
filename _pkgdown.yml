@@ -37,6 +37,7 @@ reference:
     Two complementary methods. See the "bfb-detection" article.
   contents:
   - detect_bfb_branches
+  - detect_bfb_clades
   - bfb_detect_batch
   - bfb_detect_vectors
   - split_chr_arms

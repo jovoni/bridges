@@ -189,6 +189,18 @@ branches
 Allele A of chromosome 1 should have the largest fraction of BFB-like
 nodes.
 
+`detect_bfb_branches()` counts BFB-like nodes over the whole tree, so BFB
+that happened in only part of the population can be diluted by the rest.
+`detect_bfb_clades()` instead scans every clade of the tree, reports the
+clade where BFB-like nodes are most concentrated, and corrects for having
+looked at many clades:
+
+```{r clades}
+clades <- detect_bfb_clades(res, threshold = 0.005, seed = 1)
+clades[, c("chr", "allele", "p.scan", "adj.pval", "clade_bfb_nodes",
+           "clade_nodes", "clade_n_cells")]
+```
+
 `plot_heatmap()` colours the branches leaving BFB-like nodes and marks
 those nodes:
 
