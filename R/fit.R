@@ -36,6 +36,14 @@
 #'   These take \eqn{2 \times} (chromosomes \eqn{\times} alleles) matrices of
 #'   size cells \eqn{\times} cells, so they are not kept by default.
 #'   Default: \code{FALSE}.
+#' @param wgd Logical; also consider whole-genome duplication (WGD) when
+#'   comparing cells, and label WGD branches on the tree. See Details.
+#'   Default: \code{FALSE}.
+#' @param wgd_penalty Cost of one WGD event, in the same units as the
+#'   gain/loss events. Default: 1.
+#' @param wgd_counts Optional named integer vector (names = cell ids) giving
+#'   the number of WGDs (0, 1 or 2) of each cell. If \code{NULL}, it is
+#'   estimated from ploidy as \code{round(log2(mean CN / 2))}, clamped to 0-2.
 #' @param verbose Logical; print progress messages. Default: \code{TRUE}.
 #' @param ... Currently unused.
 #'
@@ -55,6 +63,12 @@
 #'     state reconstructions per tree branch, as returned by
 #'     \code{compute_reconstructions()}.  Each element contains \code{profiles},
 #'     \code{merged_profiles}, and \code{deltas} (the per-branch BFB signal).
+#'   \item \code{history} — Reconstructed events per branch, chromosome and allele
+#'     (\code{"gain"}, \code{"loss"}, \code{"bfb"}, \code{"wgd"}, ...)
+#'   \item \code{wgd} — Only with \code{wgd = TRUE}: a list with \code{counts}
+#'     (WGDs per cell), \code{penalty}, \code{k_node} (WGD count of every tree
+#'     node, ape numbering), \code{root_count} (WGDs above the root) and
+#'     \code{edges} (one row per WGD branch, with its descendant \code{cells})
 #' }
 #'
 #' @details
@@ -77,6 +91,20 @@
 #' alleles is kept. The pure-R alternatives are computed pair by pair and
 #' are much slower; they are kept as references.
 #'
+#' \strong{Whole-genome duplication.} A WGD doubles every chromosome at once,
+#' but the gain/loss distance would count it as many separate events. With
+#' \code{wgd = TRUE}, the distance between two cells is the cheaper of two
+#' explanations: (i) no WGD, the usual distance; (ii) one cell descends from
+#' the other's lineage doubled once (or twice) plus gain/loss events, costing
+#' \code{wgd_penalty} per WGD plus the events before and after the doubling.
+#' The WGD is counted once for the whole genome. After the tree is built,
+#' each cell's WGD count (\code{wgd_counts}) is placed on the tree by
+#' parsimony (doublings only, never halving); branches where the count
+#' increases are reported in \code{wgd$edges} and as \code{"wgd"} events in
+#' \code{history}, and their nodes are left out of the BFB test of
+#' \code{\link{detect_bfb_branches}}. Only the default distance functions
+#' support \code{wgd = TRUE}.
+#'
 #' Using \code{b_dist_func = NULL} is useful for ablation studies, speed-ups, or when
 #' BFB modelling is not desired; results reduce to the greedy metric.
 #'
@@ -95,6 +123,12 @@
 #'
 #' # Greedy-only run (no BFB modelling, faster)
 #' res_g <- fit(data = sim$cna_data, b_dist_func = NULL)
+#'
+#' # With whole-genome duplication
+#' sim_w <- bridge_sim(chromosomes = "8", bfb_allele = "8:A", max_cells = 128,
+#'                     wgd_available = 1, wgd_probability = 0.1)
+#' res_w <- fit(sim_w$cna_data, chromosomes = "8", wgd = TRUE)
+#' res_w$wgd$edges
 #' }
 #'
 #' @export
@@ -108,6 +142,9 @@ fit = function(data,
                g_dist_func = "greedy_fast",
                b_dist_func = "bfb_fast",
                keep_matrices = FALSE,
+               wgd = FALSE,
+               wgd_penalty = 1,
+               wgd_counts = NULL,
                verbose = TRUE,
                ...) {
   say = function(...) if (isTRUE(verbose)) message(...)
@@ -116,19 +153,27 @@ fit = function(data,
   get_g_dist(g_dist_func)
   if (!is.null(b_dist_func)) get_b_dist(b_dist_func)
 
+  fast_path = identical(g_dist_func, "greedy_fast") &&
+    (is.null(b_dist_func) || identical(b_dist_func, "bfb_fast"))
+  if (isTRUE(wgd) && !fast_path) {
+    stop("wgd = TRUE requires the default distances (g_dist_func = \"greedy_fast\", ",
+         "b_dist_func = \"bfb_fast\" or NULL).", call. = FALSE)
+  }
+  if (!is.numeric(wgd_penalty) || length(wgd_penalty) != 1 || wgd_penalty < 0) {
+    stop("wgd_penalty must be a single non-negative number.", call. = FALSE)
+  }
+
   data = dplyr::bind_rows(data, create_diploid_data(data))
   say("Pre-processing input...")
   all_input_Xs = process_input_data(data, chromosomes, alleles, k_jitter_fix, fillna)
-
-  fast_path = identical(g_dist_func, "greedy_fast") &&
-    (is.null(b_dist_func) || identical(b_dist_func, "bfb_fast"))
 
   if (fast_path) {
     say("Computing distances...")
     dists = compute_fast_distances(all_input_Xs, chromosomes, alleles,
                                    bfb_penalty = bfb_penalty,
                                    use_bfb = !is.null(b_dist_func),
-                                   keep_matrices = keep_matrices)
+                                   keep_matrices = keep_matrices,
+                                   wgd = isTRUE(wgd), wgd_penalty = wgd_penalty)
     D = dists$D
     greedy_Ds = dists$greedy_Ds
     avg_Ds = dists$avg_Ds
@@ -164,6 +209,18 @@ fit = function(data,
   tree = ape::root(tree, outgroup = "diploid", resolve.root = TRUE)
   tree = ape::drop.tip(tree, "diploid")
 
+  wgd_info = NULL
+  if (isTRUE(wgd)) {
+    say("Placing WGD events...")
+    cells = tree$tip.label
+    counts = if (is.null(wgd_counts)) estimate_wgd_counts(data)[cells] else
+      validate_wgd_counts(wgd_counts, cells)
+    k_node = assign_wgd_counts(tree, counts, penalty = wgd_penalty)
+    wgd_info = list(counts = counts, penalty = wgd_penalty, k_node = k_node,
+                    root_count = k_node[length(cells) + 1],
+                    edges = wgd_edges(tree, k_node))
+  }
+
   res = list(
     tree = tree,
     all_input_Xs = all_input_Xs,
@@ -174,6 +231,7 @@ fit = function(data,
     b_dist_func = b_dist_func,
     reconstructions = list()
   )
+  if (!is.null(wgd_info)) res$wgd = wgd_info
 
   say("Reconstructing events...")
   recon = compute_reconstructions(fit = res, chromosomes = chromosomes, alleles = alleles)

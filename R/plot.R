@@ -603,7 +603,7 @@ process_tree_with_coloring <- function(tree,
   # Create node-level dataframe
   internal_nodes <- as.integer(names(recon_result$deltas))
   delta_values <- unlist(recon_result$deltas)
-  decision_labels <- ifelse(delta_values > 0, "Likely BFB", "Other")
+  decision_labels <- ifelse(!is.na(delta_values) & delta_values > 0, "Likely BFB", "Other")
 
   node_data <- data.frame(
     node = internal_nodes,

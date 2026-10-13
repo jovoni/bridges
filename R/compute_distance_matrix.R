@@ -144,9 +144,18 @@ fast_distance_matrices = function(input_X, use_bfb = TRUE, penalty = 0, keep_par
 # kept in memory. Per-chromosome G and B matrices are returned only when
 # keep_matrices = TRUE, in the same layout as compute_greedy_distances() /
 # compute_avg_distances(). Rows are aligned by cell name across chromosomes.
+#
+# With wgd = TRUE, the directional WGD costs W1 (one doubling) and W2 (two
+# doublings) are accumulated too (wgd_matrices_cpp()), and the distance is
+# the cheapest explanation genome-wide:
+#   D = min(D, w + W1, w + t(W1), 2w + W2, 2w + t(W2)),   w = wgd_penalty
+# The WGD is charged once for the whole genome, while the pre-doubling
+# ancestor is chosen per chromosome/allele. `D_no_wgd` keeps the distance
+# without the WGD option.
 compute_fast_distances = function(all_input_Xs, chromosomes, alleles,
                                   bfb_penalty = 0, use_bfb = TRUE,
-                                  keep_matrices = FALSE) {
+                                  keep_matrices = FALSE,
+                                  wgd = FALSE, wgd_penalty = 1) {
   alleles = alleles[alleles %in% names(all_input_Xs[[1]])]
   chromosomes = chromosomes[chromosomes %in% names(all_input_Xs)]
 
@@ -154,6 +163,7 @@ compute_fast_distances = function(all_input_Xs, chromosomes, alleles,
   D = matrix(0, length(cells), length(cells), dimnames = list(cells, cells))
   greedy_Ds = avg_Ds = NULL
   n_unique = list()
+  if (wgd) W1 = W2 = matrix(0, length(cells), length(cells), dimnames = list(cells, cells))
 
   for (chromosome in chromosomes) {
     for (allele in alleles) {
@@ -166,6 +176,12 @@ compute_fast_distances = function(all_input_Xs, chromosomes, alleles,
       m = fast_distance_matrices(X, use_bfb = use_bfb, penalty = bfb_penalty,
                                  keep_parts = keep_matrices)
       D = D + m$min
+      if (wgd) {
+        storage.mode(X) = "double"
+        w = wgd_matrices_cpp(X)
+        W1 = W1 + w$W1
+        W2 = W2 + w$W2
+      }
       n_unique[[chromosome]][[allele]] = m$n_unique
       if (keep_matrices) {
         greedy_Ds[[chromosome]][[allele]] = m$greedy
@@ -174,7 +190,15 @@ compute_fast_distances = function(all_input_Xs, chromosomes, alleles,
     }
   }
 
-  list(D = D, greedy_Ds = greedy_Ds, avg_Ds = avg_Ds, n_unique = n_unique)
+  D_no_wgd = NULL
+  if (wgd) {
+    D_no_wgd = D
+    D = pmin(D, wgd_penalty + W1, wgd_penalty + t(W1),
+             2 * wgd_penalty + W2, 2 * wgd_penalty + t(W2))
+  }
+
+  list(D = D, D_no_wgd = D_no_wgd, greedy_Ds = greedy_Ds, avg_Ds = avg_Ds,
+       n_unique = n_unique)
 }
 
 compute_distance_matrix = function(input_X, dist_func, ...) {

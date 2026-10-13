@@ -38,7 +38,7 @@ plot_bfb_signature = function(res, chr_of_interest, allele_of_interest) {
   }
 
   deltas = rec$deltas %>% unlist()
-  bfb_nodes = names(deltas[deltas > 0])
+  bfb_nodes = names(deltas)[which(deltas > 0)]  # NA deltas (WGD nodes) excluded
   if (length(bfb_nodes) == 0) {
     stop("No BFB-like nodes (delta > 0) for chr '", chr_of_interest,
          "', allele '", allele_of_interest, "'; nothing to plot.", call. = FALSE)

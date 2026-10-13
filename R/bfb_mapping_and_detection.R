@@ -98,6 +98,7 @@ pseudo_cell_bin_test = function(fit, chr, allele, threshold) {
   r = fit$reconstructions[[chr]][[allele]]  # use precomputed
   if (is.null(r)) r = reconstruct_tree(fit, chr, allele)
   delta_values <- unlist(r$deltas)
+  delta_values <- delta_values[!is.na(delta_values)]  # NA: WGD nodes, not tested
   N = length(delta_values)
   k = sum(delta_values > 0)
 
@@ -193,6 +194,12 @@ compute_reconstructions = function(fit, chromosomes = NULL, alleles = NULL) {
     }
   }
 
+  # Each WGD edge costs wgd_penalty per WGD, once for the whole genome
+  if (!is.null(fit$wgd)) {
+    dk <- fit$wgd$k_node[fit$tree$edge[, 2]] - fit$wgd$k_node[fit$tree$edge[, 1]]
+    new_edges <- new_edges + fit$wgd$penalty * dk
+  }
+
   list(
     reconstructions = reconstructions,
     edge.length = new_edges,
@@ -256,6 +263,8 @@ reconstruct_tree <- function(fit, chr, allele, store_profiles = TRUE) {
   input <- fit$all_input_Xs[[chr]][[allele]]  # rows are cells (tips), cols are bins
 
   tree <- fit$tree
+  # WGD counts per node (fit(wgd = TRUE)); numbering refers to fit$tree
+  k_node <- if (!is.null(fit$wgd) && ape::is.rooted(tree)) fit$wgd$k_node else NULL
   if (!ape::is.rooted(tree)) tree <- phangorn::midpoint(tree)
   tree$edge.length[] <- 1
 
@@ -320,45 +329,76 @@ reconstruct_tree <- function(fit, chr, allele, store_profiles = TRUE) {
     mL <- row_means[kL]; if (is.na(mL)) { mL <- mean(left);  row_means[kL] <- mL }
     mR <- row_means[kR]; if (is.na(mR)) { mR <- mean(right); row_means[kR] <- mR }
 
-    # Greedy distance
-    g_d <- G_dist(left, right, target_val = target_val)
+    # WGD counts of this node and its children (all 0 without fit$wgd)
+    k_here <- if (is.null(k_node)) 0 else k_node[node_id]
+    fL <- if (is.null(k_node)) 1 else 2^(k_node[kL] - k_here)
+    fR <- if (is.null(k_node)) 1 else 2^(k_node[kR] - k_here)
 
-    # BFB distance (order matters)
-    if (mL > mR) {
-      b_d <- B_dist(left, right, penalty = 0)
-      b_left_cost  <- b_d$a_cost
-      b_right_cost <- b_d$b_cost
-      b_left_vec   <- b_d$left
-      b_right_vec  <- b_d$right
+    if (fL > 1 || fR > 1) {
+      # One or both children descend from a WGD after this node: the ancestor
+      # is the best pre-doubling profile, and BFB is not tested here.
+      if (fL > 1 && fR > 1) {
+        g_h <- G_dist(floor(left / fL), floor(right / fR), target_val = target_val * 2^k_here)
+        internal_cell <- g_h$ancestor
+        left_cost  <- g_h$a_cost + G_dist(fL * internal_cell, left, target_val = target_val)$cost
+        right_cost <- g_h$b_cost + G_dist(fR * internal_cell, right, target_val = target_val)$cost
+      } else if (fR > 1) {
+        r <- wgd_ancestor_cpp(left, right, fR)
+        internal_cell <- r$x
+        left_cost  <- r$steps
+        right_cost <- r$after
+      } else {
+        r <- wgd_ancestor_cpp(right, left, fL)
+        internal_cell <- r$x
+        right_cost <- r$steps
+        left_cost  <- r$after
+      }
+      left_event  <- if (fL > 1) "wgd" else event_type(left - internal_cell)
+      right_event <- if (fR > 1) "wgd" else event_type(right - internal_cell)
+      left_vec  <- left
+      right_vec <- right
+      deltas_vec[as.character(node_id)] <- NA_real_
     } else {
-      b_d <- B_dist(right, left, penalty = 0)
-      b_left_cost  <- b_d$b_cost
-      b_right_cost <- b_d$a_cost
-      b_left_vec   <- b_d$right
-      b_right_vec  <- b_d$left
-    }
+      # Greedy distance
+      g_d <- G_dist(left, right, target_val = target_val * 2^k_here)
 
-    delta <- g_d$cost - b_d$cost
-    deltas_vec[as.character(node_id)] <- delta
+      # BFB distance (order matters)
+      if (mL > mR) {
+        b_d <- B_dist(left, right, penalty = 0)
+        b_left_cost  <- b_d$a_cost
+        b_right_cost <- b_d$b_cost
+        b_left_vec   <- b_d$left
+        b_right_vec  <- b_d$right
+      } else {
+        b_d <- B_dist(right, left, penalty = 0)
+        b_left_cost  <- b_d$b_cost
+        b_right_cost <- b_d$a_cost
+        b_left_vec   <- b_d$right
+        b_right_vec  <- b_d$left
+      }
 
-    if (is.finite(b_d$cost) && delta > 0) {
-      # BFB wins
-      left_cost  <- b_left_cost
-      right_cost <- b_right_cost
-      internal_cell <- b_d$ancestor
-      left_event  <- "bfb"
-      right_event <- "bfb"
-      left_vec  <- b_left_vec
-      right_vec <- b_right_vec
-    } else {
-      # Greedy wins (or BFB not available)
-      left_cost  <- g_d$a_cost
-      right_cost <- g_d$b_cost
-      internal_cell <- g_d$ancestor
-      left_event  <- event_type(g_d$a_delta)
-      right_event <- event_type(g_d$b_delta)
-      left_vec <- g_d$ancestor + g_d$a_delta
-      right_vec <- g_d$ancestor + g_d$b_delta
+      delta <- g_d$cost - b_d$cost
+      deltas_vec[as.character(node_id)] <- delta
+
+      if (is.finite(b_d$cost) && delta > 0) {
+        # BFB wins
+        left_cost  <- b_left_cost
+        right_cost <- b_right_cost
+        internal_cell <- b_d$ancestor
+        left_event  <- "bfb"
+        right_event <- "bfb"
+        left_vec  <- b_left_vec
+        right_vec <- b_right_vec
+      } else {
+        # Greedy wins (or BFB not available)
+        left_cost  <- g_d$a_cost
+        right_cost <- g_d$b_cost
+        internal_cell <- g_d$ancestor
+        left_event  <- event_type(g_d$a_delta)
+        right_event <- event_type(g_d$b_delta)
+        left_vec <- g_d$ancestor + g_d$a_delta
+        right_vec <- g_d$ancestor + g_d$b_delta
+      }
     }
 
     # Save branch costs by child id
