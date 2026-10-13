@@ -24,15 +24,42 @@ Results:
 - **Simulations:** WGD does not affect it. The true BFB is always found, no
   false calls appear, and WGD alone never produces a BFB call.
 - **OV2295:**
-  - without WGD: 61 BFB-like nodes, 26 of which join cells with different
-    WGD counts; chromosome 6 is significant (adj. p = 0.005);
+  - without WGD: 61 BFB-like nodes over all chromosomes, 26 of which join
+    cells with different WGD counts; chromosome 6 is significant
+    (14 of 890 nodes, adj. p = 0.005);
   - with WGD: 33 BFB-like nodes (10 joining different WGD counts); nothing
-    is significant.
+    is significant (chromosome 6: 5 of 876 nodes).
 
-  The chromosome 6 signal was largely made of nodes at junctions between
-  doubled and non-doubled cells, which the WGD option excludes from the
-  test. That is a likely artefact, but it cannot be confirmed without
-  ground truth.
+**Correction: chromosome 6 is not a junction artefact.** An earlier
+version of this note said the chromosome 6 signal came from nodes at
+junctions between doubled and non-doubled cells. That was generalised from
+the all-chromosome count and is wrong for chromosome 6.
+- 12 of its 14 BFB-like nodes are inside the G/H/I clade, where all cells
+  have the same WGD count (1). Several are large internal nodes (37, 79,
+  83, 88 and 228 cells). Only 2 are in A–D.
+- There, chromosome 6 shows a heterogeneous high-level gain (CN 6–9),
+  which looks BFB-like on the heatmap.
+
+The WGD option removes these nodes through two changes, separated by
+swapping trees and reconstructions:
+
+| Tree from | Reconstruction | BFB-like nodes on chr 6 | Of which ≥ 10 cells |
+|---|---|---|---|
+| `wgd = FALSE` | plain | 14 | 6 |
+| `wgd = FALSE` | WGD-aware | 7 | 1 |
+| `wgd = TRUE` | plain | 11 | 2 |
+| `wgd = TRUE` | WGD-aware (`fit()` output) | 5 | 0 |
+
+The WGD-aware reconstruction rebuilds ancestors inside doubled clades
+around a baseline of 4 instead of 2, which changes the profiles compared
+at deeper nodes. The different tree accounts for most of the rest. In the
+simulations neither effect removed the true BFB signal, so on OV2295 it is
+unknown whether the WGD option removes an artefact or hides real BFB on
+chromosome 6.
+
+Figures (`dev/data/figures/`, not in git), with BFB-like nodes on chr 6 in
+red: `ov2295_500kb_jitter2_no_wgd_bfb_chr6.png`,
+`ov2295_500kb_jitter2_wgd_bfb_chr6.png`.
 
 ## Per-cell detection (`bfb_detect_batch()`)
 
@@ -67,8 +94,9 @@ On OV2295 (total CN), the same pattern:
 ## Conclusions
 
 - Tree-based detection is safe with or without WGD in simulations. On
-  OV2295 the WGD option removes BFB-like nodes at WGD junctions, which
-  changes the result (chromosome 6).
+  OV2295 the WGD option removes the chromosome 6 signal inside the doubled
+  G/H/I clade, through both the tree and the doubled-baseline
+  reconstruction; whether that signal is real BFB is open.
 - Per-cell detection needs to know about WGD. Raw calls on doubled cells
   are unreliable; halving fixes the false positives but costs sensitivity.
   A WGD-aware version is needed (see the options in the report).
