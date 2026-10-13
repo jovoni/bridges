@@ -244,3 +244,98 @@ removed (see that commit for code and full tables):
    - On OV2295, E+F vs G+H+I was a tie (+7 events at 2 Mb, +1 at 500 kb).
 
 The full search is kept.
+
+## Event model (`event_model.cpp`, `event_model.R`)
+
+**Model.** Every event changes the copy number of one contiguous segment by
+exactly one copy (+1 or −1), as in copy-number-transformation models such
+as MEDICC2. There is no restriction at copy number 0. WGD multiplies the
+whole profile by 2.
+
+**Distance without WGD** (exact, linear time):
+
+    E(a, b) = TV(b − a) / 2,   TV(v) = |v₁| + Σ |vᵢ − vᵢ₋₁| + |vₙ|
+
+That is, half the total size of the jumps in the difference, padded with
+zeros at both ends.
+
+**Ancestor problem** (exact):
+
+    min_x  E(f₁·x, p) + E(f₂·x, q)
+
+Solved by dynamic programming over bins, with x's integer value per bin as
+the state; it covers every case we need:
+- the WGD distance (f = 1 and 2 or 4);
+- same-level ancestors (f₁ = f₂ = 1);
+- one or two doubled children in the reconstruction.
+
+**Options.** `event_matrices(X, use_bfb = TRUE)` keeps, per
+chromosome/allele, the smaller of E and the existing BFB distance B, as
+`fit()` does with G and B. `reconstruct_wgd_event()` rebuilds ancestors
+with one exact call per node.
+
+**Checks (`check_event_model.R`)**
+- E equals the true minimum number of ±1 segment events, by breadth-first
+  search, on 150 random pairs.
+- The ancestor program equals an exhaustive search over x on 300 random
+  cases.
+- Same-level ancestors lie on a shortest path.
+- Known cases:
+  - x → 2x = 0 events;
+  - +1 gain after doubling = 1;
+  - x → 4x = 0;
+  - 2 → 8 on one segment = 6 events (G counts 1).
+
+### Results (`run_event_model.R`, `real_event_model.R`)
+
+**Simulations** (same scenarios and seeds as the harder study; mean tree
+error RF over all scenarios and both data types):
+
+| Method | No noise | Low noise |
+|---|---|---|
+| Greedy G/B, no WGD term | 0.308 | 0.579 |
+| **Greedy G/B + full WGD search** | **0.293** | **0.566** |
+| Event model, exact WGD | 0.405 | 0.598 |
+| Event model + BFB distance, exact WGD | 0.309 | 0.578 |
+
+- **Event model + BFB vs the greedy full search:** worse in 108 of 160
+  paired runs, better in 38.
+- **WGD labels:**
+  - Event model + BFB is similar to the greedy full search: label match on
+    parallel WGDs 0.90 vs 0.95 with no noise, 0.95 vs 0.90 with low noise,
+    allele-specific data.
+  - The pure event model predicts too many WGD edges (2.9 for 2.4 true).
+- **No false WGDs:** no method predicts a WGD in simulations without one.
+- **Speed:** similar to the greedy full search; somewhat faster under
+  noise (about 2 s vs 3 s per data set).
+
+**Why the pure event model loses: BFB.** One BFB cycle duplicates a whole
+stretch of an already rearranged chromosome, so an amplified bin can gain
+several copies in one event, while the unit model counts one event per
+copy. Without BFB (`bfb_prob = 0`, 6 replicates) it is as good as greedy
+(RF 0.246 vs 0.253). With chromosome 1 (the BFB chromosome) excluded, the
+two are equal (0.381 vs 0.379).
+
+**OV2295 at 2 Mb**
+
+| | Greedy full search | Event model + BFB, with WGD |
+|---|---|---|
+| Clone coherence | 0.748 | 0.743 |
+| WGD clades | G+H+I; E+F | G+H+I; E+F |
+| Distance time | 13 s | 9 s |
+
+- **Even without a WGD term**, the event model keeps E+F and G+H+I in
+  separate WGD clades (the greedy model merges them without its WGD term).
+  This supports the two-WGD reading.
+
+**Conclusions**
+- Exact counting under a unit-event model does not give better trees than
+  the greedy model on these simulations, because BFB amplification is not a
+  unit-event process.
+- With the BFB distance added, it is a close second, with the advantage
+  that the WGD distance and ancestors are exact rather than heuristic.
+- Options to make the event model competitive:
+  - make the event cost depend less on magnitude, e.g. cost
+    1 + λ·(copies − 1) per event, which is still solvable exactly by the
+    same program with modified jump costs;
+  - or add BFB cycles as an explicit event type.
