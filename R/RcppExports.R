@@ -49,6 +49,42 @@ distance_matrices_cpp <- function(X, use_bfb, penalty = 0.0, keep_parts = FALSE)
     .Call(`_bridges_distance_matrices_cpp`, X, use_bfb, penalty, keep_parts)
 }
 
+#' WGD cost between two profiles
+#'
+#' min over ancestors x of G(a, x) + G(f * x, b), where G is the greedy
+#' block distance (\code{greedy_distance_cpp()}).
+#'
+#' @param a,b NumericVector profiles.
+#' @param f Doubling factor: 2 (one WGD) or 4 (two WGDs).
+#' @return Numeric cost (excluding the cost of the WGD itself).
+#' @noRd
+wgd_cost_cpp <- function(a, b, f) {
+    .Call(`_bridges_wgd_cost_cpp`, a, b, f)
+}
+
+#' Best pre-doubling ancestor between two profiles
+#'
+#' @inheritParams wgd_cost_cpp
+#' @return A list: \code{cost}, \code{x} (the ancestor), \code{steps} (greedy
+#'   events from a to x) and \code{after} (greedy events from f * x to b).
+#' @noRd
+wgd_ancestor_cpp <- function(a, b, f) {
+    .Call(`_bridges_wgd_ancestor_cpp`, a, b, f)
+}
+
+#' Directional WGD cost matrices for one cells x segments matrix
+#'
+#' \code{W1[i, j]} = W(row i -> row j, f = 2) and \code{W2[i, j]} the same
+#' with f = 4. Diagonals are \code{Inf}. Identical rows are grouped first, as
+#' in \code{distance_matrices_cpp()}.
+#'
+#' @param X Numeric matrix, cells x segments.
+#' @return A list with \code{W1}, \code{W2} and \code{n_unique}.
+#' @noRd
+wgd_matrices_cpp <- function(X) {
+    .Call(`_bridges_wgd_matrices_cpp`, X)
+}
+
 #' Compute length of an interval-encoded sequence
 #'
 #' @param seq_list R list of intervals (each a named list with start, end, direction)

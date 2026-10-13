@@ -50,6 +50,43 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// wgd_cost_cpp
+double wgd_cost_cpp(NumericVector a, NumericVector b, double f);
+RcppExport SEXP _bridges_wgd_cost_cpp(SEXP aSEXP, SEXP bSEXP, SEXP fSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type a(aSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type b(bSEXP);
+    Rcpp::traits::input_parameter< double >::type f(fSEXP);
+    rcpp_result_gen = Rcpp::wrap(wgd_cost_cpp(a, b, f));
+    return rcpp_result_gen;
+END_RCPP
+}
+// wgd_ancestor_cpp
+List wgd_ancestor_cpp(NumericVector a, NumericVector b, double f);
+RcppExport SEXP _bridges_wgd_ancestor_cpp(SEXP aSEXP, SEXP bSEXP, SEXP fSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type a(aSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type b(bSEXP);
+    Rcpp::traits::input_parameter< double >::type f(fSEXP);
+    rcpp_result_gen = Rcpp::wrap(wgd_ancestor_cpp(a, b, f));
+    return rcpp_result_gen;
+END_RCPP
+}
+// wgd_matrices_cpp
+List wgd_matrices_cpp(NumericMatrix X);
+RcppExport SEXP _bridges_wgd_matrices_cpp(SEXP XSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type X(XSEXP);
+    rcpp_result_gen = Rcpp::wrap(wgd_matrices_cpp(X));
+    return rcpp_result_gen;
+END_RCPP
+}
 // seq_length_cpp
 int seq_length_cpp(List seq_list);
 RcppExport SEXP _bridges_seq_length_cpp(SEXP seq_listSEXP) {
@@ -186,6 +223,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_bridges_greedy_distance_cpp", (DL_FUNC) &_bridges_greedy_distance_cpp, 3},
     {"_bridges_greedy_bfb_distance_cpp", (DL_FUNC) &_bridges_greedy_bfb_distance_cpp, 3},
     {"_bridges_distance_matrices_cpp", (DL_FUNC) &_bridges_distance_matrices_cpp, 4},
+    {"_bridges_wgd_cost_cpp", (DL_FUNC) &_bridges_wgd_cost_cpp, 3},
+    {"_bridges_wgd_ancestor_cpp", (DL_FUNC) &_bridges_wgd_ancestor_cpp, 3},
+    {"_bridges_wgd_matrices_cpp", (DL_FUNC) &_bridges_wgd_matrices_cpp, 1},
     {"_bridges_seq_length_cpp", (DL_FUNC) &_bridges_seq_length_cpp, 1},
     {"_bridges_reverse_sequence_cpp", (DL_FUNC) &_bridges_reverse_sequence_cpp, 1},
     {"_bridges_fuse_sequence_cpp", (DL_FUNC) &_bridges_fuse_sequence_cpp, 1},

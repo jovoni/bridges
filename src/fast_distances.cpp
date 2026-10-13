@@ -330,3 +330,155 @@ List distance_matrices_cpp(NumericMatrix X, bool use_bfb, double penalty = 0.0,
     _["n_unique"] = u
   );
 }
+
+// ── Whole-genome duplication (WGD) ───────────────────────────────────────────
+//
+// W(a -> b, f): cost of explaining b as f * x plus greedy events, where x is
+// reached from a by greedy events:  min_x G(a, x) + G(f * x, b), with
+// f = 2 (one WGD) or 4 (two WGDs). Candidates for x are all intermediate
+// profiles on the greedy path from a towards floor(b / f) and towards
+// ceil(b / f), both endpoints included; this is an upper bound on the exact
+// minimum.
+
+// Walk the greedy path from a to target; at every state x evaluate
+// steps + G(f * x, b). Returns the minimum; optionally the best x and the
+// number of steps from a to it.
+static double wgd_path_cost(const double* a, const double* target, const double* b,
+                            int n, double f, std::vector<double>& cur,
+                            std::vector<double>& diff, std::vector<double>& fx,
+                            std::vector<double>& buf,
+                            std::vector<double>* best_x = nullptr, int* best_steps = nullptr) {
+  for (int i = 0; i < n; ++i) { cur[i] = a[i]; diff[i] = a[i] - target[i]; }
+  auto eval = [&](int steps) {
+    for (int i = 0; i < n; ++i) fx[i] = f * cur[i];
+    return steps + greedy_cost_only(fx.data(), b, n, buf);
+  };
+  int steps = 0, head = 0;
+  double best = eval(0);
+  if (best_x) { *best_x = cur; *best_steps = 0; }
+  while (true) {
+    while (head < n && diff[head] == 0) ++head;
+    if (head >= n) break;
+    int s = (diff[head] > 0.0) ? 1 : -1, end = head;
+    while (end + 1 < n && sgn(diff[end + 1]) == s) ++end;
+    double step = std::abs(diff[head]);
+    for (int i = head + 1; i <= end; ++i) step = std::min(step, std::abs(diff[i]));
+    const double delta = (s < 0) ? step : -step;
+    for (int i = head; i <= end; ++i) { cur[i] += delta; diff[i] += delta; }
+    ++steps;
+    if (steps >= best) break;  // later states cannot beat the best
+    double c = eval(steps);
+    if (c < best) {
+      best = c;
+      if (best_x) { *best_x = cur; *best_steps = steps; }
+    }
+  }
+  return best;
+}
+
+struct WgdWork {
+  std::vector<double> t, cur, diff, fx, buf, x1, x2;
+  explicit WgdWork(int n) : t(n), cur(n), diff(n), fx(n), buf(n) {}
+};
+
+static double wgd_cost_impl(const double* a, const double* b, int n, double f, WgdWork& w,
+                            std::vector<double>* best_x = nullptr, int* best_steps = nullptr) {
+  int s1 = 0, s2 = 0;
+  for (int i = 0; i < n; ++i) w.t[i] = std::floor(b[i] / f);
+  double c1 = wgd_path_cost(a, w.t.data(), b, n, f, w.cur, w.diff, w.fx, w.buf,
+                            best_x ? &w.x1 : nullptr, &s1);
+  bool same = true;
+  for (int i = 0; i < n; ++i) {
+    double c = std::ceil(b[i] / f);
+    if (c != w.t[i]) same = false;
+    w.t[i] = c;
+  }
+  double c2 = same ? R_PosInf : wgd_path_cost(a, w.t.data(), b, n, f, w.cur, w.diff, w.fx, w.buf,
+                                              best_x ? &w.x2 : nullptr, &s2);
+  bool first = c1 <= c2;
+  if (best_x) { *best_x = first ? w.x1 : w.x2; *best_steps = first ? s1 : s2; }
+  return first ? c1 : c2;
+}
+
+//' WGD cost between two profiles
+//'
+//' min over ancestors x of G(a, x) + G(f * x, b), where G is the greedy
+//' block distance (\code{greedy_distance_cpp()}).
+//'
+//' @param a,b NumericVector profiles.
+//' @param f Doubling factor: 2 (one WGD) or 4 (two WGDs).
+//' @return Numeric cost (excluding the cost of the WGD itself).
+//' @noRd
+// [[Rcpp::export]]
+double wgd_cost_cpp(NumericVector a, NumericVector b, double f) {
+  WgdWork w(a.size());
+  return wgd_cost_impl(a.begin(), b.begin(), a.size(), f, w);
+}
+
+//' Best pre-doubling ancestor between two profiles
+//'
+//' @inheritParams wgd_cost_cpp
+//' @return A list: \code{cost}, \code{x} (the ancestor), \code{steps} (greedy
+//'   events from a to x) and \code{after} (greedy events from f * x to b).
+//' @noRd
+// [[Rcpp::export]]
+List wgd_ancestor_cpp(NumericVector a, NumericVector b, double f) {
+  int n = a.size(), steps = 0;
+  WgdWork w(n);
+  std::vector<double> x;
+  double cost = wgd_cost_impl(a.begin(), b.begin(), n, f, w, &x, &steps);
+  return List::create(_["cost"] = cost,
+                      _["x"] = NumericVector(x.begin(), x.end()),
+                      _["steps"] = steps,
+                      _["after"] = cost - steps);
+}
+
+//' Directional WGD cost matrices for one cells x segments matrix
+//'
+//' \code{W1[i, j]} = W(row i -> row j, f = 2) and \code{W2[i, j]} the same
+//' with f = 4. Diagonals are \code{Inf}. Identical rows are grouped first, as
+//' in \code{distance_matrices_cpp()}.
+//'
+//' @param X Numeric matrix, cells x segments.
+//' @return A list with \code{W1}, \code{W2} and \code{n_unique}.
+//' @noRd
+// [[Rcpp::export]]
+List wgd_matrices_cpp(NumericMatrix X) {
+  const int m = X.nrow(), n = X.ncol();
+  std::vector<double> rows((size_t)m * n);
+  for (int i = 0; i < m; ++i)
+    for (int j = 0; j < n; ++j) rows[(size_t)i * n + j] = X(i, j);
+  auto row = [&](int i) { return rows.data() + (size_t)i * n; };
+
+  std::vector<int> order(m);
+  for (int i = 0; i < m; ++i) order[i] = i;
+  std::sort(order.begin(), order.end(), [&](int p, int q) {
+    return std::lexicographical_compare(row(p), row(p) + n, row(q), row(q) + n);
+  });
+  std::vector<int> group(m), rep;
+  for (int k = 0; k < m; ++k) {
+    int i = order[k];
+    if (k == 0 || !std::equal(row(i), row(i) + n, row(order[k - 1]))) rep.push_back(i);
+    group[i] = (int)rep.size() - 1;
+  }
+  const int u = (int)rep.size();
+
+  std::vector<double> W1((size_t)u * u), W2((size_t)u * u);
+  WgdWork w(n);
+  for (int p = 0; p < u; ++p) {
+    for (int q = 0; q < u; ++q) {
+      W1[(size_t)p * u + q] = wgd_cost_impl(row(rep[p]), row(rep[q]), n, 2.0, w);
+      W2[(size_t)p * u + q] = wgd_cost_impl(row(rep[p]), row(rep[q]), n, 4.0, w);
+    }
+  }
+
+  NumericMatrix M1(m, m), M2(m, m);
+  for (int j = 0; j < m; ++j) {
+    for (int i = 0; i < m; ++i) {
+      size_t k = (size_t)group[i] * u + group[j];
+      M1(i, j) = (i == j) ? R_PosInf : W1[k];
+      M2(i, j) = (i == j) ? R_PosInf : W2[k];
+    }
+  }
+  return List::create(_["W1"] = M1, _["W2"] = M2, _["n_unique"] = u);
+}
