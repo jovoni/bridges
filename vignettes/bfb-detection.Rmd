@@ -125,6 +125,53 @@ rounded mean copy number.
 res_smooth <- fit(cna_data, chromosomes = c("1", "2"), k_jitter_fix = 2)
 ```
 
+## Whole-genome duplication
+
+A whole-genome duplication (WGD) doubles every chromosome in one event, but
+the gain/loss distance would count it as many separate changes. With
+`wgd = TRUE`, the distance between two cells is the cheaper of two
+explanations:
+
+1. no WGD: the usual distance;
+2. one cell descends from the other's lineage doubled (once or twice), plus
+   gain/loss events.
+
+The second costs `wgd_penalty` per WGD for the whole genome, plus the
+events before and after the doubling. Each cell's number of WGDs, estimated
+from its ploidy or given with `wgd_counts`, is then placed on the tree, so
+the branches where a WGD happened are reported.
+
+```{r wgd}
+set.seed(13)
+sim_wgd <- bridge_sim(
+    chromosomes = c("1", "2"),
+    bfb_allele = "1:A",
+    max_cells = 300,
+    subsample = 100,
+    lambda = 0.75,
+    wgd_available = 1,
+    wgd_probability = 0.05
+)
+res_plain <- fit(sim_wgd$cna_data, chromosomes = c("1", "2"), verbose = FALSE)
+res_wgd <- fit(sim_wgd$cna_data, chromosomes = c("1", "2"), wgd = TRUE,
+               verbose = FALSE)
+
+table(wgd_count = res_wgd$wgd$counts)
+res_wgd$wgd$edges[, c("n_wgd", "n_cells")]
+```
+
+Distances between doubled and non-doubled cells shrink, because the
+doubling counts as one event:
+
+```{r wgd-distances}
+doubled <- names(res_wgd$wgd$counts)[res_wgd$wgd$counts > 0]
+others <- setdiff(names(res_wgd$wgd$counts), doubled)
+c(without_wgd = mean(res_plain$D[doubled, others]),
+  with_wgd = mean(res_wgd$D[doubled, others]))
+```
+
+Nodes where a WGD happened are left out of the BFB test below.
+
 # BFB detection on the tree
 
 At each internal node, the reconstruction compares a greedy cost G and a

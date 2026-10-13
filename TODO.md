@@ -81,3 +81,25 @@ chromosome and allele) and `all_input_Xs`.
 - [ ] `bridge_sim()` post-processing: `sequences_to_cndata()` loops over
       cells and alleles in R, and `build_phylo_from_lineage()` builds the
       lineage tree in R.
+
+## WGD (`fit(wgd = TRUE)`)
+
+Known limits, from the prototype studies in `dev/wgd/README.md` (branch
+`feature/wgd_develop`):
+
+- [ ] Replicating cells or doublets have high ploidy and get a WGD count of
+      1, which creates tiny spurious WGD clades (6-13 per tree on OV2295).
+      Options: minimum WGD clade size, requiring the WGD explanation to win
+      on that branch, or filtering such cells upstream.
+- [ ] At most two WGDs per lineage; events between two WGDs are folded into
+      the before/after comparison.
+- [ ] Whether two doubled clades share one WGD or doubled separately is
+      decided by the tree only; with near-identical sister lineages the
+      data cannot tell them apart.
+- [ ] The WGD option is 10-50x slower than the plain distance (more with
+      noisy profiles).
+- [ ] Noise degrades trees much more than WGD does (see the performance
+      section): smoothing or segment-level input should come first on real
+      data.
+- [ ] The BFB distance is not used inside the WGD explanation (BFB after a
+      WGD is counted as gain/loss events).

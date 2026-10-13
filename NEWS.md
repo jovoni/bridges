@@ -18,6 +18,16 @@
 
 ## New features
 
+* `fit()` can model whole-genome duplication (WGD) with `wgd = TRUE`. The
+  distance between two cells becomes the cheaper of "no WGD" (the usual
+  G/B distance) and "one cell is the other's lineage doubled once or twice,
+  plus gain/loss events", with one `wgd_penalty` per WGD for the whole
+  genome. WGD counts per cell (estimated from ploidy, or given with
+  `wgd_counts`) are placed on the tree by parsimony; WGD branches are
+  returned in `fit$wgd$edges` and as `"wgd"` events in `fit$history`, and
+  their nodes are excluded from the BFB test of `detect_bfb_branches()`.
+  The default (`wgd = FALSE`) gives exactly the same results as before.
+
 * `fit()` is much faster with the default distances (`"greedy_fast"`,
   `"bfb_fast"`): all pairwise distances of a chromosome and allele are
   computed in one C++ call, once per pair of distinct copy-number profiles.
