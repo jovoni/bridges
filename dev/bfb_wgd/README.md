@@ -100,3 +100,57 @@ On OV2295 (total CN), the same pattern:
 - Per-cell detection needs to know about WGD. Raw calls on doubled cells
   are unreliable; halving fixes the false positives but costs sensitivity.
   A WGD-aware version is needed (see the options in the report).
+
+## Where are the WGDs, and what happened before and after? (`wgd_placement_ov2295.R`)
+
+On `fit(wgd = TRUE)` (500 kb, jitter 2) there are 14 WGD branches.
+
+**Two real WGD branches:**
+
+| WGD branch | Sister clade | Note |
+|---|---|---|
+| G+H+I (243 cells) | a single G cell estimated as not doubled | The WGD sits at the base of G/H/I; the pre-WGD ancestor is constrained mainly by that one cell, so it is weakly determined. |
+| E+F (223 cells; 1 A and 2 B cells included) | 10 near-diploid cells (A–D) | E/F branches off inside the near-diploid group. |
+
+**Twelve 1–4-cell WGD branches**, mostly single A–D cells with high
+ploidy: likely replicating cells or doublets, not real WGDs.
+
+**Gain/loss events on each part of the lineage** (greedy events summed over
+chromosomes):
+
+| WGD | Before the WGD (diploid → pre-WGD ancestor) | On the WGD branch, after doubling | Within the clade |
+|---|---|---|---|
+| G/H/I | 40 | 46 | 47 |
+| E/F | 95 | 124 | 74 |
+
+Each cell–to–ancestor comparison here carries the single-cell noise (about
+29 events per cell), so these totals are upper bounds.
+
+**Chromosome 6 in G/H/I:**
+
+| Region (Mb) | Pre-WGD ancestor (doubled) | Post-WGD ancestor | Clade consensus | Cells with CN ≥ 6 |
+|---|---|---|---|---|
+| 16–22.5 | 3 (6) | 6 | 7 | 98% |
+| 0–16 | 3 (6) | 4 | 5 | 46–48% |
+| 37.5–62.5 | 3 / 2 (6 / 4) | 4 | 6 | 52–56% |
+| 110–127 | 2 (4) | 6 | 5 | 7% |
+| rest of 6q | 1 (2) | 3–4 | 2–3 | 0% |
+
+- The 16–22.5 Mb gain is clonal. It is already present (doubled) in the
+  post-WGD ancestor and in 98% of cells, so it arose before G/H/I
+  diversified.
+- The gains at 0–16 and 37.5–62.5 Mb are heterogeneous: about half the
+  cells reach CN ≥ 6, above the post-WGD ancestor (4). They arose **after
+  the WGD, within G/H/I**, exactly where the BFB-like nodes of the
+  `wgd = FALSE` tree are.
+
+**Implication.** The chromosome 6 data are consistent with BFB-like
+activity after the WGD. The WGD-aware reconstruction removing those nodes
+therefore looks more like lost sensitivity inside doubled clades than an
+artefact being removed. This needs checking with simulations of BFB after
+a WGD.
+
+Outputs (`dev/data/figures/`):
+- `ov2295_wgd_ancestral_profiles.png`: genome-wide profiles around each
+  WGD;
+- `ov2295_wgd_ancestral_profiles.rds`: profile table.
