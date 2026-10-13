@@ -101,3 +101,16 @@ test_that("bridge_sim validates lambda, rate, subsample and hotspot position", {
     "beyond the last bin"
   )
 })
+
+test_that("bridge_sim returns an empty result with a warning when the population goes extinct", {
+  set.seed(1)
+  expect_warning(
+    sim <- bridge_sim(chromosomes = "1", birth_rate = 0.1, death_rate = 0.5, max_cells = 50),
+    "went extinct"
+  )
+  expect_length(sim$cells, 0)
+  expect_null(sim$tree)
+  expect_equal(nrow(sim$cna_data), 0)
+  expect_true(all(c("cell_id", "chr", "start", "end", "A", "B", "CN") %in% names(sim$cna_data)))
+  expect_equal(sim$n_alive, 0)
+})

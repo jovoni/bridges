@@ -140,6 +140,8 @@ simulate_serial_passages <- function(
       # tick after each passage attempt, whether it succeeded or failed
       cli::cli_progress_update(id = pb, .envir = parent.env(environment()))
 
+      if (!is.null(sim) && length(sim$cells) == 0) sim <- NULL   # extinction
+
       if (is.null(sim)) {
         if (p %in% passages_to_keep) {
           rows[[length(rows) + 1L]] <- c(passage = p, replicate = rep_idx,

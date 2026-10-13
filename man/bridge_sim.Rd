@@ -154,6 +154,9 @@ number of cells alive at simulation end.}
 Equals \code{length(cells)} unless \code{subsample} was set.}
 \item{input_parameters}{List of all input parameters used.}
 }
+If the population goes extinct (no cells alive), a warning is given and
+\code{cells} is empty, \code{tree} is \code{NULL} and \code{cna_data} has
+no rows.
 }
 \description{
 Simulates a growing population of diploid cells (alleles A and B for every

@@ -97,6 +97,9 @@
 #'     Equals \code{length(cells)} unless \code{subsample} was set.}
 #'   \item{input_parameters}{List of all input parameters used.}
 #' }
+#' If the population goes extinct (no cells alive), a warning is given and
+#' \code{cells} is empty, \code{tree} is \code{NULL} and \code{cna_data} has
+#' no rows.
 #'
 #' @examples
 #' set.seed(1)
@@ -273,8 +276,16 @@ bridge_sim <- function(
   }
   sim_state$n_alive_total <- n_alive_total
 
+  # All cells died: nothing to sequence. Return an empty result instead of
+  # failing while building the tree and copy-number table.
+  extinct <- length(sim_state$cell_ids) == 0
+  if (extinct) {
+    warning("The population went extinct (no cells alive at time ",
+            signif(sim_state$time, 3), "); returning no cells.", call. = FALSE)
+  }
+
   # Finalize and prepare results
-  sim_state <- prepare_results(sim_state, return_phylo = return_phylo)
+  sim_state <- prepare_results(sim_state, return_phylo = return_phylo && !extinct)
 
   # Prune tree to exactly the alive cells: build_phylo_from_lineage() includes
   # dead-cell leaf nodes; ape::keep.tip() removes them so tree tips == cna_data cells.
@@ -283,7 +294,11 @@ bridge_sim <- function(
     sim_state$tree <- ape::keep.tip(sim_state$tree, kept_ids)
   }
 
-  sim_state$cna_data <- if (return_cna_data) {
+  sim_state$cna_data <- if (return_cna_data && extinct) {
+    dplyr::tibble(cell_id = character(0), chr = character(0), bin_idx = integer(0),
+                  A = numeric(0), B = numeric(0), CN = numeric(0),
+                  start = numeric(0), end = numeric(0))
+  } else if (return_cna_data) {
     sequences_to_cndata(
       sequences       = sim_state$cells,
       chr_seq_lengths = chr_seq_lengths,
