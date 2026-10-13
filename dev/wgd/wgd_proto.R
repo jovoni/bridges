@@ -8,7 +8,7 @@ estimate_wgd_class <- function(data) {
   cn <- if ("CN" %in% names(data)) data$CN else data$A + data$B
   ploidy <- tapply(cn, data$cell_id, mean)
   k <- round(log2(pmax(ploidy, 1e-9) / 2))
-  pmin(pmax(k, 0), 2)
+  stats::setNames(as.numeric(pmin(pmax(k, 0), 2)), names(ploidy))
 }
 
 # Per-chromosome distances summed over the genome:
@@ -227,4 +227,87 @@ clone_coherence <- function(tree, clones) {
                monophyletic = ape::is.monophyletic(tree, cells))
   })
   cbind(clone = names(res), do.call(rbind, res))
+}
+
+# ---- Variant 1: ploidy-normalised distance ------------------------------------
+
+# Cells with the same estimated WGD count keep the current distance (S0).
+# For cells with different counts, the more-doubled cell b is brought down to
+# the other cell's level j by halving (floor of b / 2^(k_b - j)); the
+# remainder (values that don't halve cleanly) counts as greedy events after
+# the doubling. Then
+#   D(a, b) = S0(a at level j, b at level j) + remainder events + w * |k_a - k_b|
+# All pairwise distances go through compute_fast_distances(), so this costs
+# about one S0 computation per WGD level present.
+wgd_normalised_distance <- function(all_input_Xs, chromosomes, alleles, wgd_class, w = 1) {
+  alleles <- alleles[alleles %in% names(all_input_Xs[[1]])]
+  chromosomes <- chromosomes[chromosomes %in% names(all_input_Xs)]
+  cells <- rownames(all_input_Xs[[chromosomes[1]]][[alleles[1]]])
+  k <- wgd_class[cells]
+  n <- length(cells)
+  D <- matrix(NA_real_, n, n, dimnames = list(cells, cells))
+
+  for (j in sort(unique(k))) {
+    idx <- cells[k >= j]
+    fac <- 2^(k[idx] - j)
+    remainder_events <- stats::setNames(numeric(length(idx)), idx)
+    level_X <- list()
+    for (chromosome in chromosomes) for (allele in alleles) {
+      X <- all_input_Xs[[chromosome]][[allele]][idx, , drop = FALSE]
+      halved <- floor(X / fac)
+      rem <- X - halved * fac
+      remainder_events <- remainder_events + vapply(seq_along(idx), function(i)
+        greedy_distance_cpp(as.numeric(rem[i, ]), numeric(ncol(rem)), target_val = 0)$cost, 0)
+      level_X[[chromosome]][[allele]] <- halved
+    }
+    S0 <- compute_fast_distances(level_X, chromosomes, alleles)$D
+    # pairs whose lower WGD count is j
+    for (a in cells[k == j]) {
+      others <- idx[k[idx] >= j]
+      D[a, others] <- S0[a, others] + remainder_events[a] + remainder_events[others] +
+        w * (k[others] - j)
+      D[others, a] <- D[a, others]
+    }
+  }
+  diag(D) <- 0
+  list(D = D, winner = outer(k, k, function(x, y) abs(x - y)))
+}
+
+# ---- Variant 3: clone-level test, one shared WGD vs two separate WGDs --------
+
+# Consensus (rounded median per segment) of a group of cells, per chromosome/allele
+consensus_profiles <- function(all_input_Xs, chromosomes, alleles, cells) {
+  out <- list()
+  for (chromosome in chromosomes) for (allele in alleles) {
+    X <- all_input_Xs[[chromosome]][[allele]][cells, , drop = FALSE]
+    out[[chromosome]][[allele]] <- round(apply(X, 2, stats::median))
+  }
+  out
+}
+
+# Groups P and Q are both doubled once relative to group R (not doubled).
+# Two three-group trees are scored with the same kernels, summed over the genome:
+#   shared:   R --[WGD]--> u, u -> P, u -> Q       cost = w + W(R -> u) + G(P, u) + G(Q, u)
+#             u = greedy ancestor of P and Q (doubled level)
+#   parallel: R -> v, v --[WGD]--> P, v --[WGD]--> Q
+#             cost = 2w + G(R, v) + W(v -> P) + W(v -> Q)
+#             v = greedy ancestor of P and Q halved (undoubled level)
+# Returns both costs; delta = parallel - shared (> 0 favours one shared WGD).
+shared_vs_parallel <- function(all_input_Xs, chromosomes, alleles, R, P, Q, w = 1) {
+  alleles <- alleles[alleles %in% names(all_input_Xs[[1]])]
+  chromosomes <- chromosomes[chromosomes %in% names(all_input_Xs)]
+  cR <- consensus_profiles(all_input_Xs, chromosomes, alleles, R)
+  cP <- consensus_profiles(all_input_Xs, chromosomes, alleles, P)
+  cQ <- consensus_profiles(all_input_Xs, chromosomes, alleles, Q)
+  shared <- w; parallel <- 2 * w
+  for (chromosome in chromosomes) for (allele in alleles) {
+    r <- cR[[chromosome]][[allele]]; p <- cP[[chromosome]][[allele]]; q <- cQ[[chromosome]][[allele]]
+    tv <- if (allele == "CN") 2 else 1
+    g_pq <- greedy_distance_cpp(p, q, target_val = 2 * tv)
+    shared <- shared + wgd_cost(r, g_pq$ancestor, 2) + g_pq$cost
+    v <- greedy_distance_cpp(floor(p / 2), floor(q / 2), target_val = tv)$ancestor
+    parallel <- parallel + greedy_distance_cpp(r, v, target_val = tv)$cost +
+      wgd_cost(v, p, 2) + wgd_cost(v, q, 2)
+  }
+  c(shared = shared, parallel = parallel, delta = parallel - shared)
 }

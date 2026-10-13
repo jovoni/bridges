@@ -223,3 +223,95 @@ the WGD term.
    reconstruction reporting `"wgd"` events in `history`. The current
    `"ploidy"` and `"all"` variants agree; keep `"all"` (no reliance on the
    ploidy estimate) unless runtime matters.
+
+## Alternatives tested (`run_alternatives.R`, `real_alternatives.R`)
+
+### Variant 1: ploidy-normalised distance (`wgd_normalised_distance()`)
+
+**How it works**
+- Cells with the same WGD count keep today's distance.
+- Otherwise the more-doubled cell is halved (floor) down to the other
+  cell's level. Values that don't halve cleanly count as changes after
+  the doubling.
+- Distance = today's distance on the normalised profiles + those changes
+  + w per WGD of difference.
+- Everything goes through `compute_fast_distances()`.
+
+Checks: identical to today's distance without WGD; a cell vs its exact
+doubled copy = w; matches the full search on a doubled copy plus one gain
+per allele.
+
+### Variant 3: clone-level test (`shared_vs_parallel()`)
+
+Uses consensus (median) profiles of a non-doubled group R and two doubled
+groups P and Q, and compares:
+- **one shared WGD:** R → [WGD] → u → {P, Q}, with u = greedy ancestor of
+  P and Q;
+- **two separate WGDs:** R → v → [WGD] → P and v → [WGD] → Q, with
+  v = greedy ancestor of P and Q halved.
+
+Delta = cost of two separate WGDs − cost of one shared; > 0 favours one
+shared WGD. Simulation truth:
+- **one-WGD runs:** the WGD clade split into its two main subclades, so
+  the truth is one shared WGD;
+- **parallel runs:** the two WGD groups, so the truth is two separate WGDs.
+
+### Simulation results
+
+Same scenarios and seeds as the harder study, noise none and low.
+Allele-specific data shown; total CN is similar.
+
+| Scenario | Noise | Tree error (RF): none / full / normalised | WGD label match: none / full / normalised | Distance time (s): none / full / normalised |
+|---|---|---|---|---|
+| One WGD | none | 0.298 / 0.299 / 0.312 | 1 / 1 / 1 | 0.004 / 0.030 / 0.022 |
+| One WGD | low | 0.510 / 0.503 / 0.561 | 1 / 1 / 1 | 0.09 / 2.98 / 0.10 |
+| Parallel WGDs | none | 0.300 / 0.282 / 0.297 | 0.70 / 0.95 / 0.90 | 0.004 / 0.037 / 0.024 |
+| Parallel WGDs | low | 0.522 / 0.495 / 0.591 | 0.70 / 0.90 / 0.70 | 0.10 / 3.05 / 0.11 |
+| Nested WGDs | none | 0.324 / 0.305 / 0.327 | 1 / 1 / 0.98 | 0.005 / 0.038 / 0.030 |
+| No WGD | both | identical | – (0 WGD edges) | |
+
+**Variant 3**, share of correct calls (both data types):
+- truth one shared WGD: 70–90% correct, but with tiny differences (delta
+  −1 to +3 events);
+- truth two separate WGDs: 40–50% correct (median delta 0, a coin flip).
+
+### OV2295
+
+**Variant 1** gives the same top-level answer as the full search: G+H+I
+and E+F are separate WGD clades. Runtime is close to today's distance:
+
+| Bins | Normalised | Today's distance | Full search |
+|---|---|---|---|
+| 2 Mb | 0.5 s | 0.4 s | 15 s |
+| 500 kb | 1.4 s | 1.5 s | 71 s |
+
+Clone coherence is 0.750 at 2 Mb and 0.703 at 500 kb (full search: 0.748
+and 0.732).
+
+**Variant 3**:
+- Clones expected to share a WGD do: E vs F (+41/+35 events), G vs H, G vs
+  I, H vs I (+12 to +37).
+- **E+F vs G+H+I is essentially a tie**, with a slight lean to one shared
+  WGD: +7 at 2 Mb, +1 at 500 kb. One clone pair flips with resolution
+  (E vs I: +9 at 2 Mb, −8 at 500 kb).
+
+### Conclusions
+
+- **Variant 1 is a good cheap option on clean data but breaks under
+  noise.** Noisy bins create many odd values, which count as extra changes
+  after the doubling. With low noise it is no better than no WGD term and
+  worsens the tree (RF 0.59 vs 0.52 on parallel WGDs). The full search
+  stays robust (0.50) but costs about 30× more under noise.
+- **Variant 3, as designed, cannot detect parallel WGDs.** Pooling all
+  non-doubled cells into one consensus throws away the information that
+  separates the two stories: which non-doubled sub-lineage each doubled
+  group is closest to. The tree-based approach keeps that information,
+  which is why it recovers parallel WGDs (label match 0.95).
+  - When two WGDs happen in near-identical sister lineages, the data can't
+    tell them apart from one shared WGD: the two explanations differ by
+    about w.
+  - A useful clone-level test would need tree context, e.g. compare each
+    doubled group with its own nearest non-doubled sub-clade.
+- **OV2295:** the full search and variant 1 split E+F and G+H+I, while the
+  clone-level test is a tie. The data don't clearly decide between one and
+  two WGDs; the claim should be reported as uncertain.
