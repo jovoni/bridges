@@ -1,7 +1,13 @@
 # Time each stage of fit() on simulated data. Run from the package root:
 #   Rscript dev/benchmark_fit.R
-# Uses internal functions, so it loads the package with devtools::load_all().
-suppressMessages(devtools::load_all(".", quiet = TRUE))
+# Runs on the installed package: devtools::load_all() compiles the C++ code
+# without optimisation (-O0), which makes it several times slower. Install
+# first, e.g. devtools::install(). Internal functions are called with :::.
+suppressMessages(library(bridges))
+create_diploid_data <- bridges:::create_diploid_data
+process_input_data <- bridges:::process_input_data
+compute_fast_distances <- bridges:::compute_fast_distances
+compute_reconstructions <- bridges:::compute_reconstructions
 
 tm <- function(expr) round(system.time(expr)[["elapsed"]], 2)
 
