@@ -154,3 +154,51 @@ Outputs (`dev/data/figures/`):
 - `ov2295_wgd_ancestral_profiles.png`: genome-wide profiles around each
   WGD;
 - `ov2295_wgd_ancestral_profiles.rds`: profile table.
+
+## Keeping BFB detection with WGD on (`bfb_after_wgd_sim.R`)
+
+**Cause on OV2295.** Separated by swapping trees and reconstructions (an
+earlier test of this was flawed: `deparse()` split a line, so only one of
+the two target lines was changed).
+
+| Tree | Reconstruction | Chr 6 BFB-like nodes | Of which ≥ 10 cells |
+|---|---|---|---|
+| `wgd = FALSE` | plain | 14 | 6 |
+| `wgd = FALSE` | WGD-aware, target doubled (old) | 7 | 1 |
+| `wgd = FALSE` | WGD-aware, target not doubled | 12 | 5 |
+| `wgd = TRUE` | WGD-aware, target doubled (old) | 5 | 0 |
+| `wgd = TRUE` | WGD-aware, target not doubled (new) | 8 | 1 |
+
+- The large G/H/I nodes are not skipped as WGD nodes. Their delta drops
+  because, inside doubled clades, the greedy ancestor was pulled towards a
+  doubled flat baseline (4).
+- After a WGD followed by losses (6q is back at 2–3 in G/H/I), that
+  baseline picks poor ancestors.
+
+**Simulations of BFB after a WGD.**
+- Two stages: 8 founders, all or about half doubled, without BFB; then BFB
+  on 1:A, or none as a control.
+- 6 replicates per scenario; allele-specific and total CN.
+
+Results:
+- BFB after a WGD is detected equally well with the doubled target, with
+  the plain target, and with `wgd = FALSE`:
+  - all founders doubled: 6/6;
+  - mixed founders: 5/6.
+- Controls without BFB: no calls.
+- The simulator's doubled genomes stay close to an exact doubling, so the
+  target barely matters there.
+
+**Change.** `reconstruct_tree()` no longer doubles the greedy-ancestor
+target inside doubled clades. This is neutral in the simulations and on
+OV2295 brings chr 6 back from 5 to 8 BFB-like nodes on the WGD tree.
+
+**Remaining gap.**
+- Chr 6 is still not significant with `wgd = TRUE` (8 of 876 nodes,
+  adj. p = 1, vs 14 of 890, adj. p = 0.005 without WGD).
+- The WGD tree has fewer BFB-like nodes inside G/H/I even with the plain
+  reconstruction (11 vs 14, and 2 vs 6 large nodes). Distances within G/H/I
+  are identical in both fits, but neighbour-joining uses the whole matrix,
+  so the inside of G/H/I is built differently.
+- The genome-wide binomial test also dilutes a signal that lives in one
+  clade: 8 BFB-like nodes among 876.
