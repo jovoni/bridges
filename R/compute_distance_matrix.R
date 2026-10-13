@@ -152,10 +152,17 @@ fast_distance_matrices = function(input_X, use_bfb = TRUE, penalty = 0, keep_par
 # The WGD is charged once for the whole genome, while the pre-doubling
 # ancestor is chosen per chromosome/allele. `D_no_wgd` keeps the distance
 # without the WGD option.
+#
+# WGD costs are only computed from a cell to cells with more WGDs, according
+# to `wgd_counts` (named by cell): W1 (one doubling) when the other cell has
+# at least one more, W2 (two doublings) when it has two more. Other entries
+# are Inf. Set
+# wgd_all_pairs = TRUE to compute every ordered pair.
 compute_fast_distances = function(all_input_Xs, chromosomes, alleles,
                                   bfb_penalty = 0, use_bfb = TRUE,
                                   keep_matrices = FALSE,
-                                  wgd = FALSE, wgd_penalty = 1) {
+                                  wgd = FALSE, wgd_penalty = 1,
+                                  wgd_counts = NULL, wgd_all_pairs = FALSE) {
   alleles = alleles[alleles %in% names(all_input_Xs[[1]])]
   chromosomes = chromosomes[chromosomes %in% names(all_input_Xs)]
 
@@ -163,7 +170,14 @@ compute_fast_distances = function(all_input_Xs, chromosomes, alleles,
   D = matrix(0, length(cells), length(cells), dimnames = list(cells, cells))
   greedy_Ds = avg_Ds = NULL
   n_unique = list()
-  if (wgd) W1 = W2 = matrix(0, length(cells), length(cells), dimnames = list(cells, cells))
+  if (wgd) {
+    W1 = W2 = matrix(0, length(cells), length(cells), dimnames = list(cells, cells))
+    if (is.null(wgd_counts)) {
+      if (!wgd_all_pairs) stop("wgd_counts is required unless wgd_all_pairs = TRUE.", call. = FALSE)
+      wgd_counts = stats::setNames(integer(length(cells)), cells)
+    }
+    wgd_counts = as.integer(wgd_counts[cells])
+  }
 
   for (chromosome in chromosomes) {
     for (allele in alleles) {
@@ -178,7 +192,7 @@ compute_fast_distances = function(all_input_Xs, chromosomes, alleles,
       D = D + m$min
       if (wgd) {
         storage.mode(X) = "double"
-        w = wgd_matrices_cpp(X)
+        w = wgd_matrices_cpp(X, wgd_counts, wgd_all_pairs)
         W1 = W1 + w$W1
         W2 = W2 + w$W2
       }

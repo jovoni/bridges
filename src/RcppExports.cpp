@@ -77,13 +77,15 @@ BEGIN_RCPP
 END_RCPP
 }
 // wgd_matrices_cpp
-List wgd_matrices_cpp(NumericMatrix X);
-RcppExport SEXP _bridges_wgd_matrices_cpp(SEXP XSEXP) {
+List wgd_matrices_cpp(NumericMatrix X, IntegerVector counts, bool all_pairs);
+RcppExport SEXP _bridges_wgd_matrices_cpp(SEXP XSEXP, SEXP countsSEXP, SEXP all_pairsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericMatrix >::type X(XSEXP);
-    rcpp_result_gen = Rcpp::wrap(wgd_matrices_cpp(X));
+    Rcpp::traits::input_parameter< IntegerVector >::type counts(countsSEXP);
+    Rcpp::traits::input_parameter< bool >::type all_pairs(all_pairsSEXP);
+    rcpp_result_gen = Rcpp::wrap(wgd_matrices_cpp(X, counts, all_pairs));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -225,7 +227,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_bridges_distance_matrices_cpp", (DL_FUNC) &_bridges_distance_matrices_cpp, 4},
     {"_bridges_wgd_cost_cpp", (DL_FUNC) &_bridges_wgd_cost_cpp, 3},
     {"_bridges_wgd_ancestor_cpp", (DL_FUNC) &_bridges_wgd_ancestor_cpp, 3},
-    {"_bridges_wgd_matrices_cpp", (DL_FUNC) &_bridges_wgd_matrices_cpp, 1},
+    {"_bridges_wgd_matrices_cpp", (DL_FUNC) &_bridges_wgd_matrices_cpp, 3},
     {"_bridges_seq_length_cpp", (DL_FUNC) &_bridges_seq_length_cpp, 1},
     {"_bridges_reverse_sequence_cpp", (DL_FUNC) &_bridges_reverse_sequence_cpp, 1},
     {"_bridges_fuse_sequence_cpp", (DL_FUNC) &_bridges_fuse_sequence_cpp, 1},

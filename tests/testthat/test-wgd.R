@@ -40,14 +40,27 @@ test_that("wgd_matrices_cpp matches per-pair wgd_cost_cpp, with repeated profile
   set.seed(33)
   profiles <- matrix(sample(0:6, 6 * 15, TRUE), 6)
   X <- profiles[sample(6, 20, TRUE), ]
-  m <- bridges:::wgd_matrices_cpp(X)
+  counts <- sample(0:2, 20, TRUE)
+  all <- bridges:::wgd_matrices_cpp(X, counts, all_pairs = TRUE)
+  some <- bridges:::wgd_matrices_cpp(X, counts, all_pairs = FALSE)
   for (i in 1:20) for (j in 1:20) {
     if (i == j) next
-    expect_equal(m$W1[i, j], W(X[i, ], X[j, ], 2))
-    expect_equal(m$W2[i, j], W(X[i, ], X[j, ], 4))
+    expect_equal(all$W1[i, j], W(X[i, ], X[j, ], 2))
+    expect_equal(all$W2[i, j], W(X[i, ], X[j, ], 4))
+    dk <- counts[j] - counts[i]
+    expect_equal(some$W1[i, j], if (dk >= 1) all$W1[i, j] else Inf)
+    expect_equal(some$W2[i, j], if (dk == 2) all$W2[i, j] else Inf)
   }
-  expect_true(all(is.infinite(diag(m$W1))))
-  expect_equal(m$n_unique, nrow(unique(X)))
+  expect_true(all(is.infinite(diag(all$W1))))
+  expect_lt(some$n_computed, all$n_computed)
+})
+
+test_that("wgd_matrices_cpp keeps identical profiles with different WGD counts apart", {
+  X <- rbind(c(1, 2, 1), c(1, 2, 1), c(2, 4, 2))
+  m <- bridges:::wgd_matrices_cpp(X, c(0L, 1L, 1L))
+  expect_equal(m$n_unique, 3)
+  expect_equal(m$W1[1, 3], 0)               # third row is the first doubled
+  expect_equal(m$W1[1, 2], W(X[1, ], X[2, ], 2))
 })
 
 test_that("assign_wgd_counts places WGDs on the expected edges", {
@@ -116,6 +129,18 @@ test_that("fit(wgd = TRUE) changes nothing when no cell is doubled", {
   expect_identical(r1$D, r0$D)
   expect_equal(nrow(r1$wgd$edges), 0)
   expect_equal(r1$reconstructions, r0$reconstructions)
+})
+
+test_that("restricting WGD costs to differing counts gives the same fit", {
+  for (seed in c(2, 7)) {
+    sim <- wgd_sim(seed, 2)
+    chrs <- as.character(1:4)
+    fast <- fit(sim$cna_data, chromosomes = chrs, wgd = TRUE, verbose = FALSE)
+    full <- fit(sim$cna_data, chromosomes = chrs, wgd = TRUE, wgd_all_pairs = TRUE, verbose = FALSE)
+    expect_identical(fast$D, full$D)
+    expect_equal(fast$tree, full$tree)
+    expect_equal(fast$wgd$edges$cells, full$wgd$edges$cells)
+  }
 })
 
 test_that("fit(wgd = TRUE) validates its inputs", {

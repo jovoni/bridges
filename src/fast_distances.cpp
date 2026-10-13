@@ -436,14 +436,22 @@ List wgd_ancestor_cpp(NumericVector a, NumericVector b, double f) {
 //' Directional WGD cost matrices for one cells x segments matrix
 //'
 //' \code{W1[i, j]} = W(row i -> row j, f = 2) and \code{W2[i, j]} the same
-//' with f = 4. Diagonals are \code{Inf}. Identical rows are grouped first, as
-//' in \code{distance_matrices_cpp()}.
+//' with f = 4. Diagonals are \code{Inf}. Identical rows (with the same WGD
+//' count) are grouped first, as in \code{distance_matrices_cpp()}.
+//'
+//' Unless \code{all_pairs} is TRUE, a cost is only computed where it can
+//' matter: \code{W1[i, j]} when cell j has at least one more WGD than cell
+//' i (so one doubling is still tried if a count of 2 is overestimated),
+//' \code{W2[i, j]} when it has two more. Other entries are \code{Inf}.
 //'
 //' @param X Numeric matrix, cells x segments.
-//' @return A list with \code{W1}, \code{W2} and \code{n_unique}.
+//' @param counts Integer vector of WGD counts per row of \code{X}.
+//' @param all_pairs Compute every ordered pair regardless of counts.
+//' @return A list with \code{W1}, \code{W2}, \code{n_unique} and
+//'   \code{n_computed} (number of kernel evaluations).
 //' @noRd
 // [[Rcpp::export]]
-List wgd_matrices_cpp(NumericMatrix X) {
+List wgd_matrices_cpp(NumericMatrix X, IntegerVector counts, bool all_pairs = false) {
   const int m = X.nrow(), n = X.ncol();
   std::vector<double> rows((size_t)m * n);
   for (int i = 0; i < m; ++i)
@@ -452,23 +460,35 @@ List wgd_matrices_cpp(NumericMatrix X) {
 
   std::vector<int> order(m);
   for (int i = 0; i < m; ++i) order[i] = i;
+  // group rows by (profile, WGD count)
   std::sort(order.begin(), order.end(), [&](int p, int q) {
-    return std::lexicographical_compare(row(p), row(p) + n, row(q), row(q) + n);
+    if (std::lexicographical_compare(row(p), row(p) + n, row(q), row(q) + n)) return true;
+    if (std::lexicographical_compare(row(q), row(q) + n, row(p), row(p) + n)) return false;
+    return counts[p] < counts[q];
   });
   std::vector<int> group(m), rep;
   for (int k = 0; k < m; ++k) {
     int i = order[k];
-    if (k == 0 || !std::equal(row(i), row(i) + n, row(order[k - 1]))) rep.push_back(i);
+    if (k == 0 || counts[i] != counts[order[k - 1]] ||
+        !std::equal(row(i), row(i) + n, row(order[k - 1]))) rep.push_back(i);
     group[i] = (int)rep.size() - 1;
   }
   const int u = (int)rep.size();
 
-  std::vector<double> W1((size_t)u * u), W2((size_t)u * u);
+  std::vector<double> W1((size_t)u * u, R_PosInf), W2((size_t)u * u, R_PosInf);
   WgdWork w(n);
+  double n_computed = 0;
   for (int p = 0; p < u; ++p) {
     for (int q = 0; q < u; ++q) {
-      W1[(size_t)p * u + q] = wgd_cost_impl(row(rep[p]), row(rep[q]), n, 2.0, w);
-      W2[(size_t)p * u + q] = wgd_cost_impl(row(rep[p]), row(rep[q]), n, 4.0, w);
+      int dk = counts[rep[q]] - counts[rep[p]];
+      if (all_pairs || dk >= 1) {
+        W1[(size_t)p * u + q] = wgd_cost_impl(row(rep[p]), row(rep[q]), n, 2.0, w);
+        ++n_computed;
+      }
+      if (all_pairs || dk == 2) {
+        W2[(size_t)p * u + q] = wgd_cost_impl(row(rep[p]), row(rep[q]), n, 4.0, w);
+        ++n_computed;
+      }
     }
   }
 
@@ -480,5 +500,6 @@ List wgd_matrices_cpp(NumericMatrix X) {
       M2(i, j) = (i == j) ? R_PosInf : W2[k];
     }
   }
-  return List::create(_["W1"] = M1, _["W2"] = M2, _["n_unique"] = u);
+  return List::create(_["W1"] = M1, _["W2"] = M2, _["n_unique"] = u,
+                      _["n_computed"] = n_computed);
 }

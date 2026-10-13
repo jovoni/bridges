@@ -75,14 +75,22 @@ wgd_ancestor_cpp <- function(a, b, f) {
 #' Directional WGD cost matrices for one cells x segments matrix
 #'
 #' \code{W1[i, j]} = W(row i -> row j, f = 2) and \code{W2[i, j]} the same
-#' with f = 4. Diagonals are \code{Inf}. Identical rows are grouped first, as
-#' in \code{distance_matrices_cpp()}.
+#' with f = 4. Diagonals are \code{Inf}. Identical rows (with the same WGD
+#' count) are grouped first, as in \code{distance_matrices_cpp()}.
+#'
+#' Unless \code{all_pairs} is TRUE, a cost is only computed where it can
+#' matter: \code{W1[i, j]} when cell j has at least one more WGD than cell
+#' i (so one doubling is still tried if a count of 2 is overestimated),
+#' \code{W2[i, j]} when it has two more. Other entries are \code{Inf}.
 #'
 #' @param X Numeric matrix, cells x segments.
-#' @return A list with \code{W1}, \code{W2} and \code{n_unique}.
+#' @param counts Integer vector of WGD counts per row of \code{X}.
+#' @param all_pairs Compute every ordered pair regardless of counts.
+#' @return A list with \code{W1}, \code{W2}, \code{n_unique} and
+#'   \code{n_computed} (number of kernel evaluations).
 #' @noRd
-wgd_matrices_cpp <- function(X) {
-    .Call(`_bridges_wgd_matrices_cpp`, X)
+wgd_matrices_cpp <- function(X, counts, all_pairs = FALSE) {
+    .Call(`_bridges_wgd_matrices_cpp`, X, counts, all_pairs)
 }
 
 #' Compute length of an interval-encoded sequence

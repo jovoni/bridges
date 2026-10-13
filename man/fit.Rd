@@ -18,6 +18,7 @@ fit(
   wgd = FALSE,
   wgd_penalty = 1,
   wgd_counts = NULL,
+  wgd_all_pairs = FALSE,
   verbose = TRUE,
   ...
 )
@@ -73,6 +74,10 @@ gain/loss events. Default: 1.}
 \item{wgd_counts}{Optional named integer vector (names = cell ids) giving
 the number of WGDs (0, 1 or 2) of each cell. If \code{NULL}, it is
 estimated from ploidy as \code{round(log2(mean CN / 2))}, clamped to 0-2.}
+
+\item{wgd_all_pairs}{Logical; compute the WGD explanation for every pair of
+cells instead of only between cells whose WGD counts differ (by one or
+two). Much slower; mainly for checking. Default: \code{FALSE}.}
 
 \item{verbose}{Logical; print progress messages. Default: \code{TRUE}.}
 
@@ -135,7 +140,9 @@ but the gain/loss distance would count it as many separate events. With
 explanations: (i) no WGD, the usual distance; (ii) one cell descends from
 the other's lineage doubled once (or twice) plus gain/loss events, costing
 \code{wgd_penalty} per WGD plus the events before and after the doubling.
-The WGD is counted once for the whole genome. After the tree is built,
+The WGD is counted once for the whole genome. This explanation is only
+evaluated between cells whose WGD counts differ (see \code{wgd_counts} and
+\code{wgd_all_pairs}). After the tree is built,
 each cell's WGD count (\code{wgd_counts}) is placed on the tree by
 parsimony (doublings only, never halving); branches where the count
 increases are reported in \code{wgd$edges} and as \code{"wgd"} events in
