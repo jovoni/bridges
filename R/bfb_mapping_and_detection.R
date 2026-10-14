@@ -342,7 +342,7 @@ reconstruct_tree <- function(fit, chr, allele, store_profiles = TRUE) {
       # One or both children descend from a WGD after this node: the ancestor
       # is the best pre-doubling profile, and BFB is not tested here.
       if (fL > 1 && fR > 1) {
-        g_h <- G_dist(floor(left / fL), floor(right / fR), target_val = target_val)
+        g_h <- G_dist(floor(left / fL), floor(right / fR), target_val = target_val * 2^k_here)
         internal_cell <- g_h$ancestor
         left_cost  <- g_h$a_cost + G_dist(fL * internal_cell, left, target_val = target_val)$cost
         right_cost <- g_h$b_cost + G_dist(fR * internal_cell, right, target_val = target_val)$cost
@@ -363,11 +363,9 @@ reconstruct_tree <- function(fit, chr, allele, store_profiles = TRUE) {
       right_vec <- right
       deltas_vec[as.character(node_id)] <- NA_real_
     } else {
-      # Greedy distance
-      # The greedy ancestor is pulled towards the normal diploid level even
-      # inside doubled clades: after a WGD followed by losses, a doubled flat
-      # baseline picks poor ancestors and hides BFB signal (OV2295, chr 6).
-      g_d <- G_dist(left, right, target_val = target_val)
+      # Greedy distance; inside clades with k WGDs the ancestor is chosen
+      # closest to the doubled normal level (target_val * 2^k)
+      g_d <- G_dist(left, right, target_val = target_val * 2^k_here)
 
       # BFB distance (order matters)
       if (mL > mR) {

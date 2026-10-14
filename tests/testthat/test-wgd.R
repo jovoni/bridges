@@ -121,6 +121,34 @@ test_that("fit(wgd = TRUE) finds a single WGD and its clade", {
   expect_true(all(is.finite(r1$tree$edge.length)))
 })
 
+test_that("ancestors inside a doubled clade do not pile up sister-specific losses", {
+  # Two chromosomes of 20 bins: near-diploid cells, and a doubled clade with
+  # two sub-lineages that lost different segments of chr 1 A after the WGD.
+  # Each cell has its own gain on chr 2 B, so no profiles are identical.
+  cells <- c(paste0("n", 1:4), paste0("x", 1:3), paste0("y", 1:3))
+  data <- do.call(rbind, lapply(seq_along(cells), function(i) {
+    type <- substr(cells[i], 1, 1); f <- if (type == "n") 1 else 2
+    do.call(rbind, lapply(c("1", "2"), function(chr) {
+      A <- rep(f, 20); B <- rep(f, 20)
+      if (chr == "1" && type == "x") A[3:5] <- 1
+      if (chr == "1" && type == "y") A[12:14] <- 1
+      if (chr == "2") B[i + 5] <- B[i + 5] + 1
+      data.frame(cell_id = cells[i], chr = chr, start = (0:19) * 1e6 + 1, end = (1:20) * 1e6,
+                 A = A, B = B, CN = A + B)
+    }))
+  }))
+  r <- fit(data, chromosomes = c("1", "2"), wgd = TRUE, verbose = FALSE)
+  expect_equal(nrow(r$wgd$edges), 1)
+  expect_setequal(r$wgd$edges$cells[[1]], c(paste0("x", 1:3), paste0("y", 1:3)))
+
+  # The doubled ancestor carries at most one of the two losses (3 bins), not
+  # both, which would be charged again on the WGD edge and in both sub-clades
+  top <- r$reconstructions[["1"]][["A"]]$internal_nodes[[as.character(r$wgd$edges$child)]]
+  bins_lost <- sum((top < 2) * lengths(lapply(strsplit(names(top), ":"), function(se) {
+    se <- as.numeric(se); seq(se[1], se[2], by = 1e6) })))
+  expect_lte(bins_lost, 3)
+})
+
 test_that("fit(wgd = TRUE) changes nothing when no cell is doubled", {
   sim <- wgd_sim(5, 0)
   chrs <- as.character(1:4)
