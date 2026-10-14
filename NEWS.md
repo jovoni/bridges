@@ -33,6 +33,9 @@
   `wgd_counts`) are placed on the tree by parsimony; WGD branches are
   returned in `fit$wgd$edges` and as `"wgd"` events in `fit$history`, and
   their nodes are excluded from the BFB test of `detect_bfb_branches()`.
+  Inside clades with k WGDs, the reconstruction picks ancestors closest to
+  the doubled normal level, so branch lengths count events after a WGD
+  once.
   WGD costs are only computed between cells whose WGD counts differ, which
   keeps `fit(wgd = TRUE)` within about 1-2x the time of a fit without WGD;
   `wgd_all_pairs = TRUE` computes every pair.

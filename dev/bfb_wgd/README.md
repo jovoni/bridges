@@ -202,3 +202,18 @@ OV2295 brings chr 6 back from 5 to 8 BFB-like nodes on the WGD tree.
   so the inside of G/H/I is built differently.
 - The genome-wide binomial test also dilutes a signal that lives in one
   clade: 8 BFB-like nodes among 876.
+
+**Reverted (commit 8b06268).** The doubled target is back. With the plain
+target, sister lineages with different losses after a WGD got an ancestor
+carrying the losses of both. Those were charged again on the WGD edge and in
+each sub-clade, so in simulations with WGD the root-to-tip lengths stopped
+tracking the true number of events: r = 0.35 against 0.92 with the doubled
+target (`dev/branch_length/`). BFB deltas come from this same reconstruction.
+
+Effect on BFB detection:
+- Simulations of BFB after a WGD (this script): unchanged, 6/6 and 5/6
+  detected, no false calls.
+- OV2295, `wgd = TRUE`, jitter 0: chr 6 (36 BFB-like nodes) and chr 22
+  (18 → 21 nodes) stay significant in both tests.
+- OV2295, jitter 2: chr 6 drops from 8 to 5 BFB-like nodes, and
+  `detect_bfb_clades()` no longer calls it (adj. p 0.044 → 1).
