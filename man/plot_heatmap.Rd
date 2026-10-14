@@ -27,7 +27,9 @@ plot_heatmap(
   fit = NULL,
   chr = NULL,
   allele = NULL,
-  bfb_node_color = "goldenrod"
+  bfb_node_color = "goldenrod",
+  show_wgd = FALSE,
+  wgd_color = "royalblue"
 )
 }
 \arguments{
@@ -103,6 +105,14 @@ signal to annotate. Required when \code{fit} is supplied.}
 
 \item{bfb_node_color}{Colour of the points drawn on internal nodes flagged
 as likely BFB (\code{delta > 0}) when \code{fit} is supplied. Default: "goldenrod".}
+
+\item{show_wgd}{Logical; draw the branches where a whole-genome duplication
+happened (from \code{fit(wgd = TRUE)}, see \code{fit$wgd$edges}) thicker and in
+\code{wgd_color}, with a marker at their midpoint. A WGD above the root is
+marked at the root. Requires \code{fit}; \code{chr} and \code{allele} are then optional
+(without them the tree is not coloured by BFB). Default: \code{FALSE}.}
+
+\item{wgd_color}{Colour of the WGD branches. Default: "royalblue".}
 }
 \value{
 A ComplexHeatmap object that can be displayed or further customized.

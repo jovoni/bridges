@@ -152,3 +152,41 @@ test_that("fit(wgd = TRUE) validates its inputs", {
   expect_error(fit(sim$cna_data, chromosomes = "1", wgd = TRUE, wgd_penalty = -1,
                    verbose = FALSE), "wgd_penalty")
 })
+
+test_that("plot_heatmap marks WGD branches with show_wgd = TRUE", {
+  seed <- 1
+  repeat {
+    sim <- wgd_sim(seed, 1); truth <- doubled_cells(sim)
+    if (length(truth) >= 5 && length(truth) <= 40) break
+    seed <- seed + 1
+  }
+  chrs <- as.character(1:4)
+  res <- fit(sim$cna_data, chromosomes = chrs, wgd = TRUE, verbose = FALSE)
+  expect_equal(nrow(res$wgd$edges), 1)
+
+  # ggtree itself emits ggplot2 deprecation warnings (aes_(), size, fortify
+  # arguments); they are silenced around the plotting calls below.
+  quiet <- function(expr) suppressWarnings(suppressMessages(expr))
+
+  # one thick segment and one marker per WGD branch
+  p <- quiet(ggtree::ggtree(res$tree))
+  marked <- bridges:::add_wgd_branches(p, res$wgd, "royalblue")
+  expect_equal(length(marked$layers) - length(p$layers), 2)
+  seg <- quiet(ggplot2::layer_data(marked, length(marked$layers) - 1))
+  expect_equal(nrow(seg), nrow(res$wgd$edges))
+
+  # the full heatmap, with and without BFB colouring
+  expect_s4_class(quiet(plot_heatmap(sim$cna_data, fit = res, show_wgd = TRUE,
+                                     chromosomes_to_plot = chrs, use_raster = FALSE)),
+                  "HeatmapList")
+  expect_s4_class(quiet(plot_heatmap(sim$cna_data, fit = res, chr = "1", allele = "A",
+                                     show_wgd = TRUE, chromosomes_to_plot = chrs,
+                                     use_raster = FALSE)), "HeatmapList")
+
+  # errors: no WGD in the fit, or a different tree
+  r0 <- fit(sim$cna_data, chromosomes = chrs, verbose = FALSE)
+  expect_error(plot_heatmap(sim$cna_data, fit = r0, show_wgd = TRUE), "requires `fit`")
+  expect_error(plot_heatmap(sim$cna_data, fit = res, tree = r0$tree, show_wgd = TRUE), "tree of `fit`")
+  # without show_wgd, fit still needs chr and allele (unchanged behaviour)
+  expect_error(plot_heatmap(sim$cna_data, fit = res), "both `chr` and `allele`")
+})

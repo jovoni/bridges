@@ -345,6 +345,12 @@ create_tree_annotation <- function(tree_ggplot, tree_width, n_cells) {
 #'   signal to annotate. Required when `fit` is supplied.
 #' @param bfb_node_color Colour of the points drawn on internal nodes flagged
 #'   as likely BFB (`delta > 0`) when `fit` is supplied. Default: "goldenrod".
+#' @param show_wgd Logical; draw the branches where a whole-genome duplication
+#'   happened (from `fit(wgd = TRUE)`, see `fit$wgd$edges`) thicker and in
+#'   `wgd_color`, with a marker at their midpoint. A WGD above the root is
+#'   marked at the root. Requires `fit`; `chr` and `allele` are then optional
+#'   (without them the tree is not coloured by BFB). Default: `FALSE`.
+#' @param wgd_color Colour of the WGD branches. Default: "royalblue".
 #'
 #' @return A ComplexHeatmap object that can be displayed or further customized.
 #'   The object contains the combined heatmap(s) and optional tree annotation.
@@ -412,16 +418,24 @@ plot_heatmap <- function(data,
                          fit = NULL,
                          chr = NULL,
                          allele = NULL,
-                         bfb_node_color = "goldenrod") {
+                         bfb_node_color = "goldenrod",
+                         show_wgd = FALSE,
+                         wgd_color = "royalblue") {
 
   # If a fit is supplied, derive tree + reconstruction from it and turn on
   # likely-BFB node annotation. Feeds the existing colored-tree path below.
   annotate_bfb_nodes <- FALSE
-  if (!is.null(fit)) {
-    if (is.null(chr) || is.null(allele)) {
-      stop("When `fit` is supplied, both `chr` and `allele` must be given.")
-    }
-    if (is.null(tree)) tree <- fit$tree
+  if (isTRUE(show_wgd) && (is.null(fit) || is.null(fit$wgd))) {
+    stop("`show_wgd = TRUE` requires `fit`, from fit(wgd = TRUE).", call. = FALSE)
+  }
+  if (!is.null(fit) && (is.null(chr) || is.null(allele)) && !isTRUE(show_wgd)) {
+    stop("When `fit` is supplied, both `chr` and `allele` must be given.")
+  }
+  if (!is.null(fit) && is.null(tree)) tree <- fit$tree
+  if (isTRUE(show_wgd) && !identical(tree, fit$tree)) {
+    stop("`show_wgd = TRUE` needs the tree of `fit` (WGD branches refer to fit$tree).", call. = FALSE)
+  }
+  if (!is.null(fit) && !is.null(chr) && !is.null(allele)) {
     recon_ca <- fit$reconstructions[[as.character(chr)]][[as.character(allele)]]
     if (is.null(recon_ca) || !("deltas" %in% names(recon_ca))) {
       recon_ca <- reconstruct_tree(fit, as.character(chr), as.character(allele))
@@ -476,6 +490,11 @@ plot_heatmap <- function(data,
         reorder_tree = reorder_tree,
         distance_matrix = distance_matrix
       )
+    }
+
+    # Mark WGD branches (node numbers refer to fit$tree)
+    if (isTRUE(show_wgd)) {
+      tree_processed$ggplot <- add_wgd_branches(tree_processed$ggplot, fit$wgd, wgd_color)
     }
 
     # Extract ordered cell IDs from tree
@@ -658,4 +677,29 @@ process_tree_with_coloring <- function(tree,
   }
 
   return(list(tree = tree, ggplot = p))
+}
+
+# Draw the WGD branches of a ggtree plot thicker and coloured, with a marker
+# at their midpoint; a WGD above the root is marked at the root.
+add_wgd_branches <- function(p, wgd, color) {
+  d <- p$data
+  children <- wgd$edges$child
+  root_wgd <- !is.null(wgd$root_count) && wgd$root_count > 0
+  if (!length(children) && !root_wgd) return(p)
+  seg <- d[d$node %in% children & d$node != d$parent, , drop = FALSE]
+  seg$x_parent <- d$x[match(seg$parent, d$node)]
+  if (nrow(seg)) {
+    p <- p +
+      ggplot2::geom_segment(data = seg, ggplot2::aes(x = .data$x_parent, xend = .data$x,
+                                                     y = .data$y, yend = .data$y),
+                            colour = color, linewidth = 1.2, inherit.aes = FALSE) +
+      ggplot2::geom_point(data = seg, ggplot2::aes(x = (.data$x_parent + .data$x) / 2, y = .data$y),
+                          colour = color, shape = 18, size = 2.5, inherit.aes = FALSE)
+  }
+  if (root_wgd) {
+    root <- d[d$node == d$parent, , drop = FALSE]
+    p <- p + ggplot2::geom_point(data = root, ggplot2::aes(x = .data$x, y = .data$y),
+                                 colour = color, shape = 18, size = 3.5, inherit.aes = FALSE)
+  }
+  p
 }
