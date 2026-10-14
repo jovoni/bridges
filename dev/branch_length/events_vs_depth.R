@@ -5,7 +5,7 @@
 #   depth  = root-to-tip path length of fit()$tree (reconstructed events per
 #            edge, plus the WGD penalty when wgd = TRUE);
 #   D_dipl = the distance from the cell to the synthetic diploid in fit()$D.
-#   [REC_TARGET=doubled] Rscript dev/branch_length/events_vs_depth.R [output.rds]
+#   Rscript dev/branch_length/events_vs_depth.R [output.rds]
 suppressMessages(library(bridges))
 args <- commandArgs(trailingOnly = TRUE)
 out_file <- if (length(args)) args[1] else "events_vs_depth.rds"
@@ -13,21 +13,6 @@ chrs <- as.character(1:10)
 n_reps <- 5
 types <- c("amp", "del", "bfb", "wgd")
 
-# REC_TARGET=doubled: reconstruct with the greedy-ancestor target doubled
-# inside doubled clades (target_val * 2^k), as before commit 96b6774
-if (identical(Sys.getenv("REC_TARGET"), "doubled")) {
-  lines <- readLines("R/bfb_mapping_and_detection.R")
-  st <- grep("^reconstruct_tree <- function", lines)
-  en <- st - 1 + which(lines[st:length(lines)] == "}")[1]
-  txt <- gsub("G_dist(left, right, target_val = target_val)",
-              "G_dist(left, right, target_val = target_val * 2^k_here)", lines[st:en], fixed = TRUE)
-  txt <- gsub("G_dist(floor(left / fL), floor(right / fR), target_val = target_val)",
-              "G_dist(floor(left / fL), floor(right / fR), target_val = target_val * 2^k_here)", txt, fixed = TRUE)
-  stopifnot(sum(grepl("2^k_here)", txt, fixed = TRUE)) == 2)
-  f <- eval(parse(text = txt)); environment(f) <- asNamespace("bridges")
-  ns <- asNamespace("bridges")
-  unlockBinding("reconstruct_tree", ns); assign("reconstruct_tree", f, envir = ns); lockBinding("reconstruct_tree", ns)
-}
 
 scenarios <- list(
   cna_only = list(bfb_prob = 0,   first_round_of_bfb = FALSE, wgd_available = 0),
