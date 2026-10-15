@@ -23,6 +23,7 @@ articles:
 - title: In depth
   contents:
   - simulation
+  - modelling
   - bfb-detection
 
 reference:

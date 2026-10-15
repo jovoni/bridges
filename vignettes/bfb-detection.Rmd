@@ -1,19 +1,18 @@
 ---
-title: "Phylogenetic inference and BFB detection"
+title: "BFB detection"
 author:
 - name: Giovanni Santacatterina
 date: "`r BiocStyle::doc_date()`"
 package: "`r BiocStyle::pkg_ver('bridges')`"
 abstract: >
-  This vignette explains how bridges infers a phylogeny from allele-specific
-  single-cell copy-number profiles, and the two ways it detects
-  breakage-fusion-bridge (BFB) signal: on the branches of the inferred tree,
-  and directly on each cell's profile with exact BFB combinatorics.
+  This vignette shows the two ways bridges detects breakage-fusion-bridge
+  (BFB) signal: on the branches of a tree inferred with fit(), and directly
+  on each cell's profile with exact BFB combinatorics.
 output:
   BiocStyle::html_document:
     toc_float: true
 vignette: >
-  %\VignetteIndexEntry{Phylogenetic inference and BFB detection}
+  %\VignetteIndexEntry{BFB detection}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -56,121 +55,17 @@ sim <- bridge_sim(
 cna_data <- sim$cna_data
 ```
 
-# Phylogenetic inference
+# Fitting the tree
 
-## The fit() pipeline
-
-`fit()` proceeds as follows:
-
-1. Add a synthetic normal diploid cell, used later to root the tree.
-2. For each chromosome and allele, build a cells-by-bins matrix and merge
-   adjacent bins that never differ between cells.
-3. Compute a greedy (G) and a BFB (B) distance between every pair of cells,
-   and keep the smaller of the two.
-4. Sum the distances over alleles and chromosomes and build a tree with
-   `tree_func` (default `ape::nj`), rooted on the diploid cell, which is
-   then removed.
-5. Reconstruct ancestral profiles bottom-up along the tree, recording at
-   each internal node whether a BFB event or greedy gains and losses better
-   explain its two children.
+`fit()` infers the phylogeny and reconstructs the ancestral profiles that
+the tree-based tests below use. How it compares cells (the greedy and
+BFB-aware distances), builds and roots the tree, and handles whole-genome
+duplications is explained in
+`vignette("modelling", package = "bridges")`.
 
 ```{r fit}
 res <- fit(cna_data, chromosomes = c("1", "2"), verbose = FALSE)
-names(res)
 ```
-
-`res$tree` is the inferred tree, `res$D` the final distance matrix and
-`res$reconstructions` the ancestral reconstructions used below. With
-`keep_matrices = TRUE`, `res$greedy_Ds` and `res$avg_Ds` also hold the G and
-B matrices for every chromosome and allele; they are not kept by default
-because they take a lot of memory for large data sets.
-
-## Distances
-
-The **greedy distance** counts the gain and loss events needed to turn one
-profile into the other. Each event changes a contiguous block of bins in
-the same direction, so one large segmental change costs one event.
-
-The **BFB distance** first makes all copy-number differences even with
-greedy steps, then charges one event per remaining run of differing bins,
-plus `bfb_penalty`. The ancestor is the average of the two profiles. This
-matches the inverted duplications created by BFB, which change copy number
-in pairs.
-
-| Argument      | Values                                                          |
-|---------------|-----------------------------------------------------------------|
-| `g_dist_func` | `"greedy_fast"` (C++, default), `"greedy"`, `"G"` (pure R)      |
-| `b_dist_func` | `"bfb_fast"` (C++, default), `"bfb"`, `"B_contig"`, `"avg"`, `"A"`, or `NULL` |
-
-Setting `b_dist_func = NULL` gives a greedy-only analysis, useful as a
-baseline. A larger `bfb_penalty` makes the BFB explanation win less often.
-
-```{r baseline}
-res_greedy <- fit(cna_data, chromosomes = c("1", "2"), b_dist_func = NULL,
-                  verbose = FALSE)
-c(
-    with_bfb = phangorn::RF.dist(sim$tree, res$tree, normalize = TRUE),
-    greedy_only = phangorn::RF.dist(sim$tree, res_greedy$tree, normalize = TRUE)
-)
-```
-
-## Noisy data
-
-Segmentation noise in real data creates small, cell-specific breakpoints.
-With `k_jitter_fix = k`, breakpoints that are within `k` bins of a more
-frequent breakpoint are merged into it, and each segment is replaced by its
-rounded mean copy number.
-
-```{r jitter, eval = FALSE}
-res_smooth <- fit(cna_data, chromosomes = c("1", "2"), k_jitter_fix = 2)
-```
-
-## Whole-genome duplication
-
-A whole-genome duplication (WGD) doubles every chromosome in one event, but
-the gain/loss distance would count it as many separate changes. With
-`wgd = TRUE`, the distance between two cells is the cheaper of two
-explanations:
-
-1. no WGD: the usual distance;
-2. one cell descends from the other's lineage doubled (once or twice), plus
-   gain/loss events.
-
-The second costs `wgd_penalty` per WGD for the whole genome, plus the
-events before and after the doubling. Each cell's number of WGDs, estimated
-from its ploidy or given with `wgd_counts`, is then placed on the tree, so
-the branches where a WGD happened are reported.
-
-```{r wgd}
-set.seed(13)
-sim_wgd <- bridge_sim(
-    chromosomes = c("1", "2"),
-    bfb_allele = "1:A",
-    max_cells = 300,
-    subsample = 100,
-    lambda = 0.75,
-    wgd_available = 1,
-    wgd_probability = 0.05
-)
-res_plain <- fit(sim_wgd$cna_data, chromosomes = c("1", "2"), verbose = FALSE)
-res_wgd <- fit(sim_wgd$cna_data, chromosomes = c("1", "2"), wgd = TRUE,
-               verbose = FALSE)
-
-table(wgd_count = res_wgd$wgd$counts)
-res_wgd$wgd$edges[, c("n_wgd", "n_cells")]
-```
-
-Distances between doubled and non-doubled cells shrink, because the
-doubling counts as one event:
-
-```{r wgd-distances}
-doubled <- names(res_wgd$wgd$counts)[res_wgd$wgd$counts > 0]
-others <- setdiff(names(res_wgd$wgd$counts), doubled)
-c(without_wgd = mean(res_plain$D[doubled, others]),
-  with_wgd = mean(res_wgd$D[doubled, others]))
-```
-
-Nodes where a WGD happened are left out of the BFB test below.
 
 # BFB detection on the tree
 
@@ -179,7 +74,8 @@ BFB cost B for the node's two children, and records $\delta = G - B$. A
 node with $\delta > 0$ is BFB-like. `detect_bfb_branches()` counts the
 BFB-like nodes for every chromosome and allele and runs a one-sided
 binomial test against the background rate `threshold`, with
-Benjamini-Hochberg adjustment across tests.
+Benjamini-Hochberg adjustment across tests. With `fit(wgd = TRUE)`, nodes
+just above a whole-genome duplication are left out.
 
 ```{r branches}
 branches <- detect_bfb_branches(res, threshold = 0.005)

@@ -54,6 +54,11 @@
   hg19 (GRCh37) and hg38 (GRCh38), sourced from UCSC Genome Browser tracks.
   See `?centromeres` and `data-raw/centromeres.R`.
 
+* New vignette, `vignette("modelling")`, on the model behind `fit()`: the
+  greedy and BFB-aware distances and how they differ, tree reconstruction,
+  and how whole-genome duplications are detected and placed. The
+  bfb-detection vignette now focuses on the BFB tests.
+
 ## Bug fixes
 
 * `breakpoint_support = "custom"` now works throughout the simulation (it

@@ -59,8 +59,11 @@ The other vignettes go into detail:
 
 - `vignette("simulation", package = "bridges")`: the simulator and serial
   passages.
-- `vignette("bfb-detection", package = "bridges")`: phylogenetic inference
-  and both BFB detection methods.
+- `vignette("modelling", package = "bridges")`: the model behind `fit()`:
+  the greedy and BFB-aware distances, tree reconstruction and whole-genome
+  duplication.
+- `vignette("bfb-detection", package = "bridges")`: both BFB detection
+  methods.
 
 # Installation
 
@@ -132,6 +135,9 @@ sim$tree
 `sim$tree` their true lineage tree.
 
 ## Infer the phylogeny
+
+`fit()` compares every pair of cells and builds a tree from the distances
+(see `vignette("modelling", package = "bridges")`).
 
 ```{r fit}
 res <- fit(sim$cna_data, chromosomes = c("1", "2", "8"), verbose = FALSE)
