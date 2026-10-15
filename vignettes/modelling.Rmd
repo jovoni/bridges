@@ -1,0 +1,420 @@
+---
+title: "Modelling copy-number evolution with fit()"
+author:
+- name: Giovanni Santacatterina
+date: "`r BiocStyle::doc_date()`"
+package: "`r BiocStyle::pkg_ver('bridges')`"
+abstract: >
+  This vignette explains the model behind fit(): how copy-number profiles
+  are compared with a BFB-agnostic (greedy) and a BFB-aware distance, how
+  the two differ, how the tree and its ancestral profiles are built, and how
+  whole-genome duplications (WGD) are detected and placed on the tree.
+output:
+  BiocStyle::html_document:
+    toc_float: true
+vignette: >
+  %\VignetteIndexEntry{Modelling copy-number evolution with fit()}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 10,
+  fig.height = 6,
+  out.width = "100%",
+  message = FALSE
+)
+```
+
+```{r load}
+library(bridges)
+```
+
+# Overview
+
+`fit()` turns single-cell copy-number profiles into a rooted tree whose
+branches carry the copy-number events that explain them:
+
+```
+cna_data (cells x bins)
+  |  for each chromosome and allele: cells x segments matrix
+  |  distance between every pair of cells = min(G, B)        <- G: greedy, B: BFB-aware
+  |  sum over chromosomes and alleles                         (+ WGD term, wgd = TRUE)
+  v
+distance matrix D  -->  tree_func (neighbour-joining)  -->  root on a diploid cell
+  |
+  v
+bottom-up reconstruction of ancestral profiles
+  -> events and branch lengths, BFB-like nodes, WGD branches
+```
+
+The sections below follow these steps. Throughout, we use tiny hand-made
+profiles so that every number can be checked by eye. The helper `toy()`
+builds a copy-number table with one chromosome of six 1 Mb bins, in which
+allele B stays at one copy and allele A takes the given values.
+
+```{r toy}
+toy <- function(profiles, chr = "1") {
+    do.call(rbind, lapply(names(profiles), function(cell) {
+        A <- profiles[[cell]]
+        n <- length(A)
+        data.frame(cell_id = cell, chr = chr,
+                   start = (seq_len(n) - 1) * 1e6 + 1, end = seq_len(n) * 1e6,
+                   A = A, B = 1, CN = A + 1)
+    }))
+}
+```
+
+# From bins to segments
+
+For each chromosome and allele, `fit()` builds a cells-by-bins matrix and
+merges adjacent bins that have the same copy number in every cell: such
+bins carry no information about the order of events, and merging them makes
+everything faster. Missing values are replaced by `fillna` (default 0).
+
+Real data have segmentation noise: small breakpoints that move by one or two
+bins from cell to cell. With `k_jitter_fix = k`, breakpoints that lie within
+`k` bins of a more frequent breakpoint are merged into it, and each segment
+is replaced by its rounded mean copy number, before adjacent bins are
+merged.
+
+Finally, a synthetic normal cell, `"diploid"` (one copy of each allele, two
+for `"CN"`), is added to the data. It is the outgroup used to root the
+tree, and is removed afterwards.
+
+# The BFB-agnostic distance G
+
+The greedy distance G counts the gain and loss events needed to turn one
+profile into another. Starting from the difference $x = a - b$, it
+repeatedly:
+
+1. takes the leftmost run of adjacent segments where $x$ is non-zero with
+   the same sign;
+2. moves the whole run towards zero by the smallest absolute value in it;
+3. counts one event.
+
+It stops when $x$ is zero everywhere. An event can therefore change any
+number of adjacent segments by any number of copies: a large amplification
+and a one-copy loss both cost one.
+
+# The BFB-aware distance B
+
+A BFB cycle breaks a chromosome, fuses the sister chromatids and breaks the
+resulting bridge, leaving an inverted duplication. Repeated cycles build
+ladders of copy number along the chromosome, where neighbouring segments
+differ by **even** amounts. The BFB distance B reflects this:
+
+1. while some difference is odd, take the leftmost run starting at an odd
+   difference (all segments with the same sign) and move it by one copy
+   towards zero, counting one event;
+2. every remaining non-zero run, in which all differences are now even,
+   counts as one more event (whatever its shape);
+3. add `bfb_penalty` (default 0).
+
+So a whole ladder of even steps costs a single BFB-like event, while odd
+changes are paid for one copy at a time.
+
+# How G and B differ
+
+Three cells, compared with each other and with the diploid reference on
+allele A:
+
+- `ladder`: an amplification that rises in steps of two, a typical BFB
+  pattern;
+- `odd_gain`: a single gain of three copies on two segments;
+- `loss`: a one-copy loss of two segments.
+
+```{r toy-distances}
+cells <- toy(list(
+    ladder   = c(1, 1, 3, 5, 7, 1),
+    odd_gain = c(1, 1, 4, 4, 1, 1),
+    loss     = c(1, 0, 0, 1, 1, 1)
+))
+res_toy <- fit(cells, chromosomes = "1", keep_matrices = TRUE, verbose = FALSE)
+```
+
+`keep_matrices = TRUE` keeps the G matrices (`greedy_Ds`) and the B matrices
+(`avg_Ds`) of every chromosome and allele. For allele A:
+
+```{r toy-g-b}
+res_toy$greedy_Ds[["1"]][["A"]]
+res_toy$avg_Ds[["1"]][["A"]]
+```
+
+Against the diploid cell:
+
+- `ladder` costs G = 3 (one gain for each step of the ladder) but B = 1
+  (all differences are even and form one run);
+- `odd_gain` costs G = 1 but B = 2 (one copy to make the difference even,
+  then one even run);
+- `loss` costs 1 either way.
+
+The distance used for the tree is the smaller of the two, for each
+chromosome and allele, summed over all of them (allele B contributes nothing
+here, and the diagonal is 0):
+
+```{r toy-d}
+res_toy$D
+```
+
+| | Greedy distance G | BFB distance B |
+|---|---|---|
+| One event is | a gain or loss of a block, of any size | a one-copy change of a block, or a whole run of even changes |
+| Cheap for | few large gains and losses | ladders of even steps (BFB) |
+| Expensive for | ladders: one event per step | odd changes of several copies |
+| Ancestor of two cells | a profile on the greedy path between them, closest to the normal level | the average of the two (after the odd differences are fixed) |
+
+B is a fast, approximate signature of BFB: it does not check whether a
+ladder could really be produced by BFB cycles. That exact question is
+answered per cell by `bfb_detect_vectors()` and `bfb_detect_batch()`
+(see `vignette("bfb-detection", package = "bridges")`).
+
+Two arguments control the BFB distance:
+
+- `bfb_penalty` is added to every B cost, so a larger value makes the BFB
+  explanation win less often;
+- `b_dist_func = NULL` switches B off, giving a greedy-only analysis that is
+  useful as a baseline.
+
+On a simulation in which allele A of chromosome 1 undergoes BFB cycles, the
+normalised Robinson-Foulds distance between the true and inferred trees
+(0 = same topology, lower is better) compares the two:
+
+```{r baseline}
+set.seed(42)
+sim <- bridge_sim(
+    chromosomes = c("1", "2"),
+    bfb_allele = "1:A",
+    max_cells = 500,
+    subsample = 120,
+    lambda = 0.75,
+    bfb_prob = 0.8,
+    amp_rate = 0.1,
+    del_rate = 0.1
+)
+res <- fit(sim$cna_data, chromosomes = c("1", "2"), verbose = FALSE)
+res_greedy <- fit(sim$cna_data, chromosomes = c("1", "2"), b_dist_func = NULL,
+                  verbose = FALSE)
+c(
+    with_bfb = phangorn::RF.dist(sim$tree, res$tree, normalize = TRUE),
+    greedy_only = phangorn::RF.dist(sim$tree, res_greedy$tree, normalize = TRUE)
+)
+```
+
+Here both trees are about equally close to the truth. B also has a second
+role, in the reconstruction described next: comparing G and B at each node
+is what marks nodes as BFB-like.
+
+# From distances to a tree and its history
+
+The summed distance matrix is passed to `tree_func` (default `ape::nj`,
+neighbour-joining). The tree is rooted on the synthetic diploid cell, which
+is then dropped, so the root stands for the last common ancestor of the
+cells.
+
+Ancestral profiles are then reconstructed bottom-up, separately for each
+chromosome and allele. At each internal node, the profiles of its two
+children are compared with both distances:
+
+- the node's profile is the ancestor given by the cheaper one (see the table
+  above);
+- $\delta = G - B$ is recorded; a node with $\delta > 0$, where BFB explains
+  the two children better than gains and losses, is **BFB-like**;
+- the events on the two branches below the node are recorded in
+  `res$history` (`"gain"`, `"loss"`, `"gain and loss"`, `"bfb"`, `"none"`).
+
+The branch lengths of `res$tree` are the numbers of reconstructed events,
+summed over chromosomes and alleles, so the distance from the root to a cell
+estimates how many events its lineage went through.
+
+```{r history}
+head(res$history)
+summary(res$tree$edge.length)
+```
+
+The BFB-like nodes are what the tree-based BFB tests use:
+`detect_bfb_branches()` counts them over the whole tree, and
+`detect_bfb_clades()` looks for clades where they concentrate (see
+`vignette("bfb-detection", package = "bridges")`).
+
+# Whole-genome duplication
+
+## The problem
+
+A whole-genome duplication (WGD) doubles every chromosome in a single
+event. The greedy distance does not know this event: to go from a profile
+to its doubled copy it needs at least one gain per chromosome and allele, so
+a doubled cell looks far from everything that was not doubled.
+
+```{r wgd-toy}
+genome <- function(profiles) {
+    do.call(rbind, lapply(c("1", "2", "3"), function(chr) toy(profiles, chr)))
+}
+wgd_cells <- genome(list(
+    near_diploid = c(1, 1, 1, 0, 1, 1),
+    doubled      = c(2, 2, 2, 0, 2, 2)
+))
+wgd_cells$B[wgd_cells$cell_id == "doubled"] <- 2
+wgd_cells$CN <- wgd_cells$A + wgd_cells$B
+
+chrs <- c("1", "2", "3")
+fit(wgd_cells, chromosomes = chrs, verbose = FALSE)$D
+fit(wgd_cells, chromosomes = chrs, wgd = TRUE, verbose = FALSE)$D
+```
+
+`doubled` is `near_diploid` doubled. Without WGD the two cells are 9 events
+apart: on each of the three chromosomes, allele A needs two gains (the lost
+segment splits it in two) and allele B one. With `wgd = TRUE` they are one
+event apart, the WGD itself.
+
+## How many WGDs each cell has
+
+`fit(wgd = TRUE)` first needs the number of WGDs of each cell (0, 1 or 2).
+By default it is estimated from ploidy, the mean total copy number of the
+cell: $k = \mathrm{round}(\log_2(\text{ploidy} / 2))$, clamped to 0-2. So a
+cell is called doubled once its ploidy reaches about 2.8, and doubled twice
+from about 5.7. Counts from another method can be given with `wgd_counts`
+(a named vector, one value per cell).
+
+## The WGD distance
+
+For two cells $a$ and $b$, where $b$ is suspected to descend from $a$'s
+lineage doubled once ($f = 2$) or twice ($f = 4$), the cost is
+
+$$W(a \to b, f) = \min_x \; G(a, x) + G(f \cdot x, b),$$
+
+that is, greedy events from $a$ to a pre-doubling ancestor $x$, the
+doubling, then greedy events from the doubled ancestor to $b$. The ancestor
+$x$ is searched among the profiles on the greedy path from $a$ towards
+$\lfloor b / f \rfloor$ and towards $\lceil b / f \rceil$, so $W$ is an
+upper bound on the exact minimum.
+
+$W$ is computed for each chromosome and allele and summed over the genome,
+and the distance becomes
+
+$$D = \min\big(D_{\text{no WGD}},\; w + W_1,\; w + W_1^\top,\; 2w + W_2,\;
+2w + W_2^\top\big),$$
+
+where $w$ is `wgd_penalty` (default 1). The doubling is charged once for
+the whole genome, while the ancestor $x$ is chosen per chromosome and
+allele. $W$ uses greedy events only.
+
+To keep this fast, $W_1$ is only computed from a cell to cells with at least
+one more WGD, and $W_2$ to cells with two more; `wgd_all_pairs = TRUE`
+computes every pair. In practice this keeps `fit(wgd = TRUE)` within about
+1-2 times the time of a fit without WGD.
+
+## Placing the WGDs on the tree
+
+After the tree is built, the WGD counts of the cells are placed on it by
+parsimony:
+
+- counts can only increase from parent to child (a doubling is never
+  undone);
+- each WGD costs `wgd_penalty`, and the assignment with the fewest WGDs is
+  kept;
+- ties are resolved towards the later WGD.
+
+Branches along which the count increases are WGD branches. They are listed
+in `res$wgd$edges` and recorded as `"wgd"` events in `res$history`.
+
+The reconstruction takes them into account:
+
+- at a WGD branch, the ancestor above is the best pre-doubling profile;
+- inside a clade with $k$ WGDs, ancestors are chosen closest to the doubled
+  normal level ($2^k$ times the diploid level);
+- nodes just above a WGD get no $\delta$ and are left out of the BFB tests.
+
+## An example
+
+A simulation in which one WGD can happen:
+
+```{r wgd-sim}
+set.seed(13)
+sim_wgd <- bridge_sim(
+    chromosomes = c("1", "2"),
+    bfb_allele = "1:A",
+    max_cells = 300,
+    subsample = 100,
+    lambda = 0.75,
+    wgd_available = 1,
+    wgd_probability = 0.05
+)
+res_plain <- fit(sim_wgd$cna_data, chromosomes = c("1", "2"), verbose = FALSE)
+res_wgd <- fit(sim_wgd$cna_data, chromosomes = c("1", "2"), wgd = TRUE,
+               verbose = FALSE)
+
+table(wgd_count = res_wgd$wgd$counts)
+res_wgd$wgd$edges[, c("n_wgd", "n_cells")]
+```
+
+Distances between doubled and non-doubled cells shrink, because the
+doubling now counts as one event:
+
+```{r wgd-distances}
+doubled <- names(res_wgd$wgd$counts)[res_wgd$wgd$counts > 0]
+others <- setdiff(names(res_wgd$wgd$counts), doubled)
+c(without_wgd = mean(res_plain$D[doubled, others]),
+  with_wgd = mean(res_wgd$D[doubled, others]))
+```
+
+`plot_heatmap(show_wgd = TRUE)` marks the WGD branches on the tree, with a
+thick line and a diamond:
+
+```{r wgd-heatmap, fig.height = 7, warning = FALSE}
+plot_heatmap(
+    sim_wgd$cna_data,
+    fit = res_wgd, show_wgd = TRUE,
+    chromosomes_to_plot = c("1", "2"),
+    to_plot = c("A", "B"),
+    branch_length = 1,
+    use_raster = FALSE
+)
+```
+
+## Limitations
+
+- WGD counts estimated from ploidy can be wrong in real data. Cells in S
+  phase (partly replicated) or doublets can reach the ploidy threshold
+  without being doubled. When the copy-number caller picks the wrong
+  absolute ploidy, a cell can look exactly doubled or halved relative to its
+  clone. Each such cell gets its own WGD branch, often a long one. Filtering
+  these cells upstream, or supplying `wgd_counts`, avoids this.
+- At most two WGDs per lineage are modelled.
+- The WGD distance combines greedy events only; the BFB distance is not
+  used across a doubling.
+
+# Choosing the options
+
+| Argument | Default | Effect |
+|---|---|---|
+| `alleles` | `c("A", "B")` | allele-specific profiles; `"CN"` uses total copy number |
+| `k_jitter_fix` | 0 | merges breakpoints within `k` bins; 1-2 for noisy real data |
+| `bfb_penalty` | 0 | added to every BFB cost; larger values favour gains and losses |
+| `b_dist_func` | `"bfb_fast"` | `NULL` gives a greedy-only analysis |
+| `tree_func` | `ape::nj` | any function from a distance matrix to a `phylo` tree |
+| `wgd` | `FALSE` | adds the WGD distance and WGD placement |
+| `wgd_penalty` | 1 | cost of one WGD, in events |
+| `wgd_counts` | estimated | WGDs per cell, if known from another method |
+
+# References
+
+Kinsella M, Bafna V (2012). Combinatorics of the breakage-fusion-bridge
+mechanism. *Journal of Computational Biology* 19(6):662-678.
+
+Saitou N, Nei M (1987). The neighbor-joining method: a new method for
+reconstructing phylogenetic trees. *Molecular Biology and Evolution*
+4(4):406-425.
+
+Zakov S, Kinsella M, Bafna V (2013). An algorithmic approach for
+breakage-fusion-bridge detection in tumor genomes. *PNAS*
+110(14):5546-5551.
+
+# Session information
+
+```{r session-info}
+sessionInfo()
+```
