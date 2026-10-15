@@ -188,10 +188,9 @@ set.seed(42)
 sim <- bridge_sim(
     chromosomes = c("1", "2"),
     bfb_allele = "1:A",
-    max_cells = 500,
-    subsample = 120,
+    max_cells = 256,
     lambda = 0.75,
-    bfb_prob = 0.8,
+    bfb_prob = 0.2,
     amp_rate = 0.1,
     del_rate = 0.1
 )
@@ -204,8 +203,7 @@ c(
 )
 ```
 
-Here both trees are about equally close to the truth. B also has a second
-role, in the reconstruction described next: comparing G and B at each node
+B also has a second role, in the reconstruction described next: comparing G and B at each node
 is what marks nodes as BFB-like.
 
 # From distances to a tree and its history
